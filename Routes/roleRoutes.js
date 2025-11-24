@@ -8,6 +8,7 @@ router.get('/roles', async (req, res) => {
     
     try {
         switch (action) {
+            
             case 'A': // Create
                 return await roleController.createRole(req, res);
             case 'E': // Edit
