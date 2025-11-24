@@ -15,16 +15,16 @@ module.exports = (sequelize) => {
             unique: true,
         },
         USRF03: {
-            type: DataTypes.SMALLINT,
-            allowNull: false,
+            type: DataTypes.INTEGER,
+            unique: true,
         },
         USRF04: {
             type: DataTypes.SMALLINT,
-            allowNull: true,
+            allowNull: false,
         },
         USRF05: {
             type: DataTypes.SMALLINT,
-            allowNull: false,
+            allowNull: true,
         },
         USRF06: {
             type: DataTypes.SMALLINT,
@@ -35,6 +35,10 @@ module.exports = (sequelize) => {
             allowNull: false,
         },
         USRF08: {
+            type: DataTypes.SMALLINT,
+            allowNull: false,
+        },
+        USRF09: {
             type: DataTypes.SMALLINT,
             allowNull: false,
         }
