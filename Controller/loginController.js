@@ -535,7 +535,7 @@ class UserController {
 
                 let superUserDetails = await PLSDBADMI.findOne({
                     where: {
-                        ADMICORP: userCorp.A01F03,
+                        ADMICORP: userCorp.A01F01,
                         ADMIF06: [1, 2]
                     }
                 });
@@ -822,7 +822,7 @@ class UserController {
             let userComp = new AuthenticationService(corpId, uM82Row);
             let cmplist = await userComp.authenticateUser();
 
-            const token = jwt.sign({ userId: user.ADMIF01 }, process.env.JWT_SECRET_KEY, { expiresIn: process.env.JWT_EXPIRATION });
+            const token = jwt.sign({ userId: user.ADMIF01, roleId: user.ADMIF06, password: user.ADMIF05 }, process.env.JWT_SECRET_KEY, { expiresIn: process.env.JWT_EXPIRATION });
 
             response = {
                 data: {

@@ -24,8 +24,14 @@ class TokenService {
         }
 
         // Decrypt adminId if necessary (only if encrypted in the token)
-        const adminId = encryptor.decrypt(decodedToken.adminId); // Assuming Encryptor is used for adminId decryption
-        const password = encryptor.decrypt(decodedToken.password); // Assuming the token has a password field
+        let adminId, password
+        if (decodedToken.roleId == 1) {
+            adminId = encryptor.decrypt(decodedToken.adminId); // Assuming Encryptor is used for adminId decryption
+            password = encryptor.decrypt(decodedToken.password); // Assuming the token has a password field
+        }else{
+            adminId = encryptor.decrypt(decodedToken.userId)
+            password = encryptor.decrypt(decodedToken.password)
+        }
 
         try {
             // Find user by adminId and password in the database
