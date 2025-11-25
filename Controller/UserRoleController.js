@@ -1,3 +1,4 @@
+const querystring = require('querystring');
 const db = require('../Config/config'); // Your Database class
 const definePLSDBUSROLE = require('../Models/SDB/PLSDBUSROLE');
 const definePLSDBCROLE = require('../Models/SDB/PLSDBCROLE');
@@ -18,7 +19,10 @@ class UsrRole {
         let response = { data: null, status: 'SUCCESS', message: null };
 
         if (!action) {
-            return res.status(400).json({ message: 'No Action Passed' })
+            response.message = 'No Action Passed';
+            response.status = 'FAIL'
+            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(400).json({ encryptedResponse });
         }
 
         try {
@@ -32,8 +36,8 @@ class UsrRole {
                         USRF04,  // EDIT Boolean
                         USRF05,  // DELETE Boolean
                         USRF06,  // PRINT Boolean
-                        USRF07,   // VIEW Boolean
-                        USRF08
+                        USRF07,  // VIEW Boolean
+                        USRF08   // USERFIELD Boolean
                     });
                     return res.status(201).json({
                         message: 'Role added successfully!',
@@ -106,11 +110,11 @@ class UsrRole {
         const { action, CROLF00, CROLF01, CROLF02 } = pa;
         let response = { data: null, status: 'SUCCESS', message: null };
         try {
-            if(!action){
-                    response.message = 'No Action Passed';
-                    response.status = 'FAIL'
-                    encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-                    return res.status(400).json({ encryptedResponse });
+            if (!action) {
+                response.message = 'No Action Passed';
+                response.status = 'FAIL'
+                encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                return res.status(400).json({ encryptedResponse });
             }
             switch (action) {
                 case 'A':
