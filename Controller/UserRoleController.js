@@ -118,6 +118,17 @@ class UsrRole {
             switch (action) {
                 case 'A':
                     // Add a new role record
+                    let existingRole = await PLSDBCROLE.findAll({
+                        attributes: ['CROLF01']
+                    });
+                    for (const role of existingRole) {
+                        if (role.CROLF01 === CROLF01) {
+                            response.message = 'Roll Name Already Exist';
+                            response.status = 'FAIL'
+                            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                            return res.status(400).json({ encryptedResponse });
+                        }
+                    }
                     const newRole = await PLSDBCROLE.create({
                         CROLF01,
                         CROLF02
