@@ -106,6 +106,12 @@ class UsrRole {
         const { action, CROLF00, CROLF01, CROLF02 } = pa;
         let response = { data: null, status: 'SUCCESS', message: null };
         try {
+            if(!action){
+                    response.message = 'No Action Passed';
+                    response.status = 'FAIL'
+                    encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                    return res.status(400).json({ encryptedResponse });
+            }
             switch (action) {
                 case 'A':
                     // Add a new role record
