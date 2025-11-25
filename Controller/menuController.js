@@ -56,73 +56,99 @@ class MenuController {
   static async getMenuTree(req, res) {
     try {
       // Fetch menus with only S01F02, S01F03, and S01F04E columns
-      const menus = await PLSYS01.findAll({
-        attributes: ['S01F02', 'S01F03', 'S01F04E'], // Fetch only necessary columns
-        order: [['S01F03', 'ASC']], // Sort menus by parent-child order
-      });
+      // const menus = await PLSYS01.findAll({
+      //   attributes: ['S01F02', 'S01F03', 'S01F04E'], // Fetch only necessary columns
+      //   order: [['S01F03', 'ASC']], // Sort menus by parent-child order
+      // });
 
-      // Step 1: Create a map to hold menu objects by their IDs
+      // // Step 1: Create a map to hold menu objects by their IDs
+      // const menuMap = {};
+
+      // // Step 2: Loop over the menus and initialize them in the menuMap
+      // menus.forEach(menu => {
+      //   const menuId = menu.S01F02; // Current menu ID
+      //   const parentId = menu.S01F03; // Parent menu ID
+      //   const menuName = menu.S01F04E; // Menu name
+
+      //   // Initialize the menu object in the map if it doesn't exist yet
+      //   if (!menuMap[menuId]) {
+      //     menuMap[menuId] = {
+      //       S01F02: menuId,
+      //       S01F03: parentId,
+      //       S01F04E: menuName,
+      //       children: [] // Placeholder for any child menus
+      //     };
+      //   }
+
+      //   // If this menu has a parent, ensure it is initialized in the map
+      //   if (parentId !== menuId && !menuMap[parentId]) {
+      //     menuMap[parentId] = {
+      //       S01F02: parentId,
+      //       S01F03: null, // Parent has no parent itself
+      //       S01F04E: 'Parent Menu', // Placeholder name
+      //       children: []
+      //     };
+      //   }
+      // });
+
+      // // Step 3: Build the hierarchical structure
+      // // Loop through all menus and place them under their parent
+      // menus.forEach(menu => {
+      //   const menuId = menu.S01F02;
+      //   const parentId = menu.S01F03;
+
+      //   // Skip the menu if it's its own parent
+      //   if (parentId !== menuId) {
+      //     // Add the current menu to its parent menu's 'children' array
+      //     if (menuMap[parentId]) {
+      //       menuMap[parentId].children.push(menuMap[menuId]);
+      //     }
+      //   }
+      // });
+
+      // // Step 4: Extract only the top-level menus (those that are not children of any other menu)
+      // const topLevelMenus = Object.values(menuMap).filter(menu => menu.S01F03 === null || menu.S01F03 !== menu.S01F02);
+
+      // // Step 5: Recursively structure all menus to ensure the hierarchy is correct
+      // const buildMenuHierarchy = (menu) => {
+      //   if (menu.children.length > 0) {
+      //     menu.children.forEach(child => {
+      //       buildMenuHierarchy(child); // Recursively add children
+      //     });
+      //   }
+      //   return menu;
+      // };
+
+      // Step 1: Create a map to store menus by ID
       const menuMap = {};
 
-      // Step 2: Loop over the menus and initialize them in the menuMap
+      // Populate the map with menu objects, using original column names
       menus.forEach(menu => {
-        const menuId = menu.S01F02; // Current menu ID
-        const parentId = menu.S01F03; // Parent menu ID
-        const menuName = menu.S01F04E; // Menu name
-
-        // Initialize the menu object in the map if it doesn't exist yet
-        if (!menuMap[menuId]) {
-          menuMap[menuId] = {
-            S01F02: menuId,
-            S01F03: parentId,
-            S01F04E: menuName,
-            children: [] // Placeholder for any child menus
-          };
-        }
-
-        // If this menu has a parent, ensure it is initialized in the map
-        if (parentId !== menuId && !menuMap[parentId]) {
-          menuMap[parentId] = {
-            S01F02: parentId,
-            S01F03: null, // Parent has no parent itself
-            S01F04E: 'Parent Menu', // Placeholder name
-            children: []
-          };
-        }
+        const { S01F02: menuId, S01F03: parentId, S01F04E: menuName } = menu;
+        menuMap[menuId] = { S01F02: menuId, S01F03: parentId, S01F04E: menuName, children: [] }; // Include S01F04E (menuName)
       });
 
-      // Step 3: Build the hierarchical structure
-      // Loop through all menus and place them under their parent
-      menus.forEach(menu => {
-        const menuId = menu.S01F02;
-        const parentId = menu.S01F03;
+      // Step 2: Build the menu tree
+      const menuTree = [];
 
-        // Skip the menu if it's its own parent
-        if (parentId !== menuId) {
-          // Add the current menu to its parent menu's 'children' array
-          if (menuMap[parentId]) {
-            menuMap[parentId].children.push(menuMap[menuId]);
-          }
+      // Iterate over the menu map and build parent-child relationships
+      Object.values(menuMap).forEach(menu => {
+        const { S01F03: parentId } = menu;
+
+        // Check if the parent exists in the map
+        if (menuMap[parentId]) {
+          // If the parent exists in the map, add this menu as a child
+          menuMap[parentId].children.push(menu);
+        } else {
+          // If the parent does not exist, treat this menu as a root menu
+          menuTree.push(menu);
         }
       });
-
-      // Step 4: Extract only the top-level menus (those that are not children of any other menu)
-      const topLevelMenus = Object.values(menuMap).filter(menu => menu.S01F03 === null || menu.S01F03 !== menu.S01F02);
-
-      // Step 5: Recursively structure all menus to ensure the hierarchy is correct
-      const buildMenuHierarchy = (menu) => {
-        if (menu.children.length > 0) {
-          menu.children.forEach(child => {
-            buildMenuHierarchy(child); // Recursively add children
-          });
-        }
-        return menu;
-      };
 
       // Step 6: Recursively build the hierarchy for each top-level menu
-      const result = topLevelMenus.map(menu => buildMenuHierarchy(menu));
+      // const result = topLevelMenus.map(menu => buildMenuHierarchy(menu));
       // Send the menu tree as the response
-      let response = { data: result, status: 'SUCCESS' }
+      let response = { data: menuTree, status: 'SUCCESS' }
       let encryptedResponse = encryptor.encrypt(JSON.stringify(response))
       return res.status(200).json({ encryptedResponse: encryptedResponse });
     } catch (error) {
@@ -132,7 +158,6 @@ class MenuController {
   }
 }
 
-// module.exports = MenuController;
 
 
 /**
