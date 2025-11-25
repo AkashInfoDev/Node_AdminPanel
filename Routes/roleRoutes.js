@@ -25,6 +25,7 @@ router.get('/roles', async (req, res) => {
     }
 });
 
-router.get('/UsrRole', UsrRole.handleRole)
+router.get('/UsrRole', UsrRole.handleRole);
+router.get('/UsrCRole', UsrRole.handleCusRole);
 
 module.exports = router;
