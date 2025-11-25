@@ -25,6 +25,16 @@ class UsrRole {
             return res.status(400).json({ encryptedResponse });
         }
 
+        let existingrole = await PLSDBUSROLE.findAll({
+            attributes: ['USRF00','USRF01']
+        });
+        for(const ex of existingrole){
+            if(ex.USRF01 === USRF01){
+                action = 'E';
+                USRF00 = ex.USRF00
+            }
+        }
+
         try {
             switch (action) {
                 case 'A':
