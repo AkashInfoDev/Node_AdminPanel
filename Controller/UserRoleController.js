@@ -15,7 +15,7 @@ class UsrRole {
         const parameterString = encryptor.decrypt(req.query.pa);
         let decodedParam = decodeURIComponent(parameterString);
         let pa = querystring.parse(decodedParam);
-        const { action, USRF00, USRF01, USRF02, USRF03, USRF04, USRF05, USRF06, USRF07, USRF08 } = pa;
+        const { action, USRF00, USRF01, USRF02, USRF03, USRF04, USRF05, USRF06, USRF07 } = pa;
         let response = { data: null, status: 'SUCCESS', message: null };
 
         if (!action) {
@@ -37,7 +37,6 @@ class UsrRole {
                         USRF05,  // DELETE Boolean
                         USRF06,  // PRINT Boolean
                         USRF07,  // VIEW Boolean
-                        USRF08   // USERFIELD Boolean
                     });
                     return res.status(201).json({
                         message: 'Role added successfully!',
@@ -61,7 +60,6 @@ class UsrRole {
                         USRF05,
                         USRF06,
                         USRF07,
-                        USRF08
                     });
                     return res.status(200).json({
                         message: 'Role updated successfully!',
@@ -109,6 +107,7 @@ class UsrRole {
         let pa = querystring.parse(decodedParam);
         const { action, CROLF00, CROLF01, CROLF02 } = pa;
         let response = { data: null, status: 'SUCCESS', message: null };
+        let encryptedResponse
         try {
             if (!action) {
                 response.message = 'No Action Passed';

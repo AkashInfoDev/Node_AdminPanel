@@ -1,3 +1,4 @@
+const { MAX } = require('mssql2');
 const { DataTypes, Sequelize } = require('sequelize');
 
 /**
@@ -12,38 +13,30 @@ module.exports = (sequelize) => {
             autoIncrement: true
         },
         USRF01: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.STRING(MAX),
         },
         USRF02: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.STRING(MAX),
             unique: true,
         },
         USRF03: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.STRING(MAX),
             unique: true,
         },
         USRF04: {
-            type: DataTypes.SMALLINT,
+            type: DataTypes.STRING(MAX),
             allowNull: false,
         },
         USRF05: {
-            type: DataTypes.SMALLINT,
+            type: DataTypes.STRING(MAX),
             allowNull: true,
         },
         USRF06: {
-            type: DataTypes.SMALLINT,
+            type: DataTypes.STRING(MAX),
             allowNull: false,
         },
         USRF07: {
-            type: DataTypes.SMALLINT,
-            allowNull: false,
-        },
-        USRF08: {
-            type: DataTypes.SMALLINT,
-            allowNull: false,
-        },
-        USRF09: {
-            type: DataTypes.SMALLINT,
+            type: DataTypes.STRING(MAX),
             allowNull: false,
         }
     }, {
