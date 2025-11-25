@@ -6,7 +6,7 @@ const Encryptor = require('../Services/encryptor');
 
 const sequelizeSDB = db.getConnection('A00001SDB');
 const PLSDBUSROLE = definePLSDBUSROLE(sequelizeSDB);
-const PLSDBCROLE = definePLSDBUSROLE(sequelizeSDB);
+const PLSDBCROLE = definePLSDBCROLE(sequelizeSDB);
 
 const encryptor = new Encryptor();
 
