@@ -20,7 +20,7 @@ class UsrRole {
         const parameterString = encryptor.decrypt(req.query.pa);
         let decodedParam = decodeURIComponent(parameterString);
         let pa = querystring.parse(decodedParam);
-        const { action, cusRoleId, USRF00, USRF01, USRF02, USRF03, USRF04, USRF05, USRF06, USRF07, menuIds } = req.query;
+        const { action, cusRoleId, USRF00, USRF01, USRF02, USRF03, USRF04, USRF05, USRF06, USRF07, menuIds } = pa;
         let response = { data: null, status: 'SUCCESS', message: null };
 
         if (!action) {
@@ -129,21 +129,23 @@ class UsrRole {
 
                     const menuTree = MenuController.buildMenuTree(menuRows);
 
-                    const menuTreeWithPermissions = menuTree.map(menu => {
-                        return {
-                            ...menu,  // Keep existing properties
-                            AddPermission: 0,
-                            EditPermission: 0,
-                            DeletePermission: 0,
-                            ViewPermission: 0,
-                            PrintPermission: 0,
-                            UserFieldPermission: 0
-                        };
-                    });
+                    const menuWithPermission = MenuController.addPermissionsToLeafMenus(menuTree)
+
+                    // const menuTreeWithPermissions = menuTree.map(menu => {
+                    //     return {
+                    //         ...menu,  // Keep existing properties
+                    //         AddPermission: 0,
+                    //         EditPermission: 0,
+                    //         DeletePermission: 0,
+                    //         ViewPermission: 0,
+                    //         PrintPermission: 0,
+                    //         UserFieldPermission: 0
+                    //     };
+                    // });
 
                     return res.status(200).json({
                         message: 'All roles fetched.',
-                        data: menuTreeWithPermissions
+                        data: menuWithPermission
                     });
 
                 default:

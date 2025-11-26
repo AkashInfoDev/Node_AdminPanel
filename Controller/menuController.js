@@ -12,6 +12,29 @@ const encryptor = new Encryptor();
 const BATCH_SIZE = 100;
 
 class MenuController {
+
+  static addPermissionsToLeafMenus(menuTree) {
+    // Iterate through each menu item in the tree
+    menuTree.forEach(item => {
+      // Check if the item has children and whether it is a leaf node
+      if (item.children && item.children.length === 0) {
+        // Add permissions to leaf node (menu with empty children array)
+        item.l_Add = 0;
+        item.l_Edit = 0;
+        item.l_Delete = 0;
+        item.l_View = 0;
+        item.l_Print = 0;
+        item.l_UserField = 0;
+      }
+
+      // Recursively process the children if they exist
+      if (item.children && item.children.length > 0) {
+        // Directly process the children without a separate function
+        this.addPermissionsToLeafMenus(item.children);
+      }
+    });
+    return menuTree;
+  }
   // Static method to remove '&' from menu names
   static removeAmpersand(menuName) {
     return menuName.replace(/&/g, ''); // Removes all '&' characters
