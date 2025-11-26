@@ -1,10 +1,15 @@
 const querystring = require('querystring');
+const { Op } = require('sequelize');
 const db = require('../Config/config'); // Your Database class
 const definePLSDBUSROLE = require('../Models/SDB/PLSDBUSROLE');
 const definePLSDBCROLE = require('../Models/SDB/PLSDBCROLE');
+const definePLSYS01 = require('../Models/IDB/PLSYS01');
 const Encryptor = require('../Services/encryptor');
+const MenuController = require('./menuController');
 
 const sequelizeSDB = db.getConnection('A00001SDB');
+const sequelizeIDB = db.getConnection('IDBAPI');
+const PLSYS01 = definePLSYS01(sequelizeIDB);
 const PLSDBUSROLE = definePLSDBUSROLE(sequelizeSDB);
 const PLSDBCROLE = definePLSDBCROLE(sequelizeSDB);
 
@@ -15,7 +20,7 @@ class UsrRole {
         const parameterString = encryptor.decrypt(req.query.pa);
         let decodedParam = decodeURIComponent(parameterString);
         let pa = querystring.parse(decodedParam);
-        const { action, USRF00, USRF01, USRF02, USRF03, USRF04, USRF05, USRF06, USRF07 } = pa;
+        const { action, cusRoleId, USRF00, USRF01, USRF02, USRF03, USRF04, USRF05, USRF06, USRF07, menuIds } = req.query;
         let response = { data: null, status: 'SUCCESS', message: null };
 
         if (!action) {
@@ -39,15 +44,31 @@ class UsrRole {
             switch (action) {
                 case 'A':
                     // Add a new role record
-                    const newRole = await PLSDBUSROLE.create({
-                        USRF01,  // MENU ID
-                        USRF02,  // ADMIN ID
-                        USRF03,  // ADD Boolean
-                        USRF04,  // EDIT Boolean
-                        USRF05,  // DELETE Boolean
-                        USRF06,  // PRINT Boolean
-                        USRF07,  // VIEW Boolean
-                    });
+                    let existingCusRoleId = await PLSDBUSROLE.findOne({
+                        where: { USRF01: cusRoleId }
+                    })
+                    if (!existingCusRoleId) {
+                        const newRole = await PLSDBUSROLE.create({
+                            USRF01,
+                            USRF02,
+                            USRF03,
+                            USRF04,
+                            USRF05,
+                            USRF06,
+                            USRF07,
+                        });
+                    } else {
+                        let updatedRole = await PLSDBUSROLE.update({
+                            USRF02: USRF02,
+                            USRF03: USRF03,
+                            USRF04: USRF04,
+                            USRF05: USRF05,
+                            USRF06: USRF06,
+                            USRF07: USRF07,
+                        }, {
+                            where: { USRF01: USRF01 }
+                        })
+                    }
                     return res.status(201).json({
                         message: 'Role added successfully!',
                         data: newRole
@@ -92,10 +113,37 @@ class UsrRole {
 
                 case 'G':
                     // View all records
-                    const allRoles = await PLSDBUSROLE.findAll();
+                    const allRoles = await PLSDBUSROLE.findAll({
+                        where: { USRF00: USRF00 }
+                    });
+                    let menuIdsArray = menuIds.split(','); // This splits the string into an array
+                    let menuRows = await PLSYS01.findAll({
+                        attributes: ['S01F02', 'S01F03', 'S01F04E'],
+                        where: {
+                            S01F02: {
+                                [Op.in]: menuIdsArray // Using the `Op.in` to check if S01F02 is in the array of menuIds
+                            }
+                        },
+                        order: [['S01F03', 'ASC']]
+                    });
+
+                    const menuTree = MenuController.buildMenuTree(menuRows);
+
+                    const menuTreeWithPermissions = menuTree.map(menu => {
+                        return {
+                            ...menu,  // Keep existing properties
+                            AddPermission: 0,
+                            EditPermission: 0,
+                            DeletePermission: 0,
+                            ViewPermission: 0,
+                            PrintPermission: 0,
+                            UserFieldPermission: 0
+                        };
+                    });
+
                     return res.status(200).json({
                         message: 'All roles fetched.',
-                        data: allRoles
+                        data: menuTreeWithPermissions
                     });
 
                 default:
@@ -144,6 +192,16 @@ class UsrRole {
                         CROLF01,
                         CROLF02
                     });
+                    let newcrole = await PLSDBUSROLE.create({
+                        USRF01: newRole.CROLF00,
+                        USRF02: '',
+                        USRF03: '',
+                        USRF04: '',
+                        USRF05: '',
+                        USRF06: '',
+                        USRF07: ''
+
+                    })
                     response.data = newRole;
                     response.message = 'Role added successfully!';
                     encryptedResponse = encryptor.encrypt(JSON.stringify(response));
