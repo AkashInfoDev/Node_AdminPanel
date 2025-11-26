@@ -22,6 +22,7 @@ class UsrRole {
         let pa = querystring.parse(decodedParam);
         const { action, cusRoleId, USRF00, USRF01, USRF02, USRF03, USRF04, USRF05, USRF06, USRF07, menuIds } = pa;
         let response = { data: null, status: 'SUCCESS', message: null };
+        let encryptedResponse;
 
         if (!action) {
             response.message = 'No Action Passed';
@@ -69,19 +70,25 @@ class UsrRole {
                             where: { USRF01: USRF01 }
                         })
                     }
-                    return res.status(201).json({
-                        message: 'Role added successfully!',
-                        data: newRole
-                    });
+                    response.message = 'Role added successfully!'
+                    response.data = newRole
+                    encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                    return res.status(201).json({ encryptedResponse });
 
                 case 'E':
                     // Edit an existing role record
                     if (!USRF00) {
-                        return res.status(400).json({ message: 'USRF00 (Role ID) is required for editing.' });
+                        response.message = 'Role ID is required for editing.'
+                        response.status = 'FAIL'
+                        encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.status(400).json({ encryptedResponse });
                     }
                     const roleToEdit = await PLSDBUSROLE.findOne({ where: { USRF00 } });
                     if (!roleToEdit) {
-                        return res.status(404).json({ message: 'Role not found.' });
+                        response.message = 'Role not found.'
+                        response.status = 'FAIL'
+                        encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.status(404).json({ encryptedResponse });
                     }
                     await roleToEdit.update({
                         USRF01,
@@ -92,30 +99,37 @@ class UsrRole {
                         USRF06,
                         USRF07,
                     });
-                    return res.status(200).json({
-                        message: 'Role updated successfully!',
-                        data: roleToEdit
-                    });
+                    response.message = 'Role updated successfully!'
+                    response.data = roleToEdit
+                    encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                    return res.status(200).json({ encryptedResponse });
 
                 case 'D':
                     // Delete a role record
                     if (!USRF00) {
-                        return res.status(400).json({ message: 'USRF00 (Role ID) is required for deletion.' });
+                        response.message = 'USRF00 (Role ID) is required for deletion.'
+                        response.status = 'FAIL'
+                        encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.status(400).json({ encryptedResponse });
                     }
                     const roleToDelete = await PLSDBUSROLE.findOne({ where: { USRF00 } });
                     if (!roleToDelete) {
-                        return res.status(404).json({ message: 'Role not found.' });
+                        response.message = 'Role not found.'
+                        response.status = 'FAIL'
+                        encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.status(404).json({ encryptedResponse });
                     }
                     await roleToDelete.destroy();
-                    return res.status(200).json({
-                        message: 'Role deleted successfully!'
-                    });
+                    response.message = 'Role deleted successfully!'
+                    encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                    return res.status(200).json({ encryptedResponse });
 
                 case 'G':
                     // View all records
-                    const allRoles = await PLSDBUSROLE.findAll({
+                    const allRoles = await PLSDBUSROLE.findOne({
                         where: { USRF00: USRF00 }
                     });
+                    let menus
                     let menuIdsArray = menuIds.split(','); // This splits the string into an array
                     let menuRows = await PLSYS01.findAll({
                         attributes: ['S01F02', 'S01F03', 'S01F04E'],
@@ -126,27 +140,54 @@ class UsrRole {
                         },
                         order: [['S01F03', 'ASC']]
                     });
+                    if (!allRoles) {
+                        const menuTree = MenuController.buildMenuTree(menuRows);
 
-                    const menuTree = MenuController.buildMenuTree(menuRows);
+                        menus = MenuController.addPermissionsToLeafMenus(menuTree);
+                    } else {
+                        // If roles exist, check the specific role columns for permissions
+                        const menuTree = MenuController.buildMenuTree(menuRows);
 
-                    const menuWithPermission = MenuController.addPermissionsToLeafMenus(menuTree)
+                        // Iterate through the menu items in the tree
+                        menuTree.forEach(item => {
+                            // Check if the menuId is present in the specific columns for the user
+                            const menuId = item.id.toString();
 
-                    // const menuTreeWithPermissions = menuTree.map(menu => {
-                    //     return {
-                    //         ...menu,  // Keep existing properties
-                    //         AddPermission: 0,
-                    //         EditPermission: 0,
-                    //         DeletePermission: 0,
-                    //         ViewPermission: 0,
-                    //         PrintPermission: 0,
-                    //         UserFieldPermission: 0
-                    //     };
-                    // });
+                            // Set default permissions as 0
+                            item.l_Add = 0;
+                            item.l_Edit = 0;
+                            item.l_Delete = 0;
+                            item.l_View = 0;
+                            item.l_Print = 0;
+                            item.l_UserField = 0;
 
-                    return res.status(200).json({
-                        message: 'All roles fetched.',
-                        data: menuWithPermission
-                    });
+                            // Check if the menuId exists in any of the permission columns
+                            if (allRoles.USRF02 && allRoles.USRF02.split(',').includes(menuId)) {
+                                item.l_Add = 1;  // Set l_Add to 1
+                            }
+                            if (allRoles.USRF03 && allRoles.USRF03.split(',').includes(menuId)) {
+                                item.l_Edit = 1;  // Set l_Edit to 1
+                            }
+                            if (allRoles.USRF04 && allRoles.USRF04.split(',').includes(menuId)) {
+                                item.l_Delete = 1;  // Set l_Delete to 1
+                            }
+                            if (allRoles.USRF05 && allRoles.USRF05.split(',').includes(menuId)) {
+                                item.l_Print = 1;  // Set l_Print to 1
+                            }
+                            if (allRoles.USRF06 && allRoles.USRF06.split(',').includes(menuId)) {
+                                item.l_View = 1;  // Set l_View to 1
+                            }
+                            if (allRoles.USRF07 && allRoles.USRF07.split(',').includes(menuId)) {
+                                item.l_UserField = 1;  // Set l_UserField to 1
+                            }
+                        });
+
+                        menus = menuTree; // The updated menu tree with permissions
+                    }
+                    response.message = 'All roles fetched.'
+                    response.data = menus
+                    encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                    return res.status(200).json({ menuWithPermission });
 
                 default:
                     return res.status(400).json({
