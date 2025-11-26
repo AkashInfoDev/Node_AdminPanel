@@ -42,6 +42,11 @@ class MenuController {
       }
     });
 
+    // Sort the children of each parent based on S01F02 (menu ID)
+    Object.values(menuMap).forEach(menu => {
+      menu.children.sort((a, b) => a.S01F02.localeCompare(b.S01F02)); // Sort by S01F02 (menu ID)
+    });
+
     // Filter the root menus (menus that do not have a parent)
     const rootMenus = menus
       .map(menu => menu.get({ plain: true }))
@@ -59,14 +64,8 @@ class MenuController {
         order: [['S01F03', 'ASC']], // Order by parent-child relationship
       });
 
-      // Log the fetched data (for debugging purposes)
-      console.log("Fetched Menus:", menus);
-
       // Build the menu tree from the fetched menus
       const menuTree = MenuController.buildMenuTree(menus);
-
-      // Log the final menu tree (for debugging purposes)
-      console.log("Menu Tree:", menuTree);
 
       // Prepare response data
       let response = { data: menuTree, status: 'SUCCESS' };
@@ -75,13 +74,14 @@ class MenuController {
       let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
 
       // Return the encrypted response
-      return res.status(200).json({ encryptedResponse });
+      return res.status(200).json({ menuTree });
     } catch (error) {
       console.error('Error fetching menu tree:', error);
       return res.status(500).json({ message: 'Internal server error' });
     }
   }
 }
+
 
 
 /**
