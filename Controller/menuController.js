@@ -74,7 +74,7 @@ class MenuController {
       let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
 
       // Return the encrypted response
-      return res.status(200).json({ menuTree });
+      return res.status(200).json({ encryptedResponse });
     } catch (error) {
       console.error('Error fetching menu tree:', error);
       return res.status(500).json({ message: 'Internal server error' });
