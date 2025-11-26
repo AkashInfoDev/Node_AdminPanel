@@ -187,12 +187,13 @@ class UsrRole {
                     response.message = 'All roles fetched.'
                     response.data = menus
                     encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-                    return res.status(200).json({ menuWithPermission });
+                    return res.status(200).json({ encryptedResponse });
 
                 default:
-                    return res.status(400).json({
-                        message: 'Invalid action. Please provide a valid action (Add, Edit, Delete, View).'
-                    });
+                    response.message = 'Invalid action. Please provide a valid action (Add, Edit, Delete, View).'
+                    response.status = 'FAIL'
+                    encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                    return res.status(400).json({ encryptedResponse });
             }
         } catch (error) {
             console.error(error);
