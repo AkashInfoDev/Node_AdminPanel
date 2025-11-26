@@ -26,10 +26,10 @@ class UsrRole {
         }
 
         let existingrole = await PLSDBUSROLE.findAll({
-            attributes: ['USRF00','USRF01']
+            attributes: ['USRF00', 'USRF01']
         });
-        for(const ex of existingrole){
-            if(ex.USRF01 === USRF01){
+        for (const ex of existingrole) {
+            if (ex.USRF01 === USRF01) {
                 action = 'E';
                 USRF00 = ex.USRF00
             }
@@ -125,10 +125,11 @@ class UsrRole {
                 encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                 return res.status(400).json({ encryptedResponse });
             }
+            let existingRole;
             switch (action) {
                 case 'A':
                     // Add a new role record
-                    let existingRole = await PLSDBCROLE.findAll({
+                    existingRole = await PLSDBCROLE.findAll({
                         attributes: ['CROLF01']
                     });
                     for (const role of existingRole) {
@@ -156,6 +157,17 @@ class UsrRole {
                         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         return res.status(400).json({ encryptedResponse });
                     }
+                    existingRole = await PLSDBCROLE.findAll({
+                        attributes: ['CROLF01']
+                    });
+                    for (const role of existingRole) {
+                        if (role.CROLF01 === CROLF01) {
+                            response.message = 'Roll Name Already Exist';
+                            response.status = 'FAIL'
+                            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                            return res.status(400).json({ encryptedResponse });
+                        }
+                    }
                     const roleToEdit = await PLSDBCROLE.findOne({ where: { CROLF00 } });
                     if (!roleToEdit) {
                         response.message = 'Role not found.';
@@ -163,12 +175,14 @@ class UsrRole {
                         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         return res.status(404).json({ encryptedResponse });
                     }
-                    await roleToEdit.update({
-                        CROLF01,
-                        CROLF02
+                    let editedRole = await PLSDBCROLE.update({
+                        CROLF01: CROLF01,
+                        CROLF02: CROLF02
+                    }, {
+                        where: { CROLF00 }
                     });
                     response.message = 'Role updated successfully!';
-                    response.data = roleToEdit;
+                    response.data = editedRole;
                     encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                     return res.status(200).json({ encryptedResponse });
 

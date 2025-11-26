@@ -56,10 +56,10 @@ class MenuController {
   static async getMenuTree(req, res) {
     try {
       // Fetch menus with only S01F02, S01F03, and S01F04E columns
-      // const menus = await PLSYS01.findAll({
-      //   attributes: ['S01F02', 'S01F03', 'S01F04E'], // Fetch only necessary columns
-      //   order: [['S01F03', 'ASC']], // Sort menus by parent-child order
-      // });
+      const menus = await PLSYS01.findAll({
+        attributes: ['S01F02', 'S01F03', 'S01F04E'], // Fetch only necessary columns
+        order: [['S01F03', 'ASC']], // Sort menus by parent-child order
+      });
 
       // // Step 1: Create a map to hold menu objects by their IDs
       // const menuMap = {};
