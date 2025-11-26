@@ -12,152 +12,76 @@ const encryptor = new Encryptor();
 const BATCH_SIZE = 100;
 
 class MenuController {
+  // Static method to remove '&' from menu names
+  static removeAmpersand(menuName) {
+    return menuName.replace(/&/g, ''); // Removes all '&' characters
+  }
+
+  // Static method to build the menu tree from a flat list of menus
   static buildMenuTree(menus) {
-    const parentMenus = []; // Array to store all parent menus
-    const menuMap = new Map(); // Map to easily find child menus by parent ID
-
-    // Step 1: Identify and log each parent menu (where S01F03 is a parent identifier)
+    // First, convert all Sequelize instances to plain objects and initialize empty children
+    const menuMap = {};
     menus.forEach(menu => {
-      // We assume root menus have S01F03 being either '0000' or other alphanumeric strings like '000C', etc.
-      if (menu.S01F03 === '0000' || menu.S01F03.match(/^[A-F0-9]+$/)) {
-        // If parent menu is identified as root (either '0000' or any alphanumeric string)
-        parentMenus.push({
-          id: menu.S01F02,
-          name: menu.S01F04E,
-          children: [],
-        });
-      }
+      // Convert Sequelize instance to plain object
+      const menuPlain = menu.get({ plain: true });
 
-      // Step 2: Add child menus to the map by parent ID (S01F03)
-      if (menu.S01F03 !== '0000' && !menu.S01F03.match(/^[A-F0-9]+$/)) {
-        if (!menuMap.has(menu.S01F03)) {
-          menuMap.set(menu.S01F03, []);
-        }
-        menuMap.get(menu.S01F03).push({
-          id: menu.S01F02,
-          name: menu.S01F04E,
-          children: [],
-        });
+      // Initialize the children array and clean the menu name
+      menuPlain.children = [];
+      menuPlain.S01F04E = MenuController.removeAmpersand(menuPlain.S01F04E); // Clean up menu name
+      menuMap[menuPlain.S01F02] = menuPlain; // Store in the map with S01F02 as key
+    });
+
+    // Now, link child menus to their parents using the map
+    menus.forEach(menu => {
+      const menuPlain = menu.get({ plain: true });
+      const parentId = menuPlain.S01F03;
+
+      if (parentId !== '0000' && menuMap[parentId]) {
+        // If the parent exists and the menu has a parent (S01F03 != '0000')
+        menuMap[parentId].children.push(menuPlain); // Add the current menu to the parent’s children array
       }
     });
 
-    // Step 3: Add children to their respective parent menus
-    parentMenus.forEach(parentMenu => {
-      const children = menuMap.get(parentMenu.id);
-      if (children) {
-        parentMenu.children = children; // Attach children to the parent
-      }
-    });
+    // Filter the root menus (menus that do not have a parent)
+    const rootMenus = menus
+      .map(menu => menu.get({ plain: true }))
+      .filter(menuPlain => menuPlain.S01F03 === '0000');
 
-    return parentMenus;
+    return rootMenus; // Return root menus with nested children
   }
 
   // GET API: Fetch and return the full menu tree
   static async getMenuTree(req, res) {
     try {
-      // Fetch menus with only S01F02, S01F03, and S01F04E columns
-      // const menus = await PLSYS01.findAll({
-      //   attributes: ['S01F02', 'S01F03', 'S01F04E'], // Fetch only necessary columns
-      //   order: [['S01F03', 'ASC']], // Sort menus by parent-child order
-      // });
-
-      // // Step 1: Create a map to hold menu objects by their IDs
-      // const menuMap = {};
-
-      // // Step 2: Loop over the menus and initialize them in the menuMap
-      // menus.forEach(menu => {
-      //   const menuId = menu.S01F02; // Current menu ID
-      //   const parentId = menu.S01F03; // Parent menu ID
-      //   const menuName = menu.S01F04E; // Menu name
-
-      //   // Initialize the menu object in the map if it doesn't exist yet
-      //   if (!menuMap[menuId]) {
-      //     menuMap[menuId] = {
-      //       S01F02: menuId,
-      //       S01F03: parentId,
-      //       S01F04E: menuName,
-      //       children: [] // Placeholder for any child menus
-      //     };
-      //   }
-
-      //   // If this menu has a parent, ensure it is initialized in the map
-      //   if (parentId !== menuId && !menuMap[parentId]) {
-      //     menuMap[parentId] = {
-      //       S01F02: parentId,
-      //       S01F03: null, // Parent has no parent itself
-      //       S01F04E: 'Parent Menu', // Placeholder name
-      //       children: []
-      //     };
-      //   }
-      // });
-
-      // // Step 3: Build the hierarchical structure
-      // // Loop through all menus and place them under their parent
-      // menus.forEach(menu => {
-      //   const menuId = menu.S01F02;
-      //   const parentId = menu.S01F03;
-
-      //   // Skip the menu if it's its own parent
-      //   if (parentId !== menuId) {
-      //     // Add the current menu to its parent menu's 'children' array
-      //     if (menuMap[parentId]) {
-      //       menuMap[parentId].children.push(menuMap[menuId]);
-      //     }
-      //   }
-      // });
-
-      // // Step 4: Extract only the top-level menus (those that are not children of any other menu)
-      // const topLevelMenus = Object.values(menuMap).filter(menu => menu.S01F03 === null || menu.S01F03 !== menu.S01F02);
-
-      // // Step 5: Recursively structure all menus to ensure the hierarchy is correct
-      // const buildMenuHierarchy = (menu) => {
-      //   if (menu.children.length > 0) {
-      //     menu.children.forEach(child => {
-      //       buildMenuHierarchy(child); // Recursively add children
-      //     });
-      //   }
-      //   return menu;
-      // };
-
-      // Step 1: Create a map to store menus by ID
-      const menuMap = {};
-
-      // Populate the map with menu objects, using original column names
-      menus.forEach(menu => {
-        const { S01F02: menuId, S01F03: parentId, S01F04E: menuName } = menu;
-        menuMap[menuId] = { S01F02: menuId, S01F03: parentId, S01F04E: menuName, children: [] }; // Include S01F04E (menuName)
+      // Fetch menu data from database
+      const menus = await PLSYS01.findAll({
+        attributes: ['S01F02', 'S01F03', 'S01F04E'], // Select relevant columns
+        order: [['S01F03', 'ASC']], // Order by parent-child relationship
       });
 
-      // Step 2: Build the menu tree
-      const menuTree = [];
+      // Log the fetched data (for debugging purposes)
+      console.log("Fetched Menus:", menus);
 
-      // Iterate over the menu map and build parent-child relationships
-      Object.values(menuMap).forEach(menu => {
-        const { S01F03: parentId } = menu;
+      // Build the menu tree from the fetched menus
+      const menuTree = MenuController.buildMenuTree(menus);
 
-        // Check if the parent exists in the map
-        if (menuMap[parentId]) {
-          // If the parent exists in the map, add this menu as a child
-          menuMap[parentId].children.push(menu);
-        } else {
-          // If the parent does not exist, treat this menu as a root menu
-          menuTree.push(menu);
-        }
-      });
+      // Log the final menu tree (for debugging purposes)
+      console.log("Menu Tree:", menuTree);
 
-      // Step 6: Recursively build the hierarchy for each top-level menu
-      // const result = topLevelMenus.map(menu => buildMenuHierarchy(menu));
-      // Send the menu tree as the response
-      let response = { data: menuTree, status: 'SUCCESS' }
-      let encryptedResponse = encryptor.encrypt(JSON.stringify(response))
-      return res.status(200).json({ encryptedResponse: encryptedResponse });
+      // Prepare response data
+      let response = { data: menuTree, status: 'SUCCESS' };
+
+      // Encrypt the response (assuming you have an `encryptor` utility set up)
+      let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+
+      // Return the encrypted response
+      return res.status(200).json({ menuTree });
     } catch (error) {
       console.error('Error fetching menu tree:', error);
       return res.status(500).json({ message: 'Internal server error' });
     }
   }
 }
-
 
 
 /**
