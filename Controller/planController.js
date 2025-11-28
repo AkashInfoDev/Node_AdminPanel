@@ -465,6 +465,14 @@ class UpgradePlan {
                     const encryptresponse = encryptor.encrypt(JSON.stringify(response));
                     return res.status(200).json({ encryptresponse });
                 }
+            } else if (action == 'G') {
+                let allTransaction = await PLRDBPYMT.findAll({
+                    where: {PYMT02 : corpId}
+                });
+                response.status = 'SUCCESS';
+                response.data = allTransaction;
+                const encryptresponse = encryptor.encrypt(JSON.stringify(response));
+                return res.status(200).json({ encryptresponse });
             }
 
             // Invalid action

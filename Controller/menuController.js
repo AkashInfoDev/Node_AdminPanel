@@ -26,15 +26,20 @@ class MenuController {
         item.l_Print = 0;
         item.l_UserField = 0;
       }
-
-      // Recursively process the children if they exist
+  
+      // Check if the item has children, indicating it's a parent menu
       if (item.children && item.children.length > 0) {
-        // Directly process the children without a separate function
+        // Add the new parent key and value
+        item.S01F0P = 'P';
+  
+        // Recursively process the children
         this.addPermissionsToLeafMenus(item.children);
       }
     });
+    
     return menuTree;
   }
+  
   // Static method to remove '&' from menu names
   static removeAmpersand(menuName) {
     return menuName.replace(/&/g, ''); // Removes all '&' characters

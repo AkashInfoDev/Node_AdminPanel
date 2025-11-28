@@ -37,7 +37,7 @@ class UsrRole {
         for (const ex of existingrole) {
             if (ex.USRF00 === USRF00) {
                 action = 'E';
-                USRF00 = ex.USRF00
+                USRF01 = ex.USRF01
             }
         }
 
@@ -46,7 +46,7 @@ class UsrRole {
                 case 'A':
                     // Add a new role record
                     let existingCusRoleId = await PLSDBUSROLE.findOne({
-                        where: { USRF00: USRF00 }
+                        where: { USRF01: USRF01 }
                     })
                     if (!existingCusRoleId) {
                         const newRole = await PLSDBUSROLE.create({
@@ -58,6 +58,10 @@ class UsrRole {
                             USRF06: USRF06,
                             USRF07: USRF07,
                         });
+                        response.message = 'Role added successfully!'
+                        response.data = newRole
+                        encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.status(201).json({ encryptedResponse });
                     } else {
                         let updatedRole = await PLSDBUSROLE.update({
                             USRF02: USRF02,
@@ -68,7 +72,11 @@ class UsrRole {
                             USRF07: USRF07,
                         }, {
                             where: { USRF01: USRF01 }
-                        })
+                        });
+                        response.message = 'Role added successfully!'
+                        response.data = updatedRole
+                        encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.status(201).json({ encryptedResponse });
                     }
                     response.message = 'Role added successfully!'
                     response.data = newRole
@@ -127,7 +135,7 @@ class UsrRole {
                 case 'G':
                     // View all records
                     const allRoles = await PLSDBUSROLE.findOne({
-                        where: { USRF00: USRF00 }
+                        where: { USRF01: USRF01 }
                     });
                     let menus
                     let menuIdsArray = menuIds.split(','); // This splits the string into an array
@@ -148,41 +156,44 @@ class UsrRole {
                         // If roles exist, check the specific role columns for permissions
                         const menuTree = MenuController.buildMenuTree(menuRows);
 
-                        // Iterate through the menu items in the tree
-                        menuTree.forEach(item => {
-                            // Check if the menuId is present in the specific columns for the user
-                            const menuId = item.S01F02.toString();
-
-                            // Set default permissions as 0
-                            item.l_Add = 0;
-                            item.l_Edit = 0;
-                            item.l_Delete = 0;
-                            item.l_View = 0;
-                            item.l_Print = 0;
-                            item.l_UserField = 0;
-
-                            // Check if the menuId exists in any of the permission columns
-                            if (allRoles.USRF02 && allRoles.USRF02.split(',').includes(menuId)) {
-                                item.l_Add = 1;  // Set l_Add to 1
+                        menus = MenuController.addPermissionsToLeafMenus(menuTree);
+                        menus = menus.map(item => {
+                            
+                            // Check if any children exist
+                            if (item.children && item.children.length > 0) {
+                                
+                                item.children = item.children.map(child => {
+                                    
+                                    // Log if the role exists in allRoles.USRF02, USRF03, etc.
+                                    
+                                    if (allRoles.USRF02.includes(child.S01F02)) {
+                                        child.l_Add = 1;
+                                    }
+                                    if (allRoles.USRF03.includes(child.S01F02)) {
+                                        child.l_Edit = 1;
+                                    }
+                                    if (allRoles.USRF04.includes(child.S01F02)) {
+                                        child.l_Delete = 1;
+                                    }
+                                    if (allRoles.USRF05.includes(child.S01F02)) {
+                                        child.l_View = 1;
+                                    }
+                                    if (allRoles.USRF06.includes(child.S01F02)) {
+                                        child.l_Print = 1;
+                                    }
+                                    if (allRoles.USRF07.includes(child.S01F02)) {
+                                        child.l_UserField = 1;
+                                    }
+                        
+                                    return child; // Return updated child
+                                });
                             }
-                            if (allRoles.USRF03 && allRoles.USRF03.split(',').includes(menuId)) {
-                                item.l_Edit = 1;  // Set l_Edit to 1
-                            }
-                            if (allRoles.USRF04 && allRoles.USRF04.split(',').includes(menuId)) {
-                                item.l_Delete = 1;  // Set l_Delete to 1
-                            }
-                            if (allRoles.USRF05 && allRoles.USRF05.split(',').includes(menuId)) {
-                                item.l_Print = 1;  // Set l_Print to 1
-                            }
-                            if (allRoles.USRF06 && allRoles.USRF06.split(',').includes(menuId)) {
-                                item.l_View = 1;  // Set l_View to 1
-                            }
-                            if (allRoles.USRF07 && allRoles.USRF07.split(',').includes(menuId)) {
-                                item.l_UserField = 1;  // Set l_UserField to 1
-                            }
+                            
+                            return item; // Return updated item
                         });
+                        
 
-                        menus = menuTree; // The updated menu tree with permissions
+                        // menus = menuTree; // The updated menu tree with permissions
                     }
                     response.message = 'All roles fetched.'
                     response.data = menus

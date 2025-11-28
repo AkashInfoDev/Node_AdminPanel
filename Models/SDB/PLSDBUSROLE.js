@@ -17,27 +17,21 @@ module.exports = (sequelize) => {
         },
         USRF02: {
             type: DataTypes.STRING(MAX),
-            unique: true,
         },
         USRF03: {
             type: DataTypes.STRING(MAX),
-            unique: true,
         },
         USRF04: {
             type: DataTypes.STRING(MAX),
-            allowNull: false,
         },
         USRF05: {
             type: DataTypes.STRING(MAX),
-            allowNull: true,
         },
         USRF06: {
             type: DataTypes.STRING(MAX),
-            allowNull: false,
         },
         USRF07: {
             type: DataTypes.STRING(MAX),
-            allowNull: false,
         }
     }, {
         tableName: 'PLSDBUSROLE',
