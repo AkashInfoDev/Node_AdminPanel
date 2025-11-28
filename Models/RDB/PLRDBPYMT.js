@@ -48,27 +48,28 @@ module.exports = (sequelize) => {
         },
 
         PYMT11: {
-            type: DataTypes.DATEONLY
+            type: DataTypes.STRING(50)
         },
 
         PYMT12: {
-            type: DataTypes.DATEONLY
+            type: DataTypes.DECIMAL(18,2)
         },
 
         PYMT13: {
-            type: DataTypes.DATEONLY
+            type: DataTypes.STRING(20)
         },
 
         PYMT14: {
-            type: DataTypes.TEXT // nvarchar(MAX)
+            type: DataTypes.DATE, // Stores both date and time (DATETIME equivalent)
+            defaultValue: Sequelize.NOW, // Sets the default value to the current timestamp
         },
 
         PYMT15: {
-            type: DataTypes.STRING(10)
+            type: DataTypes.STRING(50)
         },
 
         PYMT16: {
-            type: DataTypes.STRING(100)
+            type: DataTypes.STRING(50)
         }
     }, {
         tableName: 'PLRDBPYMT',

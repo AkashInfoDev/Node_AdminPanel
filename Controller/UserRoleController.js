@@ -244,8 +244,8 @@ class UsrRole {
                         }
                     }
                     const newRole = await PLSDBCROLE.create({
-                        CROLF01,
-                        CROLF02
+                        CROLF01: CROLF01,
+                        CROLF02: CROLF02
                     });
                     let newcrole = await PLSDBUSROLE.create({
                         USRF01: newRole.CROLF00,

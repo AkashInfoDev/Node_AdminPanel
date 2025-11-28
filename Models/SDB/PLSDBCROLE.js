@@ -6,13 +6,17 @@ const { DataTypes, Sequelize } = require('sequelize');
  */
 module.exports = (sequelize) => {
     return sequelize.define('PLSDBCROLE', {
+        CROLF00: {
+            type: DataTypes.STRING(10),
+            unique: true,
+        },
         CROLF01: {
             type: DataTypes.STRING(50),
             primaryKey: true,
         },
-        CROLF00: {
+        CROLF02: {
             type: DataTypes.STRING(10),
-            unique: true,
+            primaryKey: true,
         }
     }, {
         tableName: 'PLSDBCROLE',

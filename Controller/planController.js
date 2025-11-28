@@ -466,11 +466,42 @@ class UpgradePlan {
                     return res.status(200).json({ encryptresponse });
                 }
             } else if (action == 'G') {
+                let finalTransaction = [];
                 let allTransaction = await PLRDBPYMT.findAll({
-                    where: {PYMT02 : corpId}
+                    where: { PYMT02: corpId }
                 });
+                let planRows = await PLRDBA02.findAll();
+                // Loop through allTransaction and add the plan name (A02F02)
+                for (let transaction of allTransaction) {
+                    // Convert PYMT01 to string for comparison
+                    let transactionId = transaction.PYMT01.toString().trim();
+                    console.log("Transaction ID:", transactionId);  // Log the transaction ID
+                
+                    // Find the matching plan row in planRows
+                    let matchingPlan = planRows.find(plan => {
+                        let planId = plan.A02F01 ? plan.A02F01.toString().trim() : ''; // Ensure A02F01 is a string and trimmed
+                        console.log("Comparing with Plan ID:", planId);  // Log the plan ID being compared
+                
+                        return planId === transactionId;  // Compare after trimming
+                    });
+                
+                    if (matchingPlan) {
+                        // If a matching plan is found, add PYMTPNM key to the transaction
+                        transaction.dataValues.PYMTPNM = matchingPlan.A02F02;
+                        finalTransaction.push(transaction.dataValues)
+                        console.log(`Plan found. Setting PYMTPNM: ${matchingPlan.A02F02}`);  // Log the assignment
+                    } else {
+                        // If no matching plan is found, handle as needed
+                        transaction.dataValues.PYMTPNM = null;
+                        finalTransaction.push(transaction.dataValues)
+                        console.log("No matching plan found. Setting PYMTPNM to null");
+                    }
+                }
+                
+                
                 response.status = 'SUCCESS';
-                response.data = allTransaction;
+                console.log("allTransaction", finalTransaction);
+                response.data = finalTransaction;
                 const encryptresponse = encryptor.encrypt(JSON.stringify(response));
                 return res.status(200).json({ encryptresponse });
             }
