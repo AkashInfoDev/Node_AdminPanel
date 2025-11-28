@@ -35,7 +35,7 @@ class UsrRole {
             attributes: ['USRF00', 'USRF01']
         });
         for (const ex of existingrole) {
-            if (ex.USRF01 === USRF01) {
+            if (ex.USRF00 === USRF00) {
                 action = 'E';
                 USRF00 = ex.USRF00
             }
@@ -46,17 +46,17 @@ class UsrRole {
                 case 'A':
                     // Add a new role record
                     let existingCusRoleId = await PLSDBUSROLE.findOne({
-                        where: { USRF01: cusRoleId }
+                        where: { USRF00: USRF00 }
                     })
                     if (!existingCusRoleId) {
                         const newRole = await PLSDBUSROLE.create({
-                            USRF01,
-                            USRF02,
-                            USRF03,
-                            USRF04,
-                            USRF05,
-                            USRF06,
-                            USRF07,
+                            USRF01: USRF01,
+                            USRF02: USRF02,
+                            USRF03: USRF03,
+                            USRF04: USRF04,
+                            USRF05: USRF05,
+                            USRF06: USRF06,
+                            USRF07: USRF07,
                         });
                     } else {
                         let updatedRole = await PLSDBUSROLE.update({
@@ -151,7 +151,7 @@ class UsrRole {
                         // Iterate through the menu items in the tree
                         menuTree.forEach(item => {
                             // Check if the menuId is present in the specific columns for the user
-                            const menuId = item.id.toString();
+                            const menuId = item.S01F02.toString();
 
                             // Set default permissions as 0
                             item.l_Add = 0;

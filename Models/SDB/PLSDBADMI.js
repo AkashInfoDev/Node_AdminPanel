@@ -71,6 +71,10 @@ module.exports = (sequelize) => {
         ADMICORP : {
             type: DataTypes.STRING(50),
             allowNull: true,
+        },
+        ADMIMOD : {
+            type: DataTypes.TEXT,
+            allowNull: true,
         }
     }, {
         tableName: 'PLSDBADMI',

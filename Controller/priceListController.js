@@ -46,7 +46,7 @@ class PricingPlanController {
         }
 
         const decoded = await TokenService.validateToken(token);
-        const decryptedId = encryptor.decrypt(decoded.adminId);
+        const decryptedId = encryptor.decrypt(decoded.userId);
         const existing = await PLSDBADMI.findAll();
             for (let i of existing) {
                 const decrypted = encryptor.decrypt(i.ADMIF01);
