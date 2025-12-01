@@ -261,7 +261,7 @@ class UserController {
         let decodedParam = decodeURIComponent(parameterString);
         let pa = querystring.parse(decodedParam);
 
-        const { action, corpId, userId, firstName, middleName, lastName, dob, gender, email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, isPassword
+        const { action, corpId, userId, firstName, middleName, lastName, dob, gender, email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, isPassword, cusRole
             // , companyName, softSubType, softType, dbVersion, webVer, noOfUser, regDate, subStrtDate, subEndDate, cancelDate, subDomainDelDate, cnclRes, SBDdbType, srverIP, serverUserName, serverPassword, A02id 
         } = pa;
 
@@ -280,14 +280,14 @@ class UserController {
             if (action === 'A') {
                 return UserController.registerUser({
                     userId, firstName, middleName, lastName, dob, gender,
-                    email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, corpId, decoded, req
+                    email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, corpId, cusRole, decoded, req
                 }, res);
-            }else if (action === 'E') {
+            } else if (action === 'E') {
                 return UserController.updateUser({
                     userId, firstName, middleName, lastName, dob, gender,
-                    email, password, isPassword, roleId, address, phoneNumber, base64Image
+                    email, password, isPassword, roleId, address, phoneNumber, base64Image, cusRole
                 }, res);
-            }else if (action === 'L') {
+            } else if (action === 'L') {
                 return UserController.loginUser(corpId, userId, password, res);
             }
 
@@ -300,7 +300,7 @@ class UserController {
 
     static async registerUser({
         userId, firstName, middleName, lastName, dob, gender,
-        email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, corpId, req, decoded
+        email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, corpId, cusRole, req, decoded
     }, res) {
         try {
             if (roleId == '2') {
@@ -332,7 +332,7 @@ class UserController {
                     ADMIF10: gender,
                     ADMIF12: address,
                     ADMIF13: phoneNumber,
-                    ADMIF14: base64Image,
+                    ADMIF14: base64Image
                 });
 
                 if (newUser) {
@@ -557,7 +557,8 @@ class UserController {
                     ADMIF12: address,
                     ADMIF13: phoneNumber,
                     ADMIF14: base64Image,
-                    ADMICORP: superUserDetails.ADMICORP
+                    ADMICORP: superUserDetails.ADMICORP,
+                    ADMIROL: cusRole
                 });
 
                 let superUsrCorpDtl = await PLRDBA01.findOne({
@@ -672,7 +673,7 @@ class UserController {
 
     static async updateUser({
         userId, updatedUserId, firstName, middleName, lastName, dob, gender,
-        email, password, isPassword, roleId, address, phoneNumber, base64Image
+        email, password, isPassword, roleId, address, phoneNumber, base64Image, cusRole
     }, res) {
         try {
             let response = { status: 'SUCCESS', message: null };
@@ -739,6 +740,14 @@ class UserController {
             await PLSDBADMI.update(updateData, {
                 where: { ADMIF01: encryptedUserId }
             });
+            if (cusRole) {
+                await PLSDBADMI.update(
+                    {
+                        ADMIROL: cusRole
+                    }, {
+                    where: { ADMIF01: encryptedUserId }
+                });
+            }
 
             response.message = 'User updated successfully';
 

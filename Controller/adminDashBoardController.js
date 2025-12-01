@@ -5,6 +5,7 @@ const definePLSDBADMI = require('../Models/SDB/PLSDBADMI'); // Model factory
 const definePLSDBM81 = require('../Models/SDB/PLSDBM81'); // Model factory
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01'); // Model factory
 const definePLSDBBRC = require('../Models/SDB/PLSDBBRC');
+const definePLSDBCROLE = require('../Models/SDB/PLSDBCROLE');
 const definePLRDBA02 = require('../Models/RDB/PLRDBA02');
 const Encryptor = require('../Services/encryptor');
 const sequelizeSDB = db.getConnection('A00001SDB');
@@ -16,6 +17,7 @@ const PLSDBM81 = definePLSDBM81(sequelizeSDB);
 const PLSDBBRC = definePLSDBBRC(sequelizeSDB);
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 const PLRDBA02 = definePLRDBA02(sequelizeRDB);
+const PLSDBCROLE = definePLSDBCROLE(sequelizeRDB);
 const encryptor = new Encryptor();
 
 class dashboardController {
@@ -43,6 +45,16 @@ class dashboardController {
         let planDetail = await PLRDBA02.findOne({
             where: { A02F01: compDetail.A02F01 }
         });
+        let cusRole = await PLSDBCROLE.findAll({
+            where: { CROLF02: compDetail.A02F01 }
+        });
+        for(let user of userDetails){
+            for(let role of cusRole){
+                if(user.ADMIROL == role.CROLF00){
+                    user.ROLENM = role.CROLF01
+                } 
+            }
+        }
         // let subDetail = await PLSDBM81.findAll({
         //     where: { M81F03: encryptor.decrypt(userDetails[0].ADMIF01) }
         // })
