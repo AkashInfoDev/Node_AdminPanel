@@ -45,15 +45,15 @@ class dashboardController {
         let planDetail = await PLRDBA02.findOne({
             where: { A02F01: compDetail.A02F01 }
         });
-        let cusRole = await PLSDBCROLE.findAll({
-            where: { CROLF02: compDetail.A02F01 }
-        });
-        for(let user of userDetails){
-            for(let role of cusRole){
-                if(user.ADMIROL == role.CROLF00){
-                    user.ROLENM = role.CROLF01
-                } 
-            }
+
+        for (let user of userDetails) {
+            let cusRole = await PLSDBCROLE.findAll({
+                where: {
+                    CROLF02: compDetail.A02F01,
+                    CROLF00: user.ADMIROL
+                }
+            });
+            user.ROLENM = cusRole.CROLF01
         }
         // let subDetail = await PLSDBM81.findAll({
         //     where: { M81F03: encryptor.decrypt(userDetails[0].ADMIF01) }
