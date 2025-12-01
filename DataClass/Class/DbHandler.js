@@ -178,8 +178,6 @@ class DBHandler {
 
             this.sequelizeDynamic = db.getConnection(this.databasename);
             const query = `SELECT TOP 1 ${cFldList ? cFldList : '*'} FROM [${cTblNM.trim()}]`;
-            console.log(query);
-            console.log(this.sequelizeDynamic);
             let DTable = await this.sequelizeDynamic.query(
                 query,
                 { type: this.sequelizeDynamic.QueryTypes.SELECT }
@@ -267,7 +265,6 @@ class DBHandler {
             const escapedTable = queryGenerator.quoteTable(tableName);
 
             const deleteQuery = `DELETE FROM ${escapedTable} WHERE ${whereClause}`;
-            console.log("DELETE Query:", deleteQuery);
 
             // Execute query inside the transaction
             const [results, metadata] = await transaction.sequelize.query(deleteQuery, { transaction });
