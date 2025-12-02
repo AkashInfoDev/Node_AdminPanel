@@ -79,6 +79,14 @@ module.exports = (sequelize) => {
         ADMIROL: {
             type: DataTypes.INTEGER,
             allowNull: true
+        },
+        ADMIBRC: {
+            type: DataTypes.INTEGER,
+            allowNull: true
+        },
+        ADMICOMP: {
+            type: DataTypes.INTEGER,
+            allowNull: true
         }
     }, {
         tableName: 'PLSDBADMI',

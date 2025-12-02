@@ -43,33 +43,49 @@ class UpgradePlan {
 
         let response = { data: null, message: '', status: 'SUCCESS' };
 
+        // Helper function for sending encrypted responses
+        const sendResponse = (status, message, data = null) => {
+            response.status = status;
+            response.message = message;
+            response.data = data;
+            const encryptresponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(status === 'SUCCESS' ? 200 : 400).json({ encryptresponse });
+        };
+
         try {
             if (!action) {
-                return res.status(400).json({ message: 'Invalid action' });
+                return sendResponse('FAIL', 'Invalid action');
             }
 
-            if (action == 'P') {
-                // Action P logic (Plan Payment)
+            // Action P - Plan Payment
+            if (action === 'P') {
                 const transactionDetail = await PLRDBRPAY.findOne({
                     where: { RPAYF01: transactionId }
                 });
 
-                if (!transactionDetail && paymentMode == 'ONLINE') {
-                    return res.status(404).json({ message: 'Transaction not found' });
+                if (!transactionDetail && paymentMode === 'ONLINE') {
+                    return sendResponse('FAIL', 'Transaction not found');
                 }
+
+                const today = new Date();
+                const todayFormatted = UpgradePlan.formatDate(today);
+
+                // Get the date after one year
+                const nextYear = new Date(today);
+                nextYear.setFullYear(today.getFullYear() + 1);
+                const nextYearFormatted = UpgradePlan.formatDate(nextYear);
 
                 // Update user info in PLRDBA01
                 const userUpdate = await PLRDBA01.update({
-                    A02F01: A02id
+                    A02F01: A02id,
+                    A02F12: todayFormatted,//today's date in YYYY-MM-DD formate
+                    A02F13: nextYearFormatted//today's date after one year in YYYY-MM-DD formate
                 }, {
                     where: { A01F03: corpId }
                 });
 
                 if (!userUpdate[0]) {
-                    response.status = 'Fail';
-                    response.message = 'Failed to update user'
-                    const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                    return res.status(400).json({ encryptresponse });
+                    return sendResponse('FAIL', 'Failed to update user');
                 }
 
                 const userInfo = await PLRDBA01.findOne({
@@ -77,10 +93,7 @@ class UpgradePlan {
                 });
 
                 if (!userInfo) {
-                    response.status = 'Fail';
-                    response.message = 'User info not found'
-                    const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                    return res.status(404).json({ encryptresponse });
+                    return sendResponse('FAIL', 'User info not found');
                 }
 
                 const planInfo = await PLRDBA02.findOne({
@@ -88,237 +101,134 @@ class UpgradePlan {
                 });
 
                 if (!planInfo) {
-                    response.status = 'Fail';
-                    response.message = 'Plan info not found'
-                    const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                    return res.status(404).json({ encryptresponse });
+                    return sendResponse('FAIL', 'Plan info not found');
                 }
 
-                let UserAdd = await PLSDBUBC.findOne({
-                    where: { UBCF05: userInfo.A01F01 }
-                });
-
-                if (UserAdd) {
-                    let planAdd = await PLSDBUBC.update({
-                        UBCF01: additionalUser,
-                        UBCF02: additionalBranch,
-                        UBCF03: additionalCompany,
-                        UBCF04: planInfo.A02F12,
-                    }, {
-                        where: { UBCF05: userInfo.A01F01 }
-                    });
-                } else {
-                    let planAdd = await PLSDBUBC.create({
-                        UBCF01: additionalUser,
-                        UBCF02: additionalBranch,
-                        UBCF03: additionalCompany,
-                        UBCF04: planInfo.A02F12,
-                        UBCF05: userInfo.A01F01
-                    });
-                }
-
-                let paymentData;
-
-                if (paymentMode = 'ONLINE') {
-                    const tranInfo = transactionDetail.RPAYF02;
-                    paymentData = {
-                        PYMT01: A02id,
-                        PYMT02: corpId,
-                        PYMT03: userId,
-                        PYMT04: 'ONLINE',
-                        PYMT08: planInfo.A02F12,
-                        PYMT09: '365',
-                        PYMT10: description,
-                        PYMT11: tranInfo.id,
-                        PYMT12: tranInfo.amount,
-                        PYMT13: tranInfo.status,
-                        PYMT15: tranInfo.method,
-                        PYMT16: UpgradePlan.nextDate(365) // Next payment date
-                    };
-                } else {
-                    const tranInfo = transactionDetail.RPAYF02;
-                    paymentData = {
-                        PYMT01: A02id,
-                        PYMT02: corpId,
-                        PYMT03: userId,
-                        PYMT04: 'OFFLINE',
-                        PYMT08: planInfo.A02F12,
-                        PYMT09: '365',
-                        PYMT10: description,
-                        PYMT11: "ID",
-                        PYMT12: 0,
-                        PYMT13: 'Complete',
-                        PYMT15: paymentMethod,
-                        PYMT16: UpgradePlan.nextDate(365) // Next payment date
-                    };
-                }
-
+                // Construct Payment Data
+                const paymentData = UpgradePlan.constructPaymentData(transactionDetail, paymentMode, A02id, corpId, userId, description, paymentMethod);
                 const paymentInfo = await PLRDBPYMT.create(paymentData);
-                response.status = 'SUCCESS';
-                response.message = 'Payment info updated successfully';
-                response.data = paymentInfo
-                const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                return res.status(200).json({ encryptresponse });
+
+                return sendResponse('SUCCESS', 'Payment info updated successfully', paymentInfo);
             }
 
             // Action A - Update Branch, Company, or User Details
-            else if (action == 'A') {
-                const { additionalBranch, additionalCompany, corpId, additionalUser, userId } = pa;
+            else if (action === 'A') {
+                const { additionalBranch, additionalCompany, userId } = pa;
+
+                if (!transactionId || !additionalBranch || !additionalCompany || !userId) {
+                    return sendResponse('FAIL', 'Branch ID, Company ID, and User ID are required for action A');
+                }
 
                 const transactionDetail = await PLRDBRPAY.findOne({
                     where: { RPAYF01: transactionId }
                 });
 
-                if (!transactionDetail && paymentMode == 'ONLINE') {
-                    return res.status(404).json({ message: 'Transaction not found' });
+                if (!transactionDetail && paymentMode === 'ONLINE') {
+                    return sendResponse('FAIL', 'Transaction not found');
                 }
 
-                if (!additionalBranch || !additionalCompany || !userId) {
-                    response.status = 'FAIL';
-                    response.message = 'Branch ID, Company ID, and User ID are required for action A';
-                    const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                    return res.status(404).json({ encryptresponse });
+                if (additionalBranch > 0) {
+                    await PLSDBADMI.update({
+                        ADMIBRC: additionalBranch,
+                    }, {
+                        where: {
+                            ADMIF00: userInfo.A01F01,
+                            ADMIF06: 2
+                        }
+                    });
                 }
 
-                let paymentData;
-
-                if (paymentMode = 'ONLINE') {
-                    const tranInfo = transactionDetail.RPAYF02;
-                    paymentData = {
-                        PYMT01: A02id,
-                        PYMT02: corpId,
-                        PYMT03: userId,
-                        PYMT04: 'ONLINE',
-                        PYMT05: additionalUser,
-                        PYMT06: additionalCompany,
-                        PYMT07: additionalBranch,
-                        PYMT09: '365',
-                        PYMT10: description,
-                        PYMT16: UpgradePlan.nextDate(365) // Next payment date
-                    };
-                } else {
-                    paymentData = {
-                        PYMT01: A02id,
-                        PYMT02: corpId,
-                        PYMT03: userId,
-                        PYMT04: 'OFFLINE',
-                        PYMT05: additionalUser,
-                        PYMT06: additionalCompany,
-                        PYMT07: additionalBranch,
-                        PYMT09: '365',
-                        PYMT10: description,
-                        PYMT11: "ID",
-                        PYMT12: 0,
-                        PYMT13: 'Complete',
-                        PYMT15: paymentMethod,
-                        PYMT16: UpgradePlan.nextDate(365) // Next payment date
-                    };
+                if (additionalCompany > 0) {
+                    await PLSDBADMI.update({
+                        ADMICOMP: additionalCompany,
+                    }, {
+                        where: {
+                            ADMIF00: userInfo.A01F01,
+                            ADMIF06: 2
+                        }
+                    });
                 }
 
-                if (userUpdate[0] === 0) {
-                    response.status = 'FAIL';
-                    response.message = 'User not found or no update performed';
-                    const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                    return res.status(404).json({ encryptresponse });
+                if (additionalUser > 0) {
+                    await PLRDBA01.update({
+                        A01F10: additionalUser
+                    }, {
+                        where: { A01F03: corpId }
+                    });
                 }
 
-                response.status = 'SUCCESS';
-                response.message = 'Branch and company updated successfully';
-                const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                return res.status(200).json({ encryptresponse });
+                const paymentData = UpgradePlan.constructPaymentData(transactionDetail, paymentMode, A02id, corpId, userId, description, paymentMethod);
+                await PLRDBPYMT.create(paymentData);
+
+                return sendResponse('SUCCESS', 'Branch and company updated successfully');
             }
 
             // Action M - Update or Activate Modules
-            else if (action == 'M') {
-                const { moduleId, userId } = req.query;
+            else if (action === 'M') {
+                const { moduleId, userId, paymentMode } = pa;
 
-                if (!moduleId || !userId) {
-                    response.status = 'FAIL';
-                    response.message = 'Module ID and User ID are required for action M';
-                    const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                    return res.status(400).json({ encryptresponse });
-                }
-
-                // Check if the module exists
-                const moduleInfo = await PLRDBA02.findOne({
-                    where: { A02F01: moduleId }
+                let user = await PLSDBADMI.findOne({
+                    where: { ADMIF00: userId }
                 });
 
-                if (!moduleInfo) {
-                    response.status = 'FAIL';
-                    response.message = 'Module not found';
-                    const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                    return res.status(404).json({ encryptresponse });
-                }
+                if (user && moduleId) {
+                    // Ensure A01F01 and moduleId are numbers (optional but recommended)
+                    const newADMIMOD = user.ADMIMOD + ',' + moduleId;
 
-                // Add module to the user's module list
-                const userModules = await PLSDBUBC.findOne({
-                    where: { UBCF01: userId }
-                });
-
-                let modules = userModules ? userModules.UBCF04.split(',') : [];
-
-                if (!modules.includes(moduleInfo.A02F12)) {
-                    modules.push(moduleInfo.A02F12);
-                    const updatedModules = modules.join(',');
-
-                    await PLSDBUBC.update(
-                        { UBCF04: updatedModules },
-                        { where: { UBCF01: userId } }
-                    );
-
-                    response.status = 'SUCCESS';
-                    response.message = 'Module activated successfully';
-                    const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                    return res.status(200).json({ encryptresponse });
-                } else {
-                    response.status = 'SUCCESS';
-                    response.message = 'Module is already activated for this user';
-                    const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                    return res.status(200).json({ encryptresponse });
-                }
-            } else if (action == 'G') {
-                let finalTransaction = [];
-                let allTransaction = await PLRDBPYMT.findAll({
-                    where: { PYMT02: corpId }
-                });
-                let planRows = await PLRDBA02.findAll();
-                // Loop through allTransaction and add the plan name (A02F02)
-                for (let transaction of allTransaction) {
-                    // Convert PYMT01 to string for comparison
-                    let transactionId = transaction.PYMT01.toString().trim();
-
-                    // Find the matching plan row in planRows
-                    let matchingPlan = planRows.find(plan => {
-                        let planId = plan.A02F01 ? plan.A02F01.toString().trim() : ''; // Ensure A02F01 is a string and trimmed
-
-                        return planId === transactionId;  // Compare after trimming
+                    await PLSDBADMI.update({
+                        ADMIMOD: newADMIMOD
+                    }, {
+                        where: { ADMIF00: userId }
                     });
+                    const paymentData = UpgradePlan.constructPaymentData(null, paymentMode, A02id, corpId, userId, description, paymentMethod);
+                    await PLRDBPYMT.create(paymentData);
+                    return sendResponse('SUCCESS', 'Module activated for this user');
+                }
+            }
 
-                    if (matchingPlan) {
-                        // If a matching plan is found, add PYMTPNM key to the transaction
-                        transaction.dataValues.PYMTPNM = matchingPlan.A02F02;
-                        finalTransaction.push(transaction.dataValues)
+            // Action G - Get Transactions
+            else if (action === 'G') {
+                let finalTransaction = [];
+                const allTransaction = await PLRDBPYMT.findAll({
+                    where: { PYMT01: corpId }
+                });
+                const planRows = await PLRDBA02.findAll();
+                const userRows = await PLRDBA01.findOne({
+                    where: { A01F03: corpId }
+                });
+
+                // Ensure userRows.A01F12 is a valid date (assuming it's in the format '2025-08-10T00:00:00.000Z')
+                const startDate = new Date(userRows.A01F12);
+
+                // Process each transaction to add BILLCYCLE key
+                allTransaction.forEach(transaction => {
+                    const transactionDate = new Date(transaction.dataValues.PYMT08); // Assuming PYMT08 is a timestamp
+
+                    // Calculate the difference in days
+                    const timeDifference = transactionDate - startDate;
+                    const dayDifference = Math.floor(timeDifference / (1000 * 60 * 60 * 24)); // Convert ms to days
+
+                    // Add the BILLCYCLE key based on the days difference
+                    if (dayDifference > 365) {
+                        transaction.dataValues.BILLCYCLE = 'Complete';
                     } else {
-                        // If no matching plan is found, handle as needed
-                        transaction.dataValues.PYMTPNM = null;
-                        finalTransaction.push(transaction.dataValues)
+                        transaction.dataValues.BILLCYCLE = dayDifference;
                     }
+                });
+
+                // Add plan name to transactions
+                for (let transaction of allTransaction) {
+                    let matchingPlan = planRows.find(plan => plan.A02F01.toString().trim() === transaction.PYMT01.toString().trim());
+                    transaction.dataValues.PYMTPNM = matchingPlan ? matchingPlan.A02F02 : null;
+                    finalTransaction.push(transaction.dataValues);
                 }
 
-
-                response.status = 'SUCCESS';
-                response.data = finalTransaction;
-                const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                return res.status(200).json({ encryptresponse });
+                return sendResponse('SUCCESS', 'Transactions fetched successfully', finalTransaction);
             }
 
             // Invalid action
             else {
-                response.status = 'SUCCESS';
-                response.message = 'Invalid action type';
-                const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                return res.status(400).json({ encryptresponse });
+                return sendResponse('FAIL', 'Invalid action type');
             }
 
         } catch (error) {
@@ -329,6 +239,49 @@ class UpgradePlan {
                 status: 'FAILURE'
             });
         }
+    }
+
+    // Helper function to construct payment data
+    static constructPaymentData(transactionDetail, paymentMode, A02id, corpId, userId, description, paymentMethod) {
+        const tranInfo = transactionDetail?.RPAYF02;
+        let transactionId = ''
+        if (paymentMode == 'OFFLINE') {
+            const now = new Date();
+
+            // Format the date as YYYYMMDD_HHMMSS
+            const date = now.toISOString().replace(/[-:T.]/g, '').slice(0, 15); // Format as YYYYMMDD_HHMMSS
+            transactionId = 'TXN_' + date;
+        }
+        return paymentMode === 'ONLINE'
+            ? {
+                PYMT01: corpId,
+                PYMT02: userId,
+                PYMT03: tranInfo.id,
+                PYMT04: 'ONLINE',
+                PYMT05: tranInfo.amount,
+                PYMT06: tranInfo.status,
+                PYMT07: tranInfo.method,
+                PYMT09: description,
+                PYMT10: (UpgradePlan.nextDate(365)).toString(), // Next payment date
+            }
+            : {
+                PYMT01: corpId,
+                PYMT02: userId,
+                PYMT03: transactionId,
+                PYMT04: 'OFFLINE',
+                PYMT05: 0,
+                PYMT06: 'SUCCESS',
+                PYMT07: 'CASH',
+                PYMT09: description,
+                PYMT10: UpgradePlan.nextDate(365), // Next payment date
+            };
+    }
+
+    static formatDate(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are zero-based
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
     }
 
     // Method to get the next date given a range (in days)

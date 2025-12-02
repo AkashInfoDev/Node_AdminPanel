@@ -6,73 +6,51 @@ const { DataTypes, Sequelize } = require('sequelize');
  */
 module.exports = (sequelize) => {
     return sequelize.define('PLRDBPYMT', {
-        PYMT01: {
-            type: DataTypes.INTEGER, // CorporateID / Name
-            primaryKey: true
+        PYMT00: { //-- Payment ID (Auto Increment)
+            type: DataTypes.INTEGER,
+            primaryKey: true,
+            autoIncrement: true,
         },
-
-        PYMT02: {
-            type: DataTypes.STRING(10) // CustomerID e.g., PL-P-00001
+        PYMT01: { // Corporation ID
+            type: DataTypes.STRING(15),
+            allowNull: false,
         },
-
-        PYMT03: {
-            type: DataTypes.INTEGER // Software type (e.g., PL)
+        PYMT02: { // User ID
+            type: DataTypes.INTEGER,
+            allowNull: false,
         },
-
-        PYMT04: {
-            type: DataTypes.STRING(50)
+        PYMT03: { //Transaction ID
+            type: DataTypes.STRING(100),
+            allowNull: false,
         },
-
-        PYMT05: {
-            type: DataTypes.INTEGER
+        PYMT04: { // Payment Modes
+            type: DataTypes.STRING(15),
+            allowNull: false,
         },
-
-        PYMT06: {
-            type: DataTypes.INTEGER
+        PYMT05: { // Amount
+            type: DataTypes.DECIMAL(18, 2),
+            allowNull: false,
         },
-
-        PYMT07: {
-            type: DataTypes.INTEGER
+        PYMT06: { // Payment Status (e.g., 'Pending', 'Completed', 'Failed')
+            type: DataTypes.STRING(20),
+            allowNull: false,
         },
-
-        PYMT08: {
-            type: DataTypes.TEXT
+        PYMT07: { // Payment Method (e.g., 'Credit Card', 'Bank Transfer', 'PayPal')
+            type: DataTypes.STRING(50),
+            allowNull: false,
         },
-
-        PYMT09: {
-            type: DataTypes.INTEGER
+        PYMT08: { // Payment Date and Time (Auto-generated, default to current timestamp)
+            type: DataTypes.DATE,
+            defaultValue: Sequelize.NOW,
         },
-
-        PYMT10: {
-            type: DataTypes.DATEONLY
+        PYMT09: { // Payment Description (text)
+            type: DataTypes.TEXT,
         },
-
-        PYMT11: {
-            type: DataTypes.STRING(50)
-        },
-
-        PYMT12: {
-            type: DataTypes.DECIMAL(18,2)
-        },
-
-        PYMT13: {
-            type: DataTypes.STRING(20)
-        },
-
-        PYMT14: {
-            type: DataTypes.DATE, // Stores both date and time (DATETIME equivalent)
-            defaultValue: Sequelize.NOW, // Sets the default value to the current timestamp
-        },
-
-        PYMT15: {
-            type: DataTypes.STRING(50)
-        },
-
-        PYMT16: {
-            type: DataTypes.STRING(50)
+        PYMT10: { // Next Payment Date
+            type: DataTypes.STRING(50),
         }
     }, {
         tableName: 'PLRDBPYMT',
-        timestamps: false,
+        timestamps: false, // Disable automatic timestamp fields like createdAt, updatedAt
     });
 };
