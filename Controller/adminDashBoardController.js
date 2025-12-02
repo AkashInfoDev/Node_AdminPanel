@@ -14,10 +14,10 @@ const sequelizeRDB = db.getConnection('RDB');
 // Initialize model using the Sequelize instance
 const PLSDBADMI = definePLSDBADMI(sequelizeSDB);
 const PLSDBM81 = definePLSDBM81(sequelizeSDB);
+const PLSDBCROLE = definePLSDBCROLE(sequelizeSDB);
 const PLSDBBRC = definePLSDBBRC(sequelizeSDB);
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 const PLRDBA02 = definePLRDBA02(sequelizeRDB);
-const PLSDBCROLE = definePLSDBCROLE(sequelizeRDB);
 const encryptor = new Encryptor();
 
 class dashboardController {
@@ -47,13 +47,17 @@ class dashboardController {
         });
 
         for (let user of userDetails) {
-            let cusRole = await PLSDBCROLE.findAll({
-                where: {
-                    CROLF02: compDetail.A02F01,
-                    CROLF00: user.ADMIROL
-                }
-            });
-            user.ROLENM = cusRole.CROLF01
+            if (user.ADMIF06 != '2') {
+                let cusRole = await PLSDBCROLE.findOne({
+                    where: {
+                        CROLF02: user.ADMICORP,
+                        CROLF00: user.ADMIROL
+                    }
+                });
+                user.dataValues.ROLENM = cusRole.CROLF01
+                user.dataValues.CROLF00 = cusRole.CROLF00
+                delete user.dataValues.ADMIROL
+            }
         }
         // let subDetail = await PLSDBM81.findAll({
         //     where: { M81F03: encryptor.decrypt(userDetails[0].ADMIF01) }
