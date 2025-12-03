@@ -40,7 +40,7 @@ class Database {
                 dialectOptions: {
                     options: {
                         encrypt: false,
-                        instanceName: 'sqlexpress',
+                        // instanceName: 'sqlexpress',
                         trustServerCertificate: true
                     }
                 },
