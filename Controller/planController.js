@@ -245,8 +245,9 @@ class UpgradePlan {
     static constructPaymentData(transactionDetail, paymentMode, A02id, corpId, userId, description, paymentMethod) {
         const tranInfo = transactionDetail?.RPAYF02;
         let transactionId = ''
+        const now = new Date();
+        const isoString = now.toISOString();
         if (paymentMode == 'OFFLINE') {
-            const now = new Date();
 
             // Format the date as YYYYMMDD_HHMMSS
             const date = now.toISOString().replace(/[-:T.]/g, '').slice(0, 15); // Format as YYYYMMDD_HHMMSS
@@ -261,6 +262,7 @@ class UpgradePlan {
                 PYMT05: tranInfo.amount,
                 PYMT06: tranInfo.status,
                 PYMT07: tranInfo.method,
+                PYMT08: isoString,
                 PYMT09: description,
                 PYMT10: (UpgradePlan.nextDate(365)).toString(), // Next payment date
             }
@@ -273,7 +275,7 @@ class UpgradePlan {
                 PYMT06: 'SUCCESS',
                 PYMT07: 'CASH',
                 PYMT09: description,
-                PYMT10: UpgradePlan.nextDate(365), // Next payment date
+                PYMT10: (UpgradePlan.nextDate(365)).toString(), // Next payment date
             };
     }
 
