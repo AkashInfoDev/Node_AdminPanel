@@ -148,7 +148,7 @@ class BranchController {
                 } else {
                     response.data = newBranch;
                     encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-                    return res.status(201).json(encryptedResponse);
+                    return res.status(201).json({ encryptedResponse });
                 }
 
             } else if (action === 'E') {
@@ -201,7 +201,7 @@ class BranchController {
 
                 response.data = branch
                 encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-                return res.status(200).json({encryptedResponse});
+                return res.status(200).json({ encryptedResponse });
 
             } else if (action === 'D') {
                 // DELETE

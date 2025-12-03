@@ -267,7 +267,7 @@ class UserController {
 
         const token = req.headers['authorization']?.split(' ')[1]; // 'Bearer <token>'
 
-        if (!token) {
+        if (action != 'L' && !token) {
             response.message = 'No token provided, authorization denied.'
             response.status = 'FAIL'
             const encryptresponse = encryptor.encrypt(JSON.stringify(response));
@@ -760,7 +760,6 @@ class UserController {
             return res.status(500).json({ encryptedResponse: encryptedResponse });
         }
     }
-
 
     static async loginUser(corpId, userId, password, res) {
         try {
