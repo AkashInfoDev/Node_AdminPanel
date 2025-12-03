@@ -246,7 +246,6 @@ class UpgradePlan {
         const tranInfo = transactionDetail?.RPAYF02;
         let transactionId = ''
         const now = new Date();
-        const isoString = now.toISOString();
         if (paymentMode == 'OFFLINE') {
 
             // Format the date as YYYYMMDD_HHMMSS
@@ -262,7 +261,6 @@ class UpgradePlan {
                 PYMT05: tranInfo.amount,
                 PYMT06: tranInfo.status,
                 PYMT07: tranInfo.method,
-                PYMT08: isoString,
                 PYMT09: description,
                 PYMT10: (UpgradePlan.nextDate(365)).toString(), // Next payment date
             }
