@@ -67,6 +67,7 @@ class BranchController {
             let response = { data: null, status: 'Success', message: '' };
             let encryptedResponse;
             let action, BRCODE, BRNAME, BRGST, BRSTATE, corpId
+            let decoded;
             if (this.lbool == false) {
                 action = this.act;
                 BRCODE = this.brc;
@@ -82,8 +83,18 @@ class BranchController {
                 BRCODE = pa.BRCODE
                 BRNAME = pa.BRNAME
                 BRGST = pa.BRGST
-                corpId = pa.corpId
                 BRSTATE = pa.BRSTATE
+
+                const token = req.headers['authorization']?.split(' ')[1]; // 'Bearer <token>'
+
+                if (!token) {
+                    response.message = 'No token provided, authorization denied.'
+                    response.status = 'FAIL'
+                    const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                    return res.status(401).json({ encryptedResponse });
+                }
+                decoded = await TokenService.validateToken(token);
+                corpId = decoded.corpId
             }
 
             if (!action) {

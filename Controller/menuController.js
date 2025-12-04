@@ -26,20 +26,20 @@ class MenuController {
         item.l_Print = 0;
         item.l_UserField = 0;
       }
-  
+
       // Check if the item has children, indicating it's a parent menu
       if (item.children && item.children.length > 0) {
         // Add the new parent key and value
         item.S01F0P = 'P';
-  
+
         // Recursively process the children
         this.addPermissionsToLeafMenus(item.children);
       }
     });
-    
+
     return menuTree;
   }
-  
+
   // Static method to remove '&' from menu names
   static removeAmpersand(menuName) {
     return menuName.replace(/&/g, ''); // Removes all '&' characters
@@ -91,6 +91,16 @@ class MenuController {
         attributes: ['S01F02', 'S01F03', 'S01F04E'], // Select relevant columns
         order: [['S01F03', 'ASC']], // Order by parent-child relationship
       });
+
+      // const token = req.headers['authorization']?.split(' ')[1]; // 'Bearer <token>'
+
+      // if (!token) {
+      //   response.message = 'No token provided, authorization denied.'
+      //   response.status = 'FAIL'
+      //   const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+      //   return res.status(401).json({ encryptedResponse });
+      // }
+      // let decoded = await TokenService.validateToken(token);
 
       // Build the menu tree from the fetched menus
       const menuTree = MenuController.buildMenuTree(menus);

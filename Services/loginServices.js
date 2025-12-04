@@ -29,7 +29,7 @@ class AuthenticationService {
         const CompList = [];
   
         if (resultM82.length === 0) {
-          this.logger.error('No user-company relationships found.');
+          console.error('No user-company relationships found.');
         } else {
           const userDataList = resultM82.map(record => ({
             UId: record.M82F01,
@@ -68,10 +68,10 @@ class AuthenticationService {
   
                 CompList.sort((a, b) => Number(a.CmpNo) - Number(b.CmpNo));
               } else {
-                this.logger.error(`No details found for Group ID: ${GId}`);
+                console.error(`No details found for Group ID: ${GId}`);
               }
             } catch (err) {
-              this.logger.error(`Error fetching details for Group ID ${GId}:` + err.message);
+              console.error(`Error fetching details for Group ID ${GId}:` + err.message);
             }
           }
         }

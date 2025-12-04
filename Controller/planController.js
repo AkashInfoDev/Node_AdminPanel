@@ -39,7 +39,7 @@ class UpgradePlan {
         const parameterString = encryptor.decrypt(req.query.pa);
         let decodedParam = decodeURIComponent(parameterString);
         let pa = querystring.parse(decodedParam);
-        const { action, transactionId, A02id, corpId, userId, additionalUser, additionalBranch, additionalCompany, moduleId, description, paymentMode, paymentMethod } = pa;
+        const { action, transactionId, A02id, additionalUser, additionalBranch, additionalCompany, moduleId, description, paymentMode, paymentMethod } = pa;
 
         let response = { data: null, message: '', status: 'SUCCESS' };
 
@@ -53,6 +53,18 @@ class UpgradePlan {
         };
 
         try {
+
+            const token = req.headers['authorization']?.split(' ')[1]; // 'Bearer <token>'
+
+            if (!token) {
+                response.message = 'No token provided, authorization denied.'
+                response.status = 'FAIL'
+                const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                return res.status(401).json({ encryptedResponse });
+            }
+            decoded = await TokenService.validateToken(token);
+            let corpId = decoded.corpId;
+            let userId = decoded.userId
             if (!action) {
                 return sendResponse('FAIL', 'Invalid action');
             }

@@ -222,6 +222,15 @@ class UsrRole {
         let response = { data: null, status: 'SUCCESS', message: null };
         let encryptedResponse
         try {
+            const token = req.headers['authorization']?.split(' ')[1]; // 'Bearer <token>'
+
+                if (!token) {
+                    response.message = 'No token provided, authorization denied.'
+                    response.status = 'FAIL'
+                    const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                    return res.status(401).json({ encryptedResponse });
+                }
+                decoded = await TokenService.validateToken(token);
             if (!action) {
                 response.message = 'No Action Passed';
                 response.status = 'FAIL'

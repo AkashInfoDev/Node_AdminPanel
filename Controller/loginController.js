@@ -845,7 +845,7 @@ class UserController {
                 UserId: corpExist.A01F01,
                 userNm: encryptor.decrypt(user.ADMIF01),
                 DefCmp: '',
-                cmplist
+                cmpList : cmplist.CompList
             };
             response.message = 'Login successful';
             response.token = token;

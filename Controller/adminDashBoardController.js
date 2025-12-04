@@ -24,10 +24,21 @@ class dashboardController {
     static async dashboardData(req, res) {
         let response = { data: null, status: 'SUCCESS', message: '' };
         let encryptedResponse;
-        const parameterString = encryptor.decrypt(req.query.pa);
-        let decodedParam = decodeURIComponent(parameterString);
-        let pa = querystring.parse(decodedParam);
-        let { corpId } = pa;
+        // const parameterString = encryptor.decrypt(req.query.pa);
+        // let decodedParam = decodeURIComponent(parameterString);
+        // let pa = querystring.parse(decodedParam);
+        // let { corpId } = pa;
+
+        const token = req.headers['authorization']?.split(' ')[1]; // 'Bearer <token>'
+
+        if (!token) {
+            response.message = 'No token provided, authorization denied.'
+            response.status = 'FAIL'
+            const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(401).json({ encryptedResponse });
+        }
+        let decoded = await TokenService.validateToken(token);
+        let corpId = decoded.corpId
         if (!corpId) {
             response.message = 'Corporate Id is required'
             encryptedResponse = encryptor.encrypt(JSON.stringify(response));
