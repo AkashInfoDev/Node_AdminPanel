@@ -113,17 +113,21 @@ class CompanyService {
 
             }
 
+            let user = await PLSDBADMI.findOne({
+                where: { ADMICORP: nextId }
+            })
+
             // Create company record
             const createCMP = await PLRDBA01.create({
                 A01F01: nextId,
                 A01F02: companyName,
                 A01F03: nextCorpId,
-                A01F04: softType,
-                A01F05: softSubType,
+                A01F04: softType ? softType : 'PL',
+                A01F05: softSubType ? softSubType : 'P',
                 A01F06: dbVersion,
                 A01F07: webVer,
                 A01F08: 'A',
-                A01F09: '',
+                A01F09: user.ADMIF02 + user.ADMIF04,
                 A01F10: noOfUser,
                 A01F11: regDate,
                 A01F12: subStrtDate,
@@ -131,11 +135,11 @@ class CompanyService {
                 A01F14: cancelDate,
                 A01F15: subDomainDelDate,
                 A01F16: cnclRes,
-                A01F17: phoneNumber,
-                A01F51: SBDdbType,
-                A01F52: srverIP,
-                A01F53: serverUserName,
-                A01F54: serverPassword,
+                A01F17: phoneNumber ? phoneNumber : user.ADMIF13,
+                A01F51: SBDdbType ? SBDdbType : 'SQL',
+                A01F52: srverIP ? srverIP : '94.176.235.105',
+                A01F53: serverUserName ? serverUserName : 'aipharma_aakash',
+                A01F54: serverPassword ? serverPassword : 'Aipharma@360',
                 A02F01: A02id,
                 A01CHLD: '',
             });
@@ -230,4 +234,3 @@ class CompanyService {
 }
 
 module.exports = CompanyService;
-
