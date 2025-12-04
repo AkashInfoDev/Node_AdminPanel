@@ -267,14 +267,18 @@ class UserController {
 
         const token = req.headers['authorization']?.split(' ')[1]; // 'Bearer <token>'
 
-        if (action != 'L' && !token) {
-            response.message = 'No token provided, authorization denied.'
-            response.status = 'FAIL'
-            const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-            return res.status(401).json({ encryptresponse });
+        let decoded;
+        if (action != 'L') {
+            if (!token) {
+                response.message = 'No token provided, authorization denied.'
+                response.status = 'FAIL'
+                const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                return res.status(401).json({ encryptedResponse });
+            } else {
+                decoded = await TokenService.validateToken(token);
+            }
         }
 
-        const decoded = await TokenService.validateToken(token);
 
         try {
             if (action === 'A') {
@@ -830,23 +834,22 @@ class UserController {
             let userComp = new AuthenticationService(corpId, uM82Row);
             let cmplist = await userComp.authenticateUser();
 
-            const token = jwt.sign({ userId: user.ADMIF01, roleId: user.ADMIF06, password: user.ADMIF05 }, process.env.JWT_SECRET_KEY, { expiresIn: process.env.JWT_EXPIRATION });
+            const token = jwt.sign({ userId: user.ADMIF01, roleId: user.ADMIF06, password: user.ADMIF05, corpId: corpId }, process.env.JWT_SECRET_KEY, { expiresIn: process.env.JWT_EXPIRATION });
 
-            response = {
-                data: {
-                    CustID: corpId,
-                    CustName: user.ADMIF02 + ' ' + user.ADMIF04,
-                    SubSDate: corpExist.A01F12,
-                    SubEDate: corpExist.A01F13,
-                    SoftVer: corpExist.A01F07,
-                    UserId: corpExist.A01F01,
-                    userNm: encryptor.decrypt(user.ADMIF01),
-                    DefCmp: '',
-                    cmplist
-                },
-                message: 'Login successful',
-                token
+            response.data = {
+                CustID: corpId,
+                CustName: user.ADMIF02 + ' ' + user.ADMIF04,
+                SubSDate: corpExist.A01F12,
+                SubEDate: corpExist.A01F13,
+                SoftVer: corpExist.A01F07,
+                UserId: corpExist.A01F01,
+                userNm: encryptor.decrypt(user.ADMIF01),
+                DefCmp: '',
+                cmplist
             };
+            response.message = 'Login successful';
+            response.token = token;
+            response.status = 'SUCCESS'
             const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
             return res.status(200).json({ encryptedResponse: encryptedResponse });
         } catch (error) {

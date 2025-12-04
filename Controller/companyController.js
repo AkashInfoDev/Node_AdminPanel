@@ -50,8 +50,8 @@ class CompanyService {
         if (!token) {
             response.message = 'No token provided, authorization denied.'
             response.status = 'FAIL'
-            const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-            return res.status(401).json({ encryptresponse });
+            const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(401).json({ encryptedResponse });
         }
 
         const decoded = await TokenService.validateToken(token);
@@ -217,8 +217,8 @@ class CompanyService {
             let AddHomeBrc = await BRCOntroller.handleAction(req, res, true);
 
             if (!lbool) {
-                const encryptresponse = encryptor.encrypt(JSON.stringify(responsePayload));
-                return res.status(201).json({ encryptresponse });
+                const encryptedResponse = encryptor.encrypt(JSON.stringify(responsePayload));
+                return res.status(201).json({ encryptedResponse });
             } else {
                 response.status = true;
                 return response;
@@ -227,8 +227,8 @@ class CompanyService {
         } catch (error) {
             console.error(error);
             sequelizeMASTER.query(`DROP DATABASE ${this.targ}`, { type: QueryTypes.RAW });
-            const encryptresponse = encryptor.encrypt(JSON.stringify({ message: 'Company creation failed' }));
-            return res.status(500).json({ encryptresponse });
+            const encryptedResponse = encryptor.encrypt(JSON.stringify({ message: 'Company creation failed' }));
+            return res.status(500).json({ encryptedResponse });
         }
     }
 }

@@ -41,8 +41,8 @@ class PricingPlanController {
         if (!token) {
             response.message = 'No token provided, authorization denied.'
             response.status = 'FAIL'
-            const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-            return res.status(401).json({ encryptresponse });
+            const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(401).json({ encryptedResponse });
         }
 
         const decoded = await TokenService.validateToken(token);
@@ -54,14 +54,14 @@ class PricingPlanController {
                     // response.status = 'FAIL';
                     // response.message = 'User ID is already registered';
                     // const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-                    // return res.status(400).json({ encryptresponse: encryptedResponse });
+                    // return res.status(400).json({ encryptedResponse: encryptedResponse });
                 }
             }
 
         // if (!user) {
         //     response.message = 'Unauthorized: User not found or inactive'
-        //     const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-        //     return res.status(403).json({ encryptresponse });
+        //     const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+        //     return res.status(403).json({ encryptedResponse });
         // }
 
         try {
@@ -80,8 +80,8 @@ class PricingPlanController {
 
                     if (existingPlan) {
                         response.message = 'Plan name already exists';
-                        const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                        return res.status(409).json({ encryptresponse });
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.status(409).json({ encryptedResponse });
                     }
 
                     // Create the new plan
@@ -101,14 +101,14 @@ class PricingPlanController {
 
                     response.message = 'Plan created successfully';
                     response.data = newPlan;
-                    const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                    return res.status(201).json({ encryptresponse });
+                    const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                    return res.status(201).json({ encryptedResponse });
 
                 case 'E':
                     if (!A02F01) {
                         response.message = 'A02F01 (ID) is required for editing.';
-                        const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                        return res.status(400).json({ encryptresponse });
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.status(400).json({ encryptedResponse });
                     }
 
                     // Update the plan with new values, including A01F11 and A02F12
@@ -130,19 +130,19 @@ class PricingPlanController {
 
                     if (updated) {
                         response.message = 'Record updated successfully';
-                        const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                        return res.json({ encryptresponse });
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.json({ encryptedResponse });
                     } else {
                         response.message = 'Record not found';
-                        const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                        return res.status(404).json({ encryptresponse });
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.status(404).json({ encryptedResponse });
                     }
 
                 case 'D':
                     if (!A02F01) {
                         response.message = 'A02F01 (ID) is required for deletion.';
-                        const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                        return res.status(400).json({ encryptresponse });
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.status(400).json({ encryptedResponse });
                     }
 
                     const deleted = await PLRDBA02.update({
@@ -153,19 +153,19 @@ class PricingPlanController {
 
                     if (deleted) {
                         response.message = 'Record deleted successfully';
-                        const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                        return res.json({ encryptresponse });
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.json({ encryptedResponse });
                     } else {
                         response.message = 'Record not found';
-                        const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                        return res.status(404).json({ encryptresponse });
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.status(404).json({ encryptedResponse });
                     }
 
                 case 'R':
                     if (!A02F01) {
                         response.message = 'A02F01 (ID) is required for restoring.';
-                        const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                        return res.status(400).json({ encryptresponse });
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.status(400).json({ encryptedResponse });
                     }
 
                     const restored = await PLRDBA02.update({
@@ -176,12 +176,12 @@ class PricingPlanController {
 
                     if (restored) {
                         response.message = 'Record restored successfully';
-                        const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                        return res.json({ encryptresponse });
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.json({ encryptedResponse });
                     } else {
                         response.message = 'Record not found';
-                        const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                        return res.status(404).json({ encryptresponse });
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.status(404).json({ encryptedResponse });
                     }
 
                 case 'G':
@@ -192,18 +192,18 @@ class PricingPlanController {
                     if (getAllList) {
                         response.message = 'All Price List';
                         response.data = getAllList
-                        const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                        return res.json({ encryptresponse });
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.json({ encryptedResponse });
                     } else {
                         response.message = 'No Records Found';
-                        const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                        return res.status(404).json({ encryptresponse });
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.status(404).json({ encryptedResponse });
                     }
 
                 default:
                     response.message = 'Invalid or missing action. Use A, E, D, or G.'
-                    encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                    return res.status(400).json({ encryptresponse });
+                    encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                    return res.status(400).json({ encryptedResponse });
             }
         } catch (error) {
             console.error('Error in PricingPlanController:', error);

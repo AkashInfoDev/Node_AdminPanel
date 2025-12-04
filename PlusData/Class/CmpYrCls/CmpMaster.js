@@ -92,8 +92,8 @@ class CmpMaster extends PlusInfo {
                 let response = {
                     message: 'Invalid UserId'
                 }
-                let encryptresponse = encryptor.encrypt(JSON.stringify(response));
-                return res.status(400).json({ encryptresponse });
+                let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                return res.status(400).json({ encryptedResponse });
             }
             let corpids = await PLRDBA01.findAll({
                 where: {

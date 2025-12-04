@@ -48,8 +48,8 @@ class UpgradePlan {
             response.status = status;
             response.message = message;
             response.data = data;
-            const encryptresponse = encryptor.encrypt(JSON.stringify(response));
-            return res.status(status === 'SUCCESS' ? 200 : 400).json({ encryptresponse });
+            const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(status === 'SUCCESS' ? 200 : 400).json({ encryptedResponse });
         };
 
         try {
