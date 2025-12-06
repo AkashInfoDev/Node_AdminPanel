@@ -8,6 +8,7 @@ const definePLSDBBRC = require('../Models/SDB/PLSDBBRC');
 const definePLSDBCROLE = require('../Models/SDB/PLSDBCROLE');
 const definePLRDBA02 = require('../Models/RDB/PLRDBA02');
 const Encryptor = require('../Services/encryptor');
+const TokenService = require('../Services/tokenServices');
 const sequelizeSDB = db.getConnection('A00001SDB');
 const sequelizeRDB = db.getConnection('RDB');
 
@@ -65,9 +66,11 @@ class dashboardController {
                         CROLF00: user.ADMIROL
                     }
                 });
-                user.dataValues.ROLENM = cusRole.CROLF01
-                user.dataValues.CROLF00 = cusRole.CROLF00
-                delete user.dataValues.ADMIROL
+                if (cusRole) {
+                    user.dataValues.ROLENM = cusRole.CROLF01
+                    user.dataValues.CROLF00 = cusRole.CROLF00
+                    delete user.dataValues.ADMIROL
+                }
             }
         }
         // let subDetail = await PLSDBM81.findAll({

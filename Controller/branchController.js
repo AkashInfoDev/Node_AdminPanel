@@ -11,6 +11,7 @@ const definePLSDBREL = require('../Models/SDB/PLSDBBRC'); // Model factory
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01'); // Model factory
 const definePLSTATE = require('../Models/IDB/PLSTATE'); // Model factory
 const Encryptor = require('../Services/encryptor');
+const TokenService = require('../Services/tokenServices');
 
 const PLSDBBRC = definePLSDBADMI(sequelizeSDB);
 const PLSDBREL = definePLSDBREL(sequelizeSDB);
@@ -20,14 +21,15 @@ const PLSTATE = definePLSTATE(sequelizeIDB);
 const encryptor = new Encryptor();
 
 class BranchController {
-    constructor(lbool, action, BRcode, BRname, BRgst, BRSTATE, BRCorp) {
+    constructor(lbool, action, BRcode, BRname, BRgst, BRSTATE, BRCorp, BRDEF) {
         this.act = action;
         this.brc = BRcode;
         this.brn = BRname;
         this.brg = BRgst;
         this.brcr = BRCorp;
         this.brst = BRSTATE;
-        this.lbool = lbool
+        this.lbool = lbool;
+        this.defBrc = BRDEF
     }
 
     // Generate a unique BRCODE in the format BRC-XXXX (where XXXX is a 4-digit number)
@@ -141,7 +143,8 @@ class BranchController {
                     BRNAME,
                     BRGST,
                     BRCORP,
-                    BRSTATE
+                    BRSTATE,
+                    BRDEF: BRDEF == 'Y' ? 'Y' : 'N'
                 });
 
                 if (newBranch) {
@@ -227,15 +230,23 @@ class BranchController {
                     }
                 }
 
-                const deletedCount = await PLSDBBRC.destroy({ where: { BRCODE } });
-                if (deletedCount === 0) {
-                    if (!this.lbool) {
-                        return false;
-                    } else {
-                        response.message = 'Branch not found';
-                        response.status = 'FAIL'
-                        encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-                        return res.status(404).json({ encryptedResponse });
+                const branchRow = await PLSDBBRC.findOne({ where: { BRCODE } });
+                if (!branchRow || branchRow.BRDEF == 'Y') {
+                    response.message = 'Default Branch Can Not be Deleted'
+                    response.status = 'FAIL'
+                    encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                    return res.status(400).json({ encryptedResponse });
+                } else {
+                    const deletedCount = await PLSDBBRC.destroy({ where: { BRCODE } });
+                    if (deletedCount === 0) {
+                        if (!this.lbool) {
+                            return false;
+                        } else {
+                            response.message = 'Branch not found';
+                            response.status = 'FAIL'
+                            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                            return res.status(404).json({ encryptedResponse });
+                        }
                     }
                 }
                 if (this.lbool == false) {

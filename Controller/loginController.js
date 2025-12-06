@@ -261,9 +261,11 @@ class UserController {
         let decodedParam = decodeURIComponent(parameterString);
         let pa = querystring.parse(decodedParam);
 
-        const { action, corpId, userId, firstName, middleName, lastName, dob, gender, email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, isPassword, cusRole
+        pa.isPassword = pa.isPassword === "true";
+        let { action, corpId, userId, firstName, middleName, lastName, dob, gender, email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, isPassword, cusRole
             // , companyName, softSubType, softType, dbVersion, webVer, noOfUser, regDate, subStrtDate, subEndDate, cancelDate, subDomainDelDate, cnclRes, SBDdbType, srverIP, serverUserName, serverPassword, A02id 
         } = pa;
+
 
         const token = req.headers['authorization']?.split(' ')[1]; // 'Bearer <token>'
 
@@ -293,6 +295,8 @@ class UserController {
                 }, res);
             } else if (action === 'L') {
                 return UserController.loginUser(corpId, userId, password, res);
+            } else if (action === 'D') {
+                return UserController.deleteUser(decoded, userId, res);
             }
 
             return res.status(400).json({ message: 'Invalid action parameter' });
@@ -519,6 +523,7 @@ class UserController {
 
 
             } else if (roleId == '3') {
+                let corpId = decoded.corpId
                 let response = { status: 'SUCCESS', message: null };
                 const encryptedUserId = encryptor.encrypt(userId);
 
@@ -544,10 +549,7 @@ class UserController {
                     }
                 });
 
-
-
                 const hashedPassword = encryptor.encrypt(password);
-
                 const newUser = await PLSDBADMI.create({
                     ADMIF01: encryptedUserId,
                     ADMIF02: firstName,
@@ -742,7 +744,7 @@ class UserController {
 
             // Update the user data in the database
             await PLSDBADMI.update(updateData, {
-                where: { ADMIF01: encryptedUserId }
+                where: { ADMIF00: existingUser.ADMIF00 }
             });
             if (cusRole) {
                 await PLSDBADMI.update(
@@ -769,7 +771,7 @@ class UserController {
         try {
             let response = { status: 'SUCCESS', message: null };
             const encryptedId = encryptor.encrypt(userId);
-            let corpRow = {};
+            let corpRow = null;
             let user = null
             const existing = await PLSDBADMI.findAll();
             for (let i of existing) {
@@ -786,7 +788,7 @@ class UserController {
             let userM81Unq = user.ADMIF00
 
             let corpExist = await PLRDBA01.findAll({
-                where: { A01F03: corpUnq }
+                where: { A01F01: corpUnq }
             });
 
             let M81Row = await PLSDBM81.findAll({
@@ -823,10 +825,8 @@ class UserController {
             let pwd = encryptor.decrypt(user.ADMIF05);
             const isPasswordValid = pwd == password;
             if (!isPasswordValid) {
-                response = {
-                    status: false,
-                    message: 'Invalid password'
-                }
+                response.status = 'FAIL';
+                response.message = 'Invalid password';
                 let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                 return res.status(400).json({ encryptedResponse: encryptedResponse });
             }
@@ -839,13 +839,13 @@ class UserController {
             response.data = {
                 CustID: corpId,
                 CustName: user.ADMIF02 + ' ' + user.ADMIF04,
-                SubSDate: corpExist.A01F12,
-                SubEDate: corpExist.A01F13,
-                SoftVer: corpExist.A01F07,
-                UserId: corpExist.A01F01,
+                SubSDate: corpRow.A01F12,
+                SubEDate: corpRow.A01F13,
+                SoftVer: corpRow.A01F07,
+                UserId: M81Row.M81F01,
                 userNm: encryptor.decrypt(user.ADMIF01),
-                DefCmp: '',
-                cmpList : cmplist.CompList
+                DefCmp: cmplist.DefComp.cmpNo,
+                cmpList: cmplist.CompList
             };
             response.message = 'Login successful';
             response.token = token;
@@ -856,6 +856,45 @@ class UserController {
             console.error(error);
             const encryptedResponse = encryptor.encrypt(JSON.stringify({ message: 'Login failed' }));
             return res.status(500).json({ encryptedResponse: encryptedResponse });
+        }
+    }
+
+    static async deleteUser(decoded, userId, res) {
+
+        let user;
+        let response = { status: 'SUCCESS', message: null };
+
+        const existing = await PLSDBADMI.findAll();
+        for (let i of existing) {
+            const decrypted = encryptor.decrypt(i.ADMIF01);
+            if (decrypted === userId) {
+                user = i;
+            }
+        }
+
+        if (user.ADMIF06 == 2) {
+            response.status = 'FAIL';
+            response.message = 'Admin User Can Not be Deleted';
+            const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(400).json({ encryptedResponse: encryptedResponse });
+        }
+
+        if (!user) {
+            response.status = 'FAIL';
+            response.message = 'User Does Not Exist';
+            const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(400).json({ encryptedResponse: encryptedResponse });
+        }
+
+        let deleteUsr = await PLSDBADMI.destroy({
+            where: { ADMIF01: user.ADMIF01 }
+        })
+
+        if (deleteUsr) {
+            response.status = 'SUCCESS';
+            response.message = 'User ID Deleted Successfully';
+            const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(200).json({ encryptedResponse: encryptedResponse });
         }
     }
 }

@@ -26,6 +26,10 @@ module.exports = (sequelize) => {
         BRSTATE: {
             type: DataTypes.STRING(15),
             allowNull: true
+        },
+        BRDEF: {
+            type: DataTypes.STRING(1),
+            allowNull: false
         }
     }, {
         tableName: 'PLSDBBRC',

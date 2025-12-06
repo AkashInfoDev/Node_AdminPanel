@@ -6,6 +6,7 @@ const definePLSDBCROLE = require('../Models/SDB/PLSDBCROLE');
 const definePLSYS01 = require('../Models/IDB/PLSYS01');
 const Encryptor = require('../Services/encryptor');
 const MenuController = require('./menuController');
+const TokenService = require('../Services/tokenServices');
 
 const sequelizeSDB = db.getConnection('A00001SDB');
 const sequelizeIDB = db.getConnection('IDBAPI');
@@ -218,9 +219,10 @@ class UsrRole {
         const parameterString = encryptor.decrypt(req.query.pa);
         let decodedParam = decodeURIComponent(parameterString);
         let pa = querystring.parse(decodedParam);
-        const { action, CROLF00, CROLF01, CROLF02 } = pa;
+        const { action, CROLF00, CROLF01 } = pa;
         let response = { data: null, status: 'SUCCESS', message: null };
-        let encryptedResponse
+        let encryptedResponse;
+        let decoded;
         try {
             const token = req.headers['authorization']?.split(' ')[1]; // 'Bearer <token>'
 
@@ -254,7 +256,7 @@ class UsrRole {
                     }
                     const newRole = await PLSDBCROLE.create({
                         CROLF01: CROLF01,
-                        CROLF02: CROLF02
+                        CROLF02: decoded.corpId
                     });
                     let newcrole = await PLSDBUSROLE.create({
                         USRF01: newRole.CROLF00,
@@ -299,7 +301,7 @@ class UsrRole {
                     }
                     let editedRole = await PLSDBCROLE.update({
                         CROLF01: CROLF01,
-                        CROLF02: CROLF02
+                        CROLF02: decoded.corpId
                     }, {
                         where: { CROLF00 }
                     });

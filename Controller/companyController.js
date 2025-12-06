@@ -213,7 +213,7 @@ class CompanyService {
                 BRcode = ''
             }
 
-            let BRCOntroller = new BranchController(false, 'A', BRcode, 'HOME-BRC', brGst, '', nextCorpId)
+            let BRCOntroller = new BranchController(false, 'A', BRcode, 'HOME-BRC', brGst, '', nextCorpId, 'Y')
             let AddHomeBrc = await BRCOntroller.handleAction(req, res, true);
 
             if (!lbool) {

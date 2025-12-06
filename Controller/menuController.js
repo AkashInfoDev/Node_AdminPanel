@@ -1,6 +1,7 @@
 const db = require('../Config/config');
 const definePLSYS01 = require('../Models/IDB/PLSYS01');
 const Encryptor = require('../Services/encryptor');
+const TokenService = require('../Services/tokenServices');
 // const { sequelizeSource, sequelizeTarget } = require('../Config/dbConnections'); // Assuming these are set up
 
 // Define source database connection and model
@@ -92,15 +93,15 @@ class MenuController {
         order: [['S01F03', 'ASC']], // Order by parent-child relationship
       });
 
-      // const token = req.headers['authorization']?.split(' ')[1]; // 'Bearer <token>'
+      const token = req.headers['authorization']?.split(' ')[1]; // 'Bearer <token>'
 
-      // if (!token) {
-      //   response.message = 'No token provided, authorization denied.'
-      //   response.status = 'FAIL'
-      //   const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-      //   return res.status(401).json({ encryptedResponse });
-      // }
-      // let decoded = await TokenService.validateToken(token);
+      if (!token) {
+        response.message = 'No token provided, authorization denied.'
+        response.status = 'FAIL'
+        const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+        return res.status(401).json({ encryptedResponse });
+      }
+      let decoded = await TokenService.validateToken(token);
 
       // Build the menu tree from the fetched menus
       const menuTree = MenuController.buildMenuTree(menus);

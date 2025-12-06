@@ -55,6 +55,7 @@ class UpgradePlan {
         try {
 
             const token = req.headers['authorization']?.split(' ')[1]; // 'Bearer <token>'
+            let decoded;
 
             if (!token) {
                 response.message = 'No token provided, authorization denied.'
@@ -177,11 +178,21 @@ class UpgradePlan {
 
             // Action M - Update or Activate Modules
             else if (action === 'M') {
-                const { moduleId, userId, paymentMode } = pa;
+                const { moduleId, paymentMode } = pa;
 
-                let user = await PLSDBADMI.findOne({
-                    where: { ADMIF00: userId }
-                });
+                let user
+                let decryptedUserId = encryptor.decrypt(decoded.userId)
+                const existing = await PLSDBADMI.findAll();
+                for (let i of existing) {
+                    const decrypted = encryptor.decrypt(i.ADMIF01)
+                    if (decrypted == decryptedUserId) {
+                        user = i;
+                        response = {
+                            message: 'User ID valid'
+                        }
+                    }
+                }
+
 
                 if (user && moduleId) {
                     // Ensure A01F01 and moduleId are numbers (optional but recommended)
@@ -190,9 +201,9 @@ class UpgradePlan {
                     await PLSDBADMI.update({
                         ADMIMOD: newADMIMOD
                     }, {
-                        where: { ADMIF00: userId }
+                        where: { ADMIF00: user.ADMIF00 }
                     });
-                    const paymentData = UpgradePlan.constructPaymentData(null, paymentMode, A02id, corpId, userId, description, paymentMethod);
+                    const paymentData = UpgradePlan.constructPaymentData(null, paymentMode, A02id, decoded.corpId, user.ADMIF00, description, paymentMethod);
                     await PLRDBPYMT.create(paymentData);
                     return sendResponse('SUCCESS', 'Module activated for this user');
                 }
@@ -269,7 +280,7 @@ class UpgradePlan {
                 PYMT01: corpId,
                 PYMT02: userId,
                 PYMT03: tranInfo.id,
-                PYMT04: 'ONLINE',
+                PYMT04: paymentMode,
                 PYMT05: tranInfo.amount,
                 PYMT06: tranInfo.status,
                 PYMT07: tranInfo.method,
@@ -280,7 +291,7 @@ class UpgradePlan {
                 PYMT01: corpId,
                 PYMT02: userId,
                 PYMT03: transactionId,
-                PYMT04: 'OFFLINE',
+                PYMT04: paymentMode,
                 PYMT05: 0,
                 PYMT06: 'SUCCESS',
                 PYMT07: 'CASH',
