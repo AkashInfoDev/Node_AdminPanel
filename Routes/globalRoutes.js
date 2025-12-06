@@ -7,7 +7,7 @@ const Company = require('./companyRoutes');
 const Branch = require('./branchRoutes');
 const Roles = require('./roleRoutes');
 const Module = require('./cusModuleRoutes')
-const dbRoute = require('./adminDashboardRoutes');
+const dbRoute = require('./userDashboardRoutes');
 const Write = require('./fileRoutes');
 const Plan = require('./PlanRoutes');
 
@@ -18,9 +18,9 @@ router.use('/Company', Company);
 router.use('/Branch', Branch);
 router.use('/Role', Roles);
 router.use('/Module', Module);
-router.use('/admindashboard', dbRoute);
+router.use('/userAdmindashboard', dbRoute);
 router.use('/Write', Write);
 router.use('/Plan', Plan);
-router.use('/Plan', Plan);
+router.use('/admindashboard', dbRoute);
 
 module.exports = router;
