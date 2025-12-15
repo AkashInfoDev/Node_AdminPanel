@@ -68,7 +68,7 @@ class BranchController {
         try {
             let response = { data: null, status: 'Success', message: '' };
             let encryptedResponse;
-            let action, BRCODE, BRNAME, BRGST, BRSTATE, corpId
+            let action, BRCODE, BRNAME, BRGST, BRSTATE, BRDEF, corpId
             let decoded;
             if (this.lbool == false) {
                 action = this.act;
@@ -77,6 +77,7 @@ class BranchController {
                 BRGST = this.brg;
                 corpId = this.brcr;
                 BRSTATE = this.brst;
+                BRDEF = this.defBrc;
             } else {
                 const parameterString = encryptor.decrypt(req.query.pa);
                 let decodedParam = decodeURIComponent(parameterString);
@@ -144,7 +145,7 @@ class BranchController {
                     BRGST,
                     BRCORP,
                     BRSTATE,
-                    BRDEF: BRDEF == 'Y' ? 'Y' : 'N'
+                    BRDEF: this.defBrc == 'Y' ? 'Y' : 'N'
                 });
 
                 if (newBranch) {
