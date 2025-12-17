@@ -107,7 +107,7 @@ class AdminController {
                 ADMIF05: hashedPassword,
                 ADMIF06: roleId,
                 ADMIF07: email,
-                ADMIF09: dob.toString(),
+                ADMIF09: (dob.toString()) ? dob.toString() : null,
                 ADMIF10: gender,
                 ADMIF12: address,
                 ADMIF13: phoneNumber,
@@ -132,14 +132,14 @@ class AdminController {
                 token: token
             }
 
-            let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
 
             return res.status(201).json({
                 encryptedResponse
             });
         } catch (error) {
             console.error(error);
-            let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
             return res.status(500).json({ encryptedResponse: encryptedResponse });
         }
     }
@@ -156,7 +156,7 @@ class AdminController {
                     status: 'FAIL',
                     message: 'Admin not found'
                 }
-                let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                 return res.status(404).json({ encryptedResponse: encryptedResponse });
             }
 
@@ -170,7 +170,7 @@ class AdminController {
             if (roleId) updatedData.ADMIF06 = roleId;
             if (email) updatedData.ADMIF07 = email;
             if (isActive) updatedData.ADMIF08 = isActive;
-            if (dob) updatedData.ADMIF09 = dob;
+            if (dob) updatedData.ADMIF09 = (dob.toString()) ? dob.toString() : null;
             if (gender) updatedData.ADMIF10 = gender;
             if (address) updatedData.ADMIF12 = address;
             if (phoneNumber) updatedData.ADMIF13 = phoneNumber;
@@ -181,14 +181,14 @@ class AdminController {
             response = {
                 message: 'Admin details updated successfully'
             }
-            let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
             return res.status(200).json({ encryptedResponse: encryptedResponse });
         } catch (error) {
             console.error(error);
             response = {
                 message: 'Failed to update admin'
             }
-            let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
             return res.status(500).json({ encryptedResponse: encryptedResponse });
         }
     }
@@ -217,7 +217,7 @@ class AdminController {
                 response = {
                     message: 'Invalid UserId'
                 }
-                let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                 return res.status(400).json({ encryptedResponse: encryptedResponse });
             }
 
@@ -227,7 +227,7 @@ class AdminController {
                 response = {
                     message: 'Invalid password'
                 }
-                let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                 return res.status(400).json({ encryptedResponse: encryptedResponse });
             }
 
@@ -241,14 +241,14 @@ class AdminController {
                 message: 'Login successful',
                 token
             }
-            let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
             return res.status(200).json({ encryptedResponse: encryptedResponse });
         } catch (error) {
             console.error(error);
             response = {
                 message: 'Login failed'
             }
-            let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
             return res.status(500).json({ encryptedResponse: encryptedResponse });
         }
     }
@@ -274,7 +274,7 @@ class UserController {
             if (!token) {
                 response.message = 'No token provided, authorization denied.'
                 response.status = 'FAIL'
-                const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                 return res.status(401).json({ encryptedResponse });
             } else {
                 decoded = await TokenService.validateToken(token);
@@ -321,7 +321,7 @@ class UserController {
                     if (decrypted === userId) {
                         response.status = 'FAIL';
                         response.message = 'User ID is already registered';
-                        const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                         return res.status(400).json({ encryptedResponse: encryptedResponse });
                     }
                 }
@@ -336,7 +336,7 @@ class UserController {
                     ADMIF05: hashedPassword,
                     ADMIF06: roleId,
                     ADMIF07: email,
-                    ADMIF09: dob.toString(),
+                    ADMIF09: (dob.toString()) ? dob.toString() : null,
                     ADMIF10: gender,
                     ADMIF12: address,
                     ADMIF13: phoneNumber,
@@ -508,7 +508,7 @@ class UserController {
                         };
 
                         // Encrypt the response
-                        const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
 
                         // Return the response
                         return res.status(201).json({ encryptedResponse });
@@ -533,7 +533,7 @@ class UserController {
                     if (decrypted === userId) {
                         response.status = 'FAIL';
                         response.message = 'User ID is already registered';
-                        const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                         return res.status(400).json({ encryptedResponse: encryptedResponse });
                     }
                 }
@@ -558,7 +558,7 @@ class UserController {
                     ADMIF05: hashedPassword,
                     ADMIF06: roleId,
                     ADMIF07: email,
-                    ADMIF09: dob.toString(),
+                    ADMIF09: (dob.toString()) ? dob.toString() : null,
                     ADMIF10: gender,
                     ADMIF12: address,
                     ADMIF13: phoneNumber,
@@ -714,12 +714,13 @@ class UserController {
                     ADMIF04: lastName || existingUser.ADMIF04, // Last Name
                     ADMIF05: hashedPassword,
                     ADMIF06: roleId || existingUser.ADMIF06,
+                    ADMIF07: email || existingUser.ADMIF07, // Email
                     ADMIF09: dob ? dob.toString() : existingUser.ADMIF09, // Date of Birth
                     ADMIF10: gender || existingUser.ADMIF10, // Gender
-                    ADMIF07: email || existingUser.ADMIF07, // Email
                     ADMIF12: address || existingUser.ADMIF12, // Address
                     ADMIF13: phoneNumber || existingUser.ADMIF13, // Phone Number
-                    ADMIF14: base64Image || existingUser.ADMIF14 // Base64 Image
+                    ADMIF14: base64Image || existingUser.ADMIF14, // Base64 Image
+                    ADMIROL: cusRole
                 };
             } else {
                 updateData = {
@@ -727,12 +728,13 @@ class UserController {
                     ADMIF03: middleName || existingUser.ADMIF03, // Middle Name
                     ADMIF04: lastName || existingUser.ADMIF04, // Last Name
                     ADMIF06: roleId || existingUser.ADMIF06,
-                    ADMIF09: dob ? dob.toString() : existingUser.ADMIF09, // Date of Birth
-                    ADMIF10: gender || existingUser.ADMIF10, // Gender
                     ADMIF07: email || existingUser.ADMIF07, // Email
+                    ADMIF09: dob ? dob == 'null' ? null : dob.toString() : existingUser.ADMIF09, // Date of Birth
+                    ADMIF10: gender || existingUser.ADMIF10, // Gender
                     ADMIF12: address || existingUser.ADMIF12, // Address
                     ADMIF13: phoneNumber || existingUser.ADMIF13, // Phone Number
-                    ADMIF14: base64Image || existingUser.ADMIF14 // Base64 Image
+                    ADMIF14: base64Image || existingUser.ADMIF14, // Base64 Image
+                    ADMIROL: cusRole
                 };
             }
 
@@ -800,7 +802,7 @@ class UserController {
             if (!corpExist) {
                 response.status = 'FAIL';
                 response.message = 'Invalid CorporateID';
-                const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                 return res.status(400).json({ encryptedResponse: encryptedResponse });
             } else {
                 for (const corp of corpExist) {
@@ -811,14 +813,14 @@ class UserController {
                 if (!corpRow) {
                     response.status = 'FAIL';
                     response.message = 'Corporate ID not Matched';
-                    const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                    const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                     return res.status(400).json({ encryptedResponse: encryptedResponse });
                 }
             }
             if (!user) {
                 response.status = 'FAIL';
                 response.message = 'Incorrect UserID';
-                const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                 return res.status(400).json({ encryptedResponse: encryptedResponse });
             }
 
@@ -827,7 +829,7 @@ class UserController {
             if (!isPasswordValid) {
                 response.status = 'FAIL';
                 response.message = 'Invalid password';
-                let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                 return res.status(400).json({ encryptedResponse: encryptedResponse });
             }
 
@@ -850,7 +852,7 @@ class UserController {
             response.message = 'Login successful';
             response.token = token;
             response.status = 'SUCCESS'
-            const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
             return res.status(200).json({ encryptedResponse: encryptedResponse });
         } catch (error) {
             console.error(error);
@@ -875,14 +877,14 @@ class UserController {
         if (user.ADMIF06 == 2) {
             response.status = 'FAIL';
             response.message = 'Admin User Can Not be Deleted';
-            const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
             return res.status(400).json({ encryptedResponse: encryptedResponse });
         }
 
         if (!user) {
             response.status = 'FAIL';
             response.message = 'User Does Not Exist';
-            const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
             return res.status(400).json({ encryptedResponse: encryptedResponse });
         }
 
@@ -893,7 +895,7 @@ class UserController {
         if (deleteUsr) {
             response.status = 'SUCCESS';
             response.message = 'User ID Deleted Successfully';
-            const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
             return res.status(200).json({ encryptedResponse: encryptedResponse });
         }
     }

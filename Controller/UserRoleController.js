@@ -158,40 +158,44 @@ class UsrRole {
                         const menuTree = MenuController.buildMenuTree(menuRows);
 
                         menus = MenuController.addPermissionsToLeafMenus(menuTree);
-                        menus = menus.map(item => {
+                        menus = MenuController.assignPermissionsToMenus(menus, allRoles); 
+                        // menus = menus.map(item => {
                             
-                            // Check if any children exist
-                            if (item.children && item.children.length > 0) {
+                        //     // Check if any children exist
+                        //     if (item.children && item.children.length > 0) {
                                 
-                                item.children = item.children.map(child => {
+                        //         item.children = item.children.map(child => {
                                     
-                                    // Log if the role exists in allRoles.USRF02, USRF03, etc.
+                        //             // Log if the role exists in allRoles.USRF02, USRF03, etc.
                                     
-                                    if (allRoles.USRF02.includes(child.S01F02)) {
-                                        child.l_Add = 1;
-                                    }
-                                    if (allRoles.USRF03.includes(child.S01F02)) {
-                                        child.l_Edit = 1;
-                                    }
-                                    if (allRoles.USRF04.includes(child.S01F02)) {
-                                        child.l_Delete = 1;
-                                    }
-                                    if (allRoles.USRF05.includes(child.S01F02)) {
-                                        child.l_View = 1;
-                                    }
-                                    if (allRoles.USRF06.includes(child.S01F02)) {
-                                        child.l_Print = 1;
-                                    }
-                                    if (allRoles.USRF07.includes(child.S01F02)) {
-                                        child.l_UserField = 1;
-                                    }
+                        //             if(child.S01F02 == '1242'){
+                        //                 console.log('');
+                        //             }
+                        //             if (allRoles.USRF02.includes(child.S01F02)) {
+                        //                 child.l_Add = 1;
+                        //             }
+                        //             if (allRoles.USRF03.includes(child.S01F02)) {
+                        //                 child.l_Edit = 1;
+                        //             }
+                        //             if (allRoles.USRF04.includes(child.S01F02)) {
+                        //                 child.l_Delete = 1;
+                        //             }
+                        //             if (allRoles.USRF05.includes(child.S01F02)) {
+                        //                 child.l_View = 1;
+                        //             }
+                        //             if (allRoles.USRF06.includes(child.S01F02)) {
+                        //                 child.l_Print = 1;
+                        //             }
+                        //             if (allRoles.USRF07.includes(child.S01F02)) {
+                        //                 child.l_UserField = 1;
+                        //             }
                         
-                                    return child; // Return updated child
-                                });
-                            }
+                        //             return child; // Return updated child
+                        //         });
+                        //     }
                             
-                            return item; // Return updated item
-                        });
+                        //     return item; // Return updated item
+                        // });
                         
 
                         // menus = menuTree; // The updated menu tree with permissions

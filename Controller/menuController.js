@@ -41,6 +41,57 @@ class MenuController {
     return menuTree;
   }
 
+  static assignPermissionsToMenus(menuTree, allRoles) {
+    // Iterate through each menu item in the tree
+    menuTree.forEach(item => {
+      // Check if the item has children (indicating it's a parent node)
+      if (item.children && item.children.length > 0) {
+        // Recursively process the children
+        this.assignPermissionsToMenus(item.children, allRoles); // Recursive call for the children
+      }
+  
+      // Now, process the permissions for each child in the item
+      if (item.children && item.children.length > 0) {
+        item.children = item.children.map(child => {
+          // Check if the role exists in allRoles and assign permissions accordingly
+          
+          // Log if the role exists in the specific roles (example '1242')
+          if (child.S01F02 === '1242') {
+            console.log('Specific role match: 1242');
+          }
+          
+          // Assign permissions based on the role (assuming child.S01F02 is the role ID)
+          if (allRoles.USRF02.includes(child.S01F02)) {
+            child.l_Add = 1; // Grant Add permission
+          }
+          if (allRoles.USRF03.includes(child.S01F02)) {
+            child.l_Edit = 1; // Grant Edit permission
+          }
+          if (allRoles.USRF04.includes(child.S01F02)) {
+            child.l_Delete = 1; // Grant Delete permission
+          }
+          if (allRoles.USRF05.includes(child.S01F02)) {
+            child.l_View = 1; // Grant View permission
+          }
+          if (allRoles.USRF06.includes(child.S01F02)) {
+            child.l_Print = 1; // Grant Print permission
+          }
+          if (allRoles.USRF07.includes(child.S01F02)) {
+            child.l_UserField = 1; // Grant UserField permission
+          }
+          
+          return child; // Return the updated child
+        });
+      }
+  
+      // Return the updated menu item
+      return item;
+    });
+  
+    return menuTree; // Return the menu tree with updated permissions
+  }
+  
+
   // Static method to remove '&' from menu names
   static removeAmpersand(menuName) {
     return menuName.replace(/&/g, ''); // Removes all '&' characters
