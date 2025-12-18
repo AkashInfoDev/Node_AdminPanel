@@ -715,7 +715,7 @@ class UserController {
                     ADMIF05: hashedPassword,
                     ADMIF06: roleId || existingUser.ADMIF06,
                     ADMIF07: email || existingUser.ADMIF07, // Email
-                    ADMIF09: dob ? dob.toString() : existingUser.ADMIF09, // Date of Birth
+                    ADMIF09: dob ? dob == 'null' ? null : dob.toString() : existingUser.ADMIF09, // Date of Birth
                     ADMIF10: gender || existingUser.ADMIF10, // Gender
                     ADMIF12: address || existingUser.ADMIF12, // Address
                     ADMIF13: phoneNumber || existingUser.ADMIF13, // Phone Number
