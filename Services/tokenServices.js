@@ -7,7 +7,7 @@ const PLSDBADMI = definePLSDBADMI(sequelizeSDB);
 
 class TokenService {
     // Method to validate the token
-    static async validateToken(token) {
+    static async validateToken(token, isCron) {
 
         const encryptor = new Encryptor();
 
@@ -19,6 +19,9 @@ class TokenService {
             // Attempt to verify and decode the token
             decodedToken = jwt.verify(token, process.env.JWT_SECRET_KEY);
         } catch (err) {
+            if(isCron){
+                return false;
+            }
             // Throw an error if the token is invalid or expired
             throw new Error('Invalid or expired token');
         }

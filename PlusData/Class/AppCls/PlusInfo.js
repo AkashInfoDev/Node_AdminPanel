@@ -1,12 +1,13 @@
 const DBHandler = require("../../../DataClass/Class/DbHandler");
-const { LangType } = require("../../commonClass/plusCommon");
+// const { LangType } = require("../../commonClass/plusCommon");
 const Year = require("../CmpYrCls/Year");
 
 class PlusInfo {
-    constructor() {
+    constructor(LangType) {
         // Simulated "NonSerialized" fields
+        this.cmpNum = '0001'
         this.ODB = DBHandler; // Database Connection Object
-        this._lCode = LangType.English; // Language Code (default English)
+        this._lCode = LangType?.English ? LangType?.English : LangType; // Language Code (default English)
         this.DtS13 = null;
         // this.oYear = new Year;
         this._cLCode = ""; // Current Language Code
@@ -40,6 +41,7 @@ class PlusInfo {
         if (this._myCmp != null) {
             this.ODB = this._myCmp.oCon;
             this.lCode = this._myCmp.lCode;
+            this.cCmpNo = this._myCmp.cCmpNo;
         }
     }
 

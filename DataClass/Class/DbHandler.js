@@ -1,6 +1,7 @@
 // const DT = require('./dt'); // Adjust import path as needed
 const DDefine = require('./DcDefine'); // Adjust import path as needed
 const db = require('../../Config/config'); // Your Database class
+const { getQuery } = require('../../Services/queryService');
 const sequelizeIDB = db.getConnection('IDBAPI');
 
 
@@ -18,7 +19,7 @@ class DBHandler {
     /**
      * Get a blank row dictionary based on a table structure
      */
-    async GetBlankRowDict(cTblNM, cFldList = "*", cExFld = "", obj) {
+    async GetBlankRowDict(cTblNM, cFldList = "*", cExFld = "") {
         try {
 
             const query = `SELECT TOP 1 ${cFldList} FROM ${cTblNM.toString().trim()}`;
@@ -28,7 +29,7 @@ class DBHandler {
             );
             // await DT('DynamicPool', 'get', '', '', '', '', '', '', obj.corporateID, obj.companyID, obj.YrNo, '', query);
 
-            DTable = cExFld ? await this.AddExColInDT(DTable.recordset, cExFld) : DTable.recordset;
+            DTable = cExFld ? await DBHandler.AddExColInDT(DTable, cExFld) : DTable;
             return this.DrToDic(DTable);
         } catch (ex) {
             console.error(`Error in GetBlankRowDict: ${cTblNM}`, ex);
@@ -39,7 +40,7 @@ class DBHandler {
     /**
      * Adds extra columns in the data table with default values
      */
-    async AddExColInDT(DTObj, cExFld, lRemoveAdd = false) {
+    static async AddExColInDT(DTObj, cExFld, lRemoveAdd = false) {
         let DT = DTObj;
 
         if (DT == null) {
@@ -284,7 +285,6 @@ class DBHandler {
         return success;
     }
 
-
     async FillDataType(DTable, cDBType) {
         let cKey;
 
@@ -321,6 +321,73 @@ class DBHandler {
 
         return DTable;
     }
+
+    static async RowExist(cTblNm, cWhere, cQuery) {
+        if (!cQuery) {
+            cQuery = '';
+            if (cWhere) {
+                cQuery = "SELECT '1' AS TFLD FROM " + cTblNm + (!cWhere ? "" : " Where " + cWhere);
+            }
+            else { cQuery = "SELECT '1' AS TFLD FROM " + cTblNm; }
+            console.log(cQuery);
+            let drs = this.sequelizeDynamic = db.getConnection(this.databasename);
+            let DTable = await this.sequelizeDynamic.query(
+                cQuery,
+                { type: this.sequelizeDynamic.QueryTypes.SELECT }
+            );
+            //   await DT(pool, 'getRow', '', '', '', '', '', '', obj.corporateID, obj.companyID, '', '', cQuery);
+            drs = drs.recordset;
+            if (drs.length > 0) {
+                return true;
+            } else
+                return false;
+        } else {
+            let drs = this.sequelizeDynamic = db.getConnection(this.databasename);
+            let DTable = await this.sequelizeDynamic.query(
+                cQuery,
+                { type: this.sequelizeDynamic.QueryTypes.SELECT }
+            );
+            //   await DT(pool, 'getRow', '', '', '', '', '', '', obj.corporateID, obj.companyID, '', '', cQuery);
+            drs = drs.recordset;
+            if (drs.length > 0) {
+                return true;
+            } else
+                return false;
+        }
+    }
+
+    async GetRowDict(cTblNM, cExFld = "", cWhere = "", lBlankRow = false, obj) {   // cExFld  - Field name ~C~ DataType ~C~ Default Value ~C~ Max length if Any ~R~ Next Field Defination
+        cWhere = cWhere ? cWhere : '';
+        let DTable = [];
+    
+        if (obj?.transactionMap != undefined || obj?.transactionMap != null) {
+          transactionMap = obj.transactionMap;
+          request = transactionMap[obj.cBeginID].request;
+          let qry = getQuery(cExFld, cTblNM, cWhere, '', '');
+          DTable = await this.sequelizeDynamic.query(qry, {
+            type: sequelizeDynamic.QueryTypes.SELECT
+        });
+        } else {
+          DTable = getQuery('TOP 1 *', cTblNM, cWhere, '', '');
+        //   await DT('DynamicPool', 'get', 'TOP 1 *', cTblNM, cWhere, '', '', '', obj.corporateID, obj.companyID, obj.YrNo);
+        }
+        // DTable = DTable.recordset;
+        if (DTable.length == 0)
+          DTable = await customServices.GetEmptyRow(DTable, '', false, true);
+        if (cExFld) {
+          DBHandler.AddExColInDT(DTable, cExFld);
+        }
+        if (lBlankRow && DTable.length == 0) {
+          return await GetEmptyRow(DTable, '', false, true);
+        }
+        else if (DTable.length == 0) {
+          return null;
+        }
+        else {
+          return DTable.length > 0 ? DTable[0] : DTable;
+        }
+        // return null;
+      }
 }
 
 module.exports = DBHandler;

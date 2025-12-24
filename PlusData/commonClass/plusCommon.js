@@ -1,6 +1,18 @@
+const db = require('../../Config/config'); // Your Database class
 const path = require('path');
 const fs = require('fs');
+const { Op } = require('sequelize');
 
+const sequelizeSDB = db.getConnection('A00001SDB');
+const definePLSDBM81 = require('../../Models/SDB/PLSDBM81');
+const definePLSDBM82 = require('../../Models/SDB/PLSDBM82');
+const definePLSDBADMI = require('../../Models/SDB/PLSDBADMI');
+const Company = require('../Class/CmpYrCls/Company');
+const Encryptor = require('../../Services/encryptor');
+const PLSDBM82 = definePLSDBM82(sequelizeSDB);
+const PLSDBM81 = definePLSDBM81(sequelizeSDB);
+const PLSDBADMI = definePLSDBADMI(sequelizeSDB);
+const encryptor = new Encryptor();
 
 class MApp {
     cSolPath = path.resolve(__dirname, '..'); // Parent directory
@@ -128,56 +140,6 @@ class MApp {
         return cArray;
     }
 
-
-    // /**
-    //  * Generate the next unique code
-    //  * @param {Sequelize.Model} model - Sequelize model (e.g., User, Order)
-    //  * @param {string} fieldName - Column to check uniqueness against
-    //  * @param {number} width - Total length of the final code
-    //  * @param {string} prefix - Optional prefix (e.g., 'ORD-')
-    //  * @param {string} excludePrefix - Optional prefix to avoid (e.g., 'TMP-')
-    //  * @returns {Promise<string>} - A unique generated code
-    //  */
-    // static async NextNumber(model, fieldName, width, prefix = '', excludePrefix = '') {
-    //     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890';
-    //     const length = width - prefix.length;
-    //     let code = '';
-    //     let exists = true;
-    //     const maxRetries = 1000; // Avoid infinite loops
-    //     let attempts = 0;
-
-    //     while (exists && attempts < maxRetries) {
-    //         attempts++;
-
-    //         // Generate random code
-    //         code = prefix;
-    //         for (let i = 0; i < length; i++) {
-    //             code += chars.charAt(Math.floor(Math.random() * chars.length));
-    //         }
-
-    //         // Skip if it starts with the excluded prefix
-    //         if (excludePrefix && code.startsWith(excludePrefix)) {
-    //             continue;
-    //         }
-
-    //         // Check in database using Sequelize
-    //         const record = await model.findOne({
-    //             where: {
-    //                 [fieldName]: code
-    //             },
-    //             attributes: [fieldName] // Only fetch the field
-    //         });
-
-    //         exists = !!record; // true if found
-    //     }
-
-    //     if (exists) {
-    //         throw new Error('Unable to generate unique code after maximum attempts.');
-    //     }
-
-    //     return code;
-    // }
-
     static async NextNumber(oCon, cTblNm, cFldNm, nWidth, cPrefix = '', cExPrefix = '') {
         const cChar = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890';
         let cCode = '';
@@ -223,7 +185,8 @@ class MApp {
                 // Assuming cFilter is a key-value pair string like "name = 'John'"
                 // Parse cFilter as simple key-value pair logic, e.g., "name = 'John'"
                 const [key, value] = cFilter.split('=').map(str => str.trim());
-                return row[key] && row[key].toString().toLowerCase() === value.toLowerCase();
+                let result = row[key] && row[key].toString().toLowerCase() === value.toLowerCase();
+                return result;
             });
 
             // Return the first matching row or a new row if lBlank is true
@@ -247,7 +210,8 @@ class MApp {
             const row = this.DTSeek(DT, cFilter, true);
 
             if (row && row.hasOwnProperty(cFldNM)) {
-                return row[cFldNM] || cDefVal; // Return the field value or default value
+                let result = row[cFldNM] || cDefVal; // Return the field value or default value
+                return result;
             }
 
             return cDefVal; // If field doesn't exist, return default value
@@ -257,96 +221,223 @@ class MApp {
         }
     }
 
-        // Converts SQL-like filter to JavaScript filter function
-        sqlToJsFilter(sqlFilter) {
-            return sqlFilter
-                // Normalize spacing
-                .replace(/\s+/g, ' ')
-                // Handle IN clauses
-                .replace(/(\w+)\s+IN\s*\(([^)]+)\)/gi, (match, field, values) => {
-                    const jsArray = values.split(',')
-                        .map(v => `"${v.trim().replace(/^'|'$/g, '')}"`)
-                        .join(', ');
-                    return `[${jsArray}].includes(x.${field})`;
-                })
-                // Handle NOT IN clauses
-                .replace(/(\w+)\s+NOT\s+IN\s*\(([^)]+)\)/gi, (match, field, values) => {
-                    const jsArray = values.split(',')
-                        .map(v => `"${v.trim().replace(/^'|'$/g, '')}"`)
-                        .join(', ');
-                    return `![${jsArray}].includes(x.${field})`;
-                })
-                // Handle LIKE '%value%'
-                .replace(/(\w+)\s+LIKE\s+'%(.+?)%'/gi, (match, field, value) => {
-                    return `x.${field}.includes("${value}")`;
-                })
-                // Handle LIKE 'value%'
-                .replace(/(\w+)\s+LIKE\s+'(.+?)%'/gi, (match, field, value) => {
-                    return `x.${field}.startsWith("${value}")`;
-                })
-                // Handle LIKE '%value'
-                .replace(/(\w+)\s+LIKE\s+'%(.+?)'/gi, (match, field, value) => {
-                    return `x.${field}.endsWith("${value}")`;
-                })
-                // Handle comparisons with constants: =, !=, <, >, <=, >=
-                .replace(/(\w+)\s*(=|!=|<>|<=|>=|<|>)\s*'([^']+)'/gi, (match, field, op, value) => {
-                    const jsOp = op === '=' ? '===' : (op === '<>' ? '!==' : op);
-                    return `x.${field} ${jsOp} "${value}"`;
-                })
-                // Handle comparisons with other fields (field-to-field)
-                .replace(/(\w+)\s*(=|!=|<>|<=|>=|<|>)\s*(\w+)/g, (match, left, op, right) => {
-                    // Skip if right is a number (would already be handled)
-                    if (!isNaN(right)) return match;
-    
-                    const jsOp = op === '=' ? '===' : (op === '<>' ? '!==' : op);
-                    return `x.${left} ${jsOp} x.${right}`;
-                })
-                // Logical operators
-                .replace(/\bAND\b/gi, '&&')
-                .replace(/\bOR\b/gi, '||')
-                // Clean up stray quotes
-                .replace(/'([^']+)'/g, '"$1"');
+    // Converts SQL-like filter to JavaScript filter function
+    sqlToJsFilter(sqlFilter) {
+        return sqlFilter
+            // Normalize spacing
+            .replace(/\s+/g, ' ')
+            // Handle IN clauses
+            .replace(/(\w+)\s+IN\s*\(([^)]+)\)/gi, (match, field, values) => {
+                const jsArray = values.split(',')
+                    .map(v => `"${v.trim().replace(/^'|'$/g, '')}"`)
+                    .join(', ');
+                return `[${jsArray}].includes(x.${field})`;
+            })
+            // Handle NOT IN clauses
+            .replace(/(\w+)\s+NOT\s+IN\s*\(([^)]+)\)/gi, (match, field, values) => {
+                const jsArray = values.split(',')
+                    .map(v => `"${v.trim().replace(/^'|'$/g, '')}"`)
+                    .join(', ');
+                return `![${jsArray}].includes(x.${field})`;
+            })
+            // Handle LIKE '%value%'
+            .replace(/(\w+)\s+LIKE\s+'%(.+?)%'/gi, (match, field, value) => {
+                return `x.${field}.includes("${value}")`;
+            })
+            // Handle LIKE 'value%'
+            .replace(/(\w+)\s+LIKE\s+'(.+?)%'/gi, (match, field, value) => {
+                return `x.${field}.startsWith("${value}")`;
+            })
+            // Handle LIKE '%value'
+            .replace(/(\w+)\s+LIKE\s+'%(.+?)'/gi, (match, field, value) => {
+                return `x.${field}.endsWith("${value}")`;
+            })
+            // Handle comparisons with constants: =, !=, <, >, <=, >=
+            .replace(/(\w+)\s*(=|!=|<>|<=|>=|<|>)\s*'([^']+)'/gi, (match, field, op, value) => {
+                const jsOp = op === '=' ? '===' : (op === '<>' ? '!==' : op);
+                return `x.${field} ${jsOp} "${value}"`;
+            })
+            // Handle comparisons with other fields (field-to-field)
+            .replace(/(\w+)\s*(=|!=|<>|<=|>=|<|>)\s*(\w+)/g, (match, left, op, right) => {
+                // Skip if right is a number (would already be handled)
+                if (!isNaN(right)) return match;
+
+                const jsOp = op === '=' ? '===' : (op === '<>' ? '!==' : op);
+                return `x.${left} ${jsOp} x.${right}`;
+            })
+            // Logical operators
+            .replace(/\bAND\b/gi, '&&')
+            .replace(/\bOR\b/gi, '||')
+            // Clean up stray quotes
+            .replace(/'([^']+)'/g, '"$1"');
+    }
+
+    // Method to copy data from the DataTable with optional filters, ordering, and distinct selection
+    DTCopy(DT, cFilter = "", cOrderBy = "", aFlds = null, lDistinct = false) {
+        let enumerable = Query.from(DT);
+
+        if (cFilter) {
+            const jsFilter = this.sqlToJsFilter(cFilter);
+            const filterFunc = new Function("x", `return (${jsFilter});`);
+            enumerable = enumerable.where(filterFunc);
         }
-    
-        // Method to copy data from the DataTable with optional filters, ordering, and distinct selection
-        DTCopy(DT, cFilter = "", cOrderBy = "", aFlds = null, lDistinct = false) {
-            let enumerable = Query.from(DT);
-    
-            if (cFilter) {
-                const jsFilter = this.sqlToJsFilter(cFilter);
-                const filterFunc = new Function("x", `return (${jsFilter});`);
-                enumerable = enumerable.where(filterFunc);
+
+        if (cOrderBy) {
+            enumerable = enumerable.orderBy(x => x[cOrderBy]);
+        }
+
+        if (aFlds && aFlds.length > 0) {
+            enumerable = enumerable.select(x => {
+                const result = {};
+                for (const field of aFlds) {
+                    result[field] = x[field];
+                }
+                return result;
+            });
+        }
+
+        let result = Array.from(enumerable);
+
+        if (lDistinct) {
+            const seen = new Set();
+            result = result.filter(row => {
+                const key = JSON.stringify(row);
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+        }
+
+        return result;
+    }
+
+    static DTOS(oObj, lNoQuote = false) {
+        if (oObj == null || oObj.toString().trim() == '')
+            return lNoQuote ? "" : "''";
+
+        let cDate = oObj.getFullYear().toString().padStart(4, '0') + (oObj.getMonth() + 1).toString().padStart(2, '0') + oObj.getDate().toString().padStart(2, '0');
+        return lNoQuote ? cDate : "'" + cDate + "'";
+    }
+
+    static async GetEmptyCmpNo(dtoken, cBPath = "") // Method To Load Empty Company No for Create new Company no
+    {
+        // let nMaxCmp = 0, nCmpNo = 0;
+        // nMaxCmp = parseInt("99999999999999".substring(1, define.CMP_NOLENGTH));
+
+        // cBPath = SetBasePath(cBPath);
+
+        // for (nI = 1; nI <= nMaxCmp; nI++) {
+        //     if (CmpExists(nI.toString(), cBaseDBPath))
+        //         continue;
+        //     nCmpNo = nI;
+        //     break;
+        // }
+        // return nCmpNo.toString().Trim();
+
+        let admin = null
+        let existingAdmin = await PLSDBADMI.findAll();
+        let userId = encryptor.decrypt(dtoken.userId);
+        for (let i of existingAdmin) {
+            const decrypted = encryptor.decrypt(i.ADMIF01)
+            if (decrypted == userId) {
+                admin = i;
             }
-    
-            if (cOrderBy) {
-                enumerable = enumerable.orderBy(x => x[cOrderBy]);
+        }
+        let M81 = await PLSDBM81.findOne({
+            where: { M81CHLD: admin.ADMIF00 }
+        });
+        let M82 = await PLSDBM82.findAll({
+            attributes: ['M82F01', 'M82F02'],
+            where: { M82F01: M81.M81F01 }
+        });
+
+        // Extract the numbers from M82F02 field
+        let numbers = M82.map(item => item.M82F02);
+
+        // Sort the numbers to find the missing one
+        numbers.sort((a, b) => a - b);
+
+        // Now, let's find the missing number in the sequence
+        let missingNumber = null;
+        for (let i = 0; i < numbers.length; i++) {
+            // Check if the next number is not the current number + 1
+            if (numbers[i] !== i + 1) {
+                missingNumber = i + 1;
+                break;
             }
-    
-            if (aFlds && aFlds.length > 0) {
-                enumerable = enumerable.select(x => {
-                    const result = {};
-                    for (const field of aFlds) {
-                        result[field] = x[field];
-                    }
-                    return result;
-                });
-            }
-    
-            let result = Array.from(enumerable);
-    
-            if (lDistinct) {
-                const seen = new Set();
-                result = result.filter(row => {
-                    const key = JSON.stringify(row);
-                    if (seen.has(key)) return false;
-                    seen.add(key);
-                    return true;
-                });
-            }
-    
-            return result;
+        }
+
+        // If no missing number was found, it means the next number in sequence is the next highest number
+        if (!missingNumber) {
+            missingNumber = numbers[numbers.length - 1] + 1;
+        }
+
+        return missingNumber; // This will be the first missing number in the sequence
+
+    }
+
+    static EVL(cExp1, cExp2) {
+        let type = typeof cExp1;
+        if (type == 'number') {
+            return (cExp1 != 0 ? cExp1 : cExp2);
+        } else if (type == 'string') {
+            return (cExp1 != "" && cExp1 != null ? cExp1 : cExp2);
+        } else if (type == 'object') {
+            return ((cExp1) ? cExp2 : cExp1);
         }
     }
+
+    static async LoadCmpYear(cUserID, cCmpNo, dbName) {
+        let oCmp = new Company(dbName);
+        if (oCmp.lcon) {
+            return false;
+        }
+        let oTCmp = await oCmp.LoadCMP()
+        if (oTCmp == null) {
+            return false;
+        }
+        if (!cYrNo || (parseInt(cYrNo) == 0)) {
+            cYrNo = await oCmp.GetCMM("_CMPYEAR");
+            if (!cYrNo)
+                cYrNo = await oCmp.GetDefYrNo(cUserID, cCmpNo, dbName);
+            else {
+
+                if (!await oCmp.YrExists(cYrNo)) {
+                    cYrNo = oCmp.GetLastYrNo().toString();
+                }
+            }
+        }
+        if (!cYrNo) {
+            // cEMsg = pc.RC("CMPEM003", oCUser.lCode);   // Year Not Exist or Loading Problem.
+            return false;
+        }
+        //----------------------------------
+        let oTYr = await oCmp.LoadYear(parseInt(cYrNo), false);
+        if (oTYr == null) {
+            // cEMsg = pc.EVL(oCmp.cEMsg, pc.RC("CMPEM003", oCmp.lCode));   // Year Not Exist or Loading Problem.
+            return false;
+        }
+        if (oCmp != null && oTYr != null)
+            oTYr.LoadCmpSetup(oTYr);
+
+        //----------------------------------
+        if (lSetDef) {
+            oCUser.SetDefaultYear(oCmp, oTYr, true);
+        }
+        //if (oTYr != null && false && Environment.UserName.ToUpper() == "BHADRESH") // Temparory only for BD
+        //{
+        //    YrSupport oYRS = new YrSupport(oTYr);
+        //    oYRS.LoadCustomFiles("", false);
+        //    oCmp.StructChg("", "Y");
+        //}
+        if (!oCmp.CheckVersion())    // Version Checking & Upgrade Data
+        {
+            oCmp.ReleaseMe();
+            return false;
+        }
+        return true;
+    }
+}
 
 class LangType {
     // Static Properties
@@ -378,6 +469,28 @@ class LangType {
             return LangType.Resorce_Hindi;
         } else {
             return LangType.Resorce_English;  // Default English
+        }
+    }
+}
+
+class plusCommon {
+    RC(field, lCode, dtPLSYSCAP) {
+        const row = dtPLSYSCAP?.find(record => record.CAPF00 === field);
+    
+        if (!row) {
+            return field;
+        }
+    
+        switch (lCode) {
+            case '01':
+                return row.CAPF01;
+            case '02':
+                return row.CAPF02;
+            case '03':
+                return row.CAPF03;
+            default:
+                logger.error(`Invalid lCode: ${lCode}`);
+                return null;
         }
     }
 }

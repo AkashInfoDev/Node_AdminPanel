@@ -9,6 +9,7 @@ module.exports = (sequelize) => {
     return sequelize.define('PLSYS13', {
         S13F00: {
             type: DataTypes.STRING(1),
+            primaryKey: true,
             allowNull: true,
         },
         S13F01: {
@@ -32,15 +33,15 @@ module.exports = (sequelize) => {
             allowNull: true,
         },
         S13F04: {
-            type: DataTypes.DECIMAL(4,0),
+            type: DataTypes.DECIMAL(4, 0),
             allowNull: true,
         },
         S13F05: {
-            type: DataTypes.DECIMAL(1,0),
+            type: DataTypes.DECIMAL(1, 0),
             allowNull: true,
         },
         S13F06: {
-            type: DataTypes.DECIMAL(3,0),
+            type: DataTypes.DECIMAL(3, 0),
             allowNull: true,
         },
         S13F07: {
@@ -76,7 +77,7 @@ module.exports = (sequelize) => {
             allowNull: true,
         },
         S13F11: {
-            type: DataTypes.DECIMAL(3,0),
+            type: DataTypes.DECIMAL(3, 0),
             allowNull: true,
         },
         S13F12: {

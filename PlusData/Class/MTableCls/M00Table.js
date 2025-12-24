@@ -3,9 +3,9 @@ const PlusTable = require("../AppCls/PlusTable");
 const SCMPTable = require("../STable/SCMPTable");
 
 class M00Table extends PlusTable {
-    constructor(param = null) {
-        this.Mp = MApp();
-        super();
+    constructor(param = null, dbName, LangType) {
+        super(null, dbName, LangType);
+        this.Mp = new MApp();
 
         this.oCmp = null;
         this.oYear = null;

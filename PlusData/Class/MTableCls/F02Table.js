@@ -27,8 +27,8 @@
 const PlusTable = require("../AppCls/PlusTable");
 
 class F02Table extends PlusTable {
-    constructor(oYr = null, dbName, databaseName) {
-        super(oYr, dbName, databaseName); // Call to parent class constructor
+    constructor(oYr = null, databaseName, LangType) {
+        super(oYr, databaseName, LangType); // Call to parent class constructor
         this.oYear = oYr; // Store the Year object
         this.oCmp = this.oYear?.oCmp; // Optional chaining to safely access oCmp
         this.initCls(); // Initialize class fields based on oYear

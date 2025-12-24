@@ -9,9 +9,9 @@ const PLDic = require("./PLDic");
 const PlusInfo = require("./PlusInfo");
 
 class PlusTable extends PlusInfo {
-    constructor(OSC, dbName, databaseName) {
+    constructor(OSC, databaseName, LangType) {
         // Initialize DBHandler as an instance
-        super();
+        super(LangType);
         this.transaction = null;
         this.oYr = PlusInfo.oYear
         this.dbName = databaseName
@@ -73,16 +73,16 @@ class PlusTable extends PlusInfo {
 
                 if (!lAddNew && !cWhere) {
                     // this.SaveErr.addErr("No Code Field or Where Clause Passed."); // Uncomment and define SaveErr if needed
-                    this.oEntDict[init.cFldPrefix] = null;
+                    this.oEntDict[this.cFldPrefix] = null;
                     return null;
                 }
 
-                this.oEntDict[init.cFldPrefix] = await this.DBHand.GetRowDict(
-                    init.cTable,
-                    init.cExFldStr,
+                this.oEntDict[this.cFldPrefix] = await this.DBHand.GetRowDict(
+                    this.cTable,
+                    this.cExFldStr,
                     cWhere,
                     lAddNew,
-                    obj
+                    obj = {}
                 );
             }
 

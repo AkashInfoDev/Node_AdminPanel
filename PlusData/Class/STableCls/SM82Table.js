@@ -1,11 +1,13 @@
-const { MApp } = require("../../commonClass/plusCommon");
+// const { MApp } = require("../../commonClass/plusCommon");
 const PlusTable = require("../AppCls/PlusTable");
 const SM81Table = require("./SM81Table");
-// const db = require('../Config/config'); // Your Database class
-// const sequelizeSDB = db.getConnection('A00001SDB');
-// const PLSYSM81 = definePLSDBADMI(sequelizeSDB);
+const db = require('../../../Config/config'); // Your Database class
+const definePLSDBM82 = require("../../../Models/SDB/PLSDBM82");
+const PlusInfo = require("../AppCls/PlusInfo");
+const sequelizeSDB = db.getConnection('A00001SDB');
+const PLSDBM82 = definePLSDBM82(sequelizeSDB);
 
-class SM82Table extends PlusTable{
+class SM82Table extends PlusInfo{
     constructor(SDBH) {
         super();
         this.oSDB = SDBH; // Database handler (you'll need to implement or import this)
@@ -25,7 +27,7 @@ class SM82Table extends PlusTable{
         this.oM81 = new SM81Table(this.oSDB);  // Assuming SM81Table is another class for database access
     }
 
-    async UpdateUser(cCmpNo, cUserID, cBeginID = "") {
+    async UpdateUser(cCmpNo, cUserID, cBeginID = "", MApp) {
         let cWhere = `M82F01='${cUserID}' AND M82F02=${cCmpNo}`;
 
         // Simulate base.GetDictionary() - Assuming this fetches data from DB
@@ -58,6 +60,22 @@ class SM82Table extends PlusTable{
         }
 
         return false;
+    }
+    
+    static async GetField(cCode, cWhere, cFldNM) {
+        let init = await InitCls();
+        if (!cWhere) {
+            if (!cCode || !init.CodeField)
+                return "";
+
+            cWhere = init.CodeField + "='" + cCode + "'";
+        }
+        let row = await PLSDBM82.findOne({
+            where: cWhere,
+            attributes: [cFldNM]
+        })
+        return row.cFldNM;
+        // await ODB.GetField(init.cTable, cWhere, cFldNM, cOrderBy, obj, 'poolIDBAPI')
     }
 }
 

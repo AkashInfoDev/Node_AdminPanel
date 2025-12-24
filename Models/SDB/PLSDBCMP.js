@@ -47,6 +47,10 @@ module.exports = (sequelize) => {
         CMPF24: {
             type: DataTypes.DATEONLY,
             allowNull: true,
+        },
+        CMPDEL: {
+            type: DataTypes.STRING(50),
+            allowNull: true,
         }
     }, {
         tableName: 'PLSDBCMP',

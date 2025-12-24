@@ -6,7 +6,7 @@ const definePLSYS13 = require('../../../Models/IDB/PLSYS13'); // Model factory
 const definePLSYS14 = require('../../../Models/IDB/PLSYS14'); // Model factory
 const { Sequelize, Op } = require('sequelize');
 const DBHandler = require('../../../DataClass/Class/DbHandler');
-const { MApp } = require('../../commonClass/plusCommon');
+// const { MApp } = require('../../commonClass/plusCommon');
 const sequelizeIDB = db.getConnection('IDBAPI');
 
 // Initialize model using the Sequelize instance
@@ -23,7 +23,7 @@ class Year {
         this.DtS14 = null;
         this.pldc = new PLDic();
         this.DBH = new DBHandler(dbName);
-        this.Mp = new MApp
+        this.Mp = null;
     }
 
     async LoadSetup(cGrpID, oSS = null, aCF02 = null, lBothSame = false, cF01IDs = "") {
@@ -125,7 +125,8 @@ class Year {
     }
 
     // The GetDBS13 method as a class method
-    async GetDBS13(cTblNM, cWhere = "", cOrderBy = "") {
+    async GetDBS13(cTblNM, cWhere = "", cOrderBy = "", MApp) {
+        this.Mp = new MApp();
         if (this.DtS13 == null || this.DtS13.length == 0) {
             await this.LoadS13S14(); // Load the data if not already loaded
         }
@@ -142,7 +143,7 @@ class Year {
     }
 
     async LoadS13S14() {
-        const dbconn = db.getConnection(this.dbName); 
+        const dbconn = db.getConnection(this.dbName);
         // Table Definition Table - Assuming DT is a function that gets data from the database
         this.DtS14 = await PLSYS14.findAll({
             order: ['S14F01']

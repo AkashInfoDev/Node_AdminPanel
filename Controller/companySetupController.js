@@ -1,12 +1,25 @@
 // CompanyService.js
+const querystring = require('querystring');
 const { Sequelize, QueryTypes } = require('sequelize');
+const TokenService = require('../Services/tokenServices');
+const Encryptor = require('../Services/encryptor');
+
+const encryptor = new Encryptor();
 // const { evlStr, evlSTU, dtSeekFld } = require('./utils');
 const F02Table = require('../PlusData/Class/MTableCls/F02Table'); // You need to implement similar functionality
 const db = require('../Config/config'); // Your Database class
-const { MApp } = require('../PlusData/commonClass/plusCommon');
+const { MApp, LangType } = require('../PlusData/commonClass/plusCommon');
 const definePLSYSF02 = require('../Models/IDB/PLSYSF02');
+const definePLSDBADMI = require('../Models/SDB/PLSDBADMI');
+const definePLSDBM81 = require('../Models/SDB/PLSDBM81');
+const Year = require('../PlusData/Class/CmpYrCls/Year');
+const Company = require('../PlusData/Class/CmpYrCls/Company');
 const sequelizeIDB = db.getConnection('IDBAPI');
+const sequelizeA00001SDB = db.getConnection('A00001SDB');
+
 const PLSYSF02 = definePLSYSF02(sequelizeIDB);
+const PLSDBADMI = definePLSDBADMI(sequelizeA00001SDB);
+const PLSDBM81 = definePLSDBM81(sequelizeA00001SDB);
 
 class CompanyService {
   constructor({ year, oCmp, oEntDict, dbName, databaseName }) {
@@ -14,10 +27,10 @@ class CompanyService {
     this.oCmp = oCmp;
     this.oEntDict = oEntDict;
     this.dbName = dbName;
-    this.databaseName = databaseName
+    this.databaseName = databaseName;
   }
 
-  async getSetF02(lGet, dbName, cBeginID = '') {
+  async getSetF02(lGet, dbName, cBeginID = '', langtpe) {
     // const sequelizeDynamic = db.getConnection(dbName);
     // const sequelize = db.sequelize;
 
@@ -33,9 +46,10 @@ class CompanyService {
       let dtCF02 = [];
 
       if (this.oCmp) {
-        const f02Table = new F02Table('YR' + new Date().getFullYear() % 100);
+        let defYrno = await this.oCmp.oCon.query(`SELECT * FROM CMPCMM WHERE FIELD01 = '_CMPYEAR'`, { type: QueryTypes.SELECT });
+        const f02Table = new F02Table('YR' + defYrno[0].FIELD02, dbName, langtpe);
         let table = f02Table.cTable
-        dtCF02 = await dbName.query(`SELECT * FROM ${table}`, { type: QueryTypes.SELECT });
+        dtCF02 = await this.oCmp.oCon.query(`SELECT * FROM ${table}`, { type: QueryTypes.SELECT });
         // dtCF02 = await f02Table.getList(); // Should return array of objects
       }
 
@@ -43,19 +57,27 @@ class CompanyService {
         const cKey = MApp._evlSTU(row.F02F04);
         if (!cKey) continue;
 
-        let cVal;
+        let cVal = '';
         if (dtCF02.length === 0) {
           cVal = MApp._evlStr(row.F02F07);
         } else {
           const field01 = MApp._evlSTU(row.F02F01);
+
+          let filterStr;
+          let fieldToFetch;
+
           if (field01 === 'SCMPA021') {
-            cVal = MApp.DTSeekFld(dtCF02, r => r.FIELD01 === field01, 'FIELD13');
+            filterStr = `FIELD01=${field01}`;
+            fieldToFetch = 'FIELD13';
           } else {
-            cVal = MApp.DTSeekFld(dtCF02, r => r.FIELD01 === field01, 'FIELD07');
+            filterStr = `FIELD01=${field01}`;
+            fieldToFetch = 'FIELD07';
           }
+
+          cVal = MApp.DTSeekFld(dtCF02, filterStr, fieldToFetch);
         }
 
-        this.oEntDict[cKey] = cVal;
+        this.oEntDict["M00"][cKey] = cVal;
       }
     } else {
       // SET: Save oEntDict back to DB
@@ -74,8 +96,8 @@ class CompanyService {
       this.oEntDict['M00']._SYNCID = this.oEntDict['M00'].FIELD07 || '';
       this.oEntDict['M00']._BSYNCID = this.oEntDict['M00'].FIELD08 || '';
 
-        const f02Table = new F02Table('YR' + new Date().getFullYear() % 100, dbName, this.databaseName);
-        await f02Table.getDictionary('', '', true, true);
+      const f02Table = new F02Table('YR' + new Date().getFullYear() % 100, dbName, this.databaseName);
+      await f02Table.getDictionary('', '', true, true);
 
       for (const row of dtF02) {
         const cKey = MApp._evlSTU(row.F02F04);
@@ -101,5 +123,6 @@ class CompanyService {
     }
   }
 }
+
 
 module.exports = CompanyService;

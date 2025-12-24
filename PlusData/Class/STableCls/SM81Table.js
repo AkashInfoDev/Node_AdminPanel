@@ -1,7 +1,8 @@
-const { MApp } = require("../../commonClass/plusCommon");
+// const { MApp } = require("../../commonClass/plusCommon");
+const PlusInfo = require("../AppCls/PlusInfo");
 const PlusTable = require("../AppCls/PlusTable");
 
-class SM81Table extends PlusTable{
+class SM81Table extends PlusInfo{
     constructor(SDBH) {
         super();
         this.oSDB = SDBH; // Database handler (you'll need to implement or import this)
@@ -20,7 +21,7 @@ class SM81Table extends PlusTable{
         super.lImgReq = false;
     }
 
-    static async GetDataRow(cCode = "", cWhere = "", lAddNew = false, lFull = false) {
+    static async GetDataRow(cCode = "", cWhere = "", lAddNew = false, lFull = false, MApp) {
         let cErr = "";
 
         // Try to get the row from the database

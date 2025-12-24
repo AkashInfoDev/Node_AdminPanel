@@ -14,7 +14,7 @@ class AdminPanel {
     static async getUsers(req, res) {
         try {
             // 🔹 Step 1: Decrypt & parse parameter
-            // const parameterString = encryptor.decrypt(req.query.pa);
+            // const parameterString = encryptor.decrypt(req.query);
             // let decodedParam = decodeURIComponent(parameterString);
             // let pa = querystring.parse(decodedParam);
 

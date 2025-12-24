@@ -37,7 +37,7 @@ class CompanyService {
             userId, companyName, softSubType, softType, dbVersion, webVer,
             noOfUser, regDate, subStrtDate, subEndDate, cancelDate,
             subDomainDelDate, cnclRes, SBDdbType, srverIP, serverUserName,
-            serverPassword, A02id, phoneNumber, cSData, ExistingcorpId, GSTNumber
+            serverPassword, A02id, phoneNumber, cSData, ExistingcorpId, GSTNumber, startDate, endDate
         } = pa
         let response = {
             status: true,
@@ -100,9 +100,9 @@ class CompanyService {
                 where: { A01F03: { [Op.like]: 'PL-P-%' } }
             });
 
-            let corpNumbers
-            let nextCorpNum
-            let nextCorpId
+            let corpNumbers;
+            let nextCorpNum;
+            let nextCorpId;
 
             if (lbool) {
                 corpNumbers = corpIds.map(item => parseInt(item.A01F03.slice(5))).filter(Number.isFinite);
@@ -188,7 +188,7 @@ class CompanyService {
             CmpMaster.cUserID = userId;
             // console.log(typeof(CmpMaster.oEntDict));
 
-            if (!await cMaster.SaveCompany(nextCorpId, '')) {
+            if (!await cMaster.SaveCompany(nextCorpId, '', '', false, '', startDate, endDate)) {
                 return res.status(201).json(message = 'error');
             }
 

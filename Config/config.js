@@ -36,13 +36,22 @@ class Database {
                 username: process.env.DB_USER,
                 password: process.env.DB_PASSWORD,
                 host: process.env.DB_SERVER,
+                // port:1433,
                 dialect: 'mssql',
                 dialectOptions: {
                     options: {
                         encrypt: false,
+                        requestTimeOut: 30000,
+                        enableArithAbort: true,
                         // instanceName: 'sqlexpress',
                         trustServerCertificate: true
                     }
+                },
+                pool:{
+                    max: 5,
+                    min: 0,
+                    acquire: 30000,
+                    idle: 10000
                 },
                 logging: process.env.LOG_LEVEL === 'info' ? console.log : false
             }

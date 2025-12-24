@@ -74,15 +74,19 @@ class DbCloneService {
    * @param {string} sourceDB - Name of the source database
    * @param {string} targetDB - Name of the target database to be created
    * @param {string} replaceSuffix - Suffix to replace 'YR25' in table names
+   * @param {string} startDate - Suffix to replace 'YR25' in table names
+   * @param {string} endDate - Suffix to replace 'YR25' in table names
    */
-  async cloneDatabase(sourceDB, targetDB, replaceSuffix) {
+  async cloneDatabase(sourceDB, targetDB, replaceSuffix, startDate, endDate) {
     const sequelize = db.getConnection('MASTER'); // Connect to 'master' DB
 
     const sql = `
       EXEC dbo.CloneDatabase 
-        @SourceDB = '${sourceDB}', 
-        @TargetDB = '${targetDB}', 
-        @ReplaceSuffix = '${replaceSuffix}'
+      @SourceDB = ${sourceDB},
+      @TargetDB = ${targetDB},
+      @ReplaceSuffix = ${replaceSuffix},
+      @StartDate = ${startDate},
+      @EndDate = ${endDate}
     `;
 
     console.log('Executing SQL:', sql);
