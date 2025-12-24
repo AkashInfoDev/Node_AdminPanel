@@ -1,3 +1,4 @@
+const { response } = require('express');
 const db = require('../Config/config');
 const definePLSYS01 = require('../Models/IDB/PLSYS01');
 const Encryptor = require('../Services/encryptor');
@@ -56,7 +57,7 @@ class MenuController {
           // Check if the role exists in allRoles and assign permissions accordingly
           
           // Log if the role exists in the specific roles (example '1242')
-          if (child.S01F02 === '1242') {
+          if (child.S01F02 === '0588') {
             console.log('Specific role match: 1242');
           }
           
@@ -138,6 +139,12 @@ class MenuController {
   // GET API: Fetch and return the full menu tree
   static async getMenuTree(req, res) {
     try {
+
+      let response = {
+        data: null,
+        status: 'SUCCESS',
+        message: ''
+      };
       // Fetch menu data from database
       const menus = await PLSYS01.findAll({
         attributes: ['S01F02', 'S01F03', 'S01F04E'], // Select relevant columns
@@ -158,7 +165,6 @@ class MenuController {
       const menuTree = MenuController.buildMenuTree(menus);
 
       // Prepare response data
-      let response = { data: menuTree, status: 'SUCCESS' };
 
       // Encrypt the response (assuming you have an `encryptor` utility set up)
       let encryptedResponse = encryptor.encrypt(JSON.stringify(response));

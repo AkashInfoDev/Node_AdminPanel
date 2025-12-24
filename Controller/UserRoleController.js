@@ -3,6 +3,8 @@ const { Op } = require('sequelize');
 const db = require('../Config/config'); // Your Database class
 const definePLSDBUSROLE = require('../Models/SDB/PLSDBUSROLE');
 const definePLSDBCROLE = require('../Models/SDB/PLSDBCROLE');
+const definePLSDBADMI = require('../Models/SDB/PLSDBADMI');
+const definePLRDBA01 = require('../Models/RDB/PLRDBA01');
 const definePLSYS01 = require('../Models/IDB/PLSYS01');
 const Encryptor = require('../Services/encryptor');
 const MenuController = require('./menuController');
@@ -10,9 +12,12 @@ const TokenService = require('../Services/tokenServices');
 
 const sequelizeSDB = db.getConnection('A00001SDB');
 const sequelizeIDB = db.getConnection('IDBAPI');
+const sequelizeRDB = db.getConnection('RDB');
 const PLSYS01 = definePLSYS01(sequelizeIDB);
 const PLSDBUSROLE = definePLSDBUSROLE(sequelizeSDB);
 const PLSDBCROLE = definePLSDBCROLE(sequelizeSDB);
+const PLSDBADMI = definePLSDBADMI(sequelizeSDB);
+const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 
 const encryptor = new Encryptor();
 
@@ -158,16 +163,16 @@ class UsrRole {
                         const menuTree = MenuController.buildMenuTree(menuRows);
 
                         menus = MenuController.addPermissionsToLeafMenus(menuTree);
-                        menus = MenuController.assignPermissionsToMenus(menus, allRoles); 
+                        menus = MenuController.assignPermissionsToMenus(menus, allRoles);
                         // menus = menus.map(item => {
-                            
+
                         //     // Check if any children exist
                         //     if (item.children && item.children.length > 0) {
-                                
+
                         //         item.children = item.children.map(child => {
-                                    
+
                         //             // Log if the role exists in allRoles.USRF02, USRF03, etc.
-                                    
+
                         //             if(child.S01F02 == '1242'){
                         //                 console.log('');
                         //             }
@@ -189,14 +194,14 @@ class UsrRole {
                         //             if (allRoles.USRF07.includes(child.S01F02)) {
                         //                 child.l_UserField = 1;
                         //             }
-                        
+
                         //             return child; // Return updated child
                         //         });
                         //     }
-                            
+
                         //     return item; // Return updated item
                         // });
-                        
+
 
                         // menus = menuTree; // The updated menu tree with permissions
                     }
@@ -223,20 +228,20 @@ class UsrRole {
         const parameterString = encryptor.decrypt(req.query.pa);
         let decodedParam = decodeURIComponent(parameterString);
         let pa = querystring.parse(decodedParam);
-        const { action, CROLF00, CROLF01 } = pa;
+        const { action, CROLF00, CROLF01, updateRoleId } = pa;
         let response = { data: null, status: 'SUCCESS', message: null };
         let encryptedResponse;
         let decoded;
         try {
             const token = req.headers['authorization']?.split(' ')[1]; // 'Bearer <token>'
 
-                if (!token) {
-                    response.message = 'No token provided, authorization denied.'
-                    response.status = 'FAIL'
-                    const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-                    return res.status(401).json({ encryptedResponse });
-                }
-                decoded = await TokenService.validateToken(token);
+            if (!token) {
+                response.message = 'No token provided, authorization denied.'
+                response.status = 'FAIL'
+                const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                return res.status(401).json({ encryptedResponse });
+            }
+            decoded = await TokenService.validateToken(token);
             if (!action) {
                 response.message = 'No Action Passed';
                 response.status = 'FAIL'
@@ -322,14 +327,42 @@ class UsrRole {
                         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         return res.status(400).json({ encryptedResponse });
                     }
-                    const roleToDelete = await PLSDBCROLE.findOne({ where: { CROLF00 } });
+                    const roleToDelete = await PLSDBCROLE.findOne({
+                        where: {
+                            CROLF00,
+                            CROLF02: decoded.corpId
+                        }
+                    });
+
+                    let corpDetails = await PLRDBA01.findOne({
+                        where: { A01F03: decoded.corpId }
+                    });
                     if (!roleToDelete) {
                         response.message = 'Role not found.';
                         response.status = 'FAIL';
                         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         return res.status(404).json({ encryptedResponse });
                     }
-                    await roleToDelete.destroy();
+                    const allroles = await PLSDBCROLE.findOne({
+                        where: {
+                            CROLF02: decoded.corpId
+                        }
+                    });
+                    if (allRoles.length > 1) {
+                        await PLSDBADMI.update({
+                            ADMIROL : updateRoleId
+                        },{
+                            where: {
+                                ADMICORP : corpDetails.A01F03,
+                                ADMIROL: roleToDelete.CROLF00
+                            }
+                        });
+                        await roleToDelete.destroy();
+                    } else {
+                        response.message = 'Single role can not be deleted';
+                        encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.status(200).json({ encryptedResponse });
+                    }
                     response.message = 'Role deleted successfully!';
                     encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                     return res.status(200).json({ encryptedResponse });

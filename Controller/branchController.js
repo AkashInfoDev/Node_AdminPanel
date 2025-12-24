@@ -138,11 +138,17 @@ class BranchController {
 
                 const BRCORP = corpRow.A01F01;
                 const newBRCODE = await this.generateUniqueBRCODE();
+                let mainBRC = await PLSDBBRC.findOne({
+                    where: {
+                        BRCORP: BRCORP,
+                        BRDEF: 'Y'
+                    }
+                });
 
                 const newBranch = await PLSDBBRC.create({
                     BRCODE: newBRCODE,
                     BRNAME,
-                    BRGST,
+                    BRGST: BRGST ? BRGST : mainBRC.BRGST,
                     BRCORP,
                     BRSTATE,
                     BRDEF: this.defBrc == 'Y' ? 'Y' : 'N'
@@ -203,14 +209,21 @@ class BranchController {
                     BRCORP = corpRow.A01F01;
                 }
 
+                let mainBRC = await PLSDBBRC.findOne({
+                    where: {
+                        BRCORP: BRCORP,
+                        BRDEF: 'Y'
+                    }
+                });
+
                 const updatedBRNAME = BRNAME || branch.BRNAME;
-                const updatedBRGST = BRGST || branch.BRGST;
+                const updatedBRGST = BRGST ? BRGST : mainBRC.BRGST;
                 const updatedBRSTATE = BRSTATE || branch.BRSTATE;
 
                 branch.BRNAME = updatedBRNAME;
                 branch.BRGST = updatedBRGST;
                 branch.BRCORP = BRCORP;
-                branch.BRSTATE = BRSTATE;
+                branch.BRSTATE = updatedBRSTATE;
 
                 await branch.save();
 
