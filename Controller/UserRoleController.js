@@ -337,23 +337,47 @@ class UsrRole {
                     let corpDetails = await PLRDBA01.findOne({
                         where: { A01F03: decoded.corpId }
                     });
+                    let corpUnq = corpDetails.A01F01;
+                    corpUnq = corpUnq.trim();
                     if (!roleToDelete) {
                         response.message = 'Role not found.';
                         response.status = 'FAIL';
                         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         return res.status(404).json({ encryptedResponse });
                     }
-                    const allroles = await PLSDBCROLE.findOne({
+                    const allroles = await PLSDBCROLE.findAll({
                         where: {
                             CROLF02: decoded.corpId
                         }
                     });
-                    if (allRoles.length > 1) {
+                    let allUsrs = await PLSDBADMI.findAll({
+                        ADMIROL: updateRoleId
+                    }, {
+                        where: {
+                            ADMICORP: corpUnq,
+                            ADMIROL: roleToDelete.CROLF00
+                        }
+                    });
+                    let i = 0;
+                    for (let usr of allUsrs) {
+                        if (usr.ADMIROL == roleToDelete.CROLF00) {
+                            i++
+                        }
+                    }
+                    if (i > 0) {
+                        if (!updateRoleId) {
+                            response.message = 'Assigned Role Can not be Deleted Without Replacement Role';
+                            response.status = 'FAIL'
+                            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                            return res.status(200).json({ encryptedResponse });
+                        }
+                    }
+                    if (allroles.length > 1) {
                         await PLSDBADMI.update({
-                            ADMIROL : updateRoleId
-                        },{
+                            ADMIROL: updateRoleId
+                        }, {
                             where: {
-                                ADMICORP : corpDetails.A01F03,
+                                ADMICORP: corpUnq,
                                 ADMIROL: roleToDelete.CROLF00
                             }
                         });

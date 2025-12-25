@@ -218,8 +218,16 @@ class BranchController {
 
                 const updatedBRNAME = BRNAME || branch.BRNAME;
                 const updatedBRGST = BRGST ? BRGST : mainBRC.BRGST;
-                const updatedBRSTATE = BRSTATE || branch.BRSTATE;
-
+                let statecode = updatedBRGST.split('').slice(0, 2).join('');
+                console.log(statecode);
+                let stateid = await PLSTATE.findOne({
+                    where: {
+                        PLSF01: {
+                            [Op.like]: `%${statecode}`  // Matches any value where PLSF01 ends with '24'
+                        }
+                    }
+                });
+                const updatedBRSTATE = stateid.PLSF01 || branch.BRSTATE;
                 branch.BRNAME = updatedBRNAME;
                 branch.BRGST = updatedBRGST;
                 branch.BRCORP = BRCORP;
