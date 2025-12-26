@@ -33,7 +33,7 @@ class QueryService {
         return `SELECT * FROM ${tableName} ${whereClause}`;
     }
 
-    generateDatabaseName(corporateID, companyID = '6001') {
+    generateDatabaseName(corporateID, companyID) {
         if (!corporateID || !companyID) {
             throw new Error("Both corporateID and companyID must be provided");
         }

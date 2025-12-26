@@ -13,6 +13,7 @@ const definePLSDBADMI = require('../Models/SDB/PLSDBADMI');
 const definePLSDBCMP = require('../Models/SDB/PLSDBCMP');
 const definePLSDBM81 = require('../Models/SDB/PLSDBM81');
 const definePLSDBM82 = require('../Models/SDB/PLSDBM82');
+const defineCRONLOGS = require('../Models/SDB/CRONLOGS');
 const Year = require('../PlusData/Class/CmpYrCls/Year');
 const Company = require('../PlusData/Class/CmpYrCls/Company');
 const queryService = require('../Services/queryService');
@@ -23,6 +24,7 @@ const PLSDBADMI = definePLSDBADMI(sequelizeA00001SDB);
 const PLSDBCMP = definePLSDBCMP(sequelizeA00001SDB);
 const PLSDBM81 = definePLSDBM81(sequelizeA00001SDB);
 const PLSDBM82 = definePLSDBM82(sequelizeA00001SDB);
+const CRONLOGS = defineCRONLOGS(sequelizeA00001SDB);
 
 class handleCompany {
     constructor({ year, oCmp, oEntDict, dbName, databaseName }) {
@@ -55,7 +57,7 @@ class handleCompany {
             let cErr = "";
             let oUser = {};
             oUser.lCode = LangType.English;
-            let qS = queryService.generateDatabaseName(decoded.corpId);
+            let qS = CmpNo ? queryService.generateDatabaseName(decoded.corpId, CmpNo) : '';
             let isComapny = false;
             let userInfo = {};
             let admin;
@@ -83,13 +85,14 @@ class handleCompany {
 
             let cUserID = M81Info.M81F01;
 
-            let M82 = await PLSDBM82.findOne({
-                where: {
-                    M82F02: CmpNo,
-                    M82F01: cUserID
-                }
-            });
+            let M82;
             if (cAction == 'E' && CmpNo) {
+                M82 = await PLSDBM82.findOne({
+                    where: {
+                        M82F02: CmpNo,
+                        M82F01: cUserID
+                    }
+                });
                 if (M82) {
                     if (M82.M82ADA == 'A') {
                         let dbCmp = await PLSDBCMP.findOne({
@@ -109,7 +112,7 @@ class handleCompany {
                 }
             }
             if ((cAction == "E" && isComapny) || cAction == "G" || cAction == "D") {
-                let oCmp = new Company(qS, CmpNo);
+                let oCmp = (qS && CmpNo) ? new Company(qS, CmpNo) : null;
                 let oYear = oUser.oYear;
 
 
@@ -232,7 +235,14 @@ class handleCompany {
                                     M82F01: cUserID,
                                     M82F02: CmpNo
                                 }
-                            })
+                            });
+                            await CRONLOGS.create({
+                                CRONF02: decoded.corpId,
+                                CRONF03: CmpNo,
+                                CRONF04: MApp.DTOS(Date.now()),
+                                CRONF05: '',
+                                CRONF07: 'Y',
+                            });
                         }
                         if (updtToDel) {
                             response.status = "SUCCESS";

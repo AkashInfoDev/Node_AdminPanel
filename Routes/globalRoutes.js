@@ -11,6 +11,7 @@ const dbRoute = require('./userDashboardRoutes');
 const Write = require('./fileRoutes');
 const Plan = require('./PlanRoutes');
 const Cron = require('./cronJobsRoutes');
+const Token = require('./tokenRoutes');
 
 // Use loginRoutes under /User path
 router.use('/User', loginRoutes);
@@ -23,6 +24,7 @@ router.use('/userAdmindashboard', dbRoute);
 router.use('/Write', Write);
 router.use('/Plan', Plan);
 router.use('/admindashboard', dbRoute);
-router.use('/cron', Cron);
+// router.use('/cron', Cron);
+router.use('/Token', Token);
 
 module.exports = router;
