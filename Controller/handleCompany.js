@@ -380,7 +380,7 @@ class handleCompany {
                     let saveCmp = await cMaster.SaveCompany(decoded.corpId, '', '', false, '');
                     console.log(cSData);
                     cSData = JSON.parse(cSData);
-                    let BRCOntroller = new BranchController(false, 'A', BRcode, 'HOME-BRC', brGst, '', nextCorpId, 'Y', saveCmp.CmpNum)
+                    let BRCOntroller = new BranchController(false, 'A', '', 'HOME-BRC', cSData["M00"]._16, '', decoded.corpId, 'Y', saveCmp.CmpNum)
                     let AddHomeBrc = await BRCOntroller.handleAction(req, res, true);
                     if (!saveCmp.result) {
                         await PLSDBREL.create({
