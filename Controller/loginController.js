@@ -262,7 +262,7 @@ class UserController {
         let pa = querystring.parse(decodedParam);
 
         pa.isPassword = pa.isPassword === "true";
-        let { action, corpId, userId, firstName, middleName, lastName, dob, gender, email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, isPassword, cusRole
+        let { action, corpId, userId, firstName, middleName, lastName, dob, gender, email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, isPassword, cusRole, CmpList, BrcList
             // , companyName, softSubType, softType, dbVersion, webVer, noOfUser, regDate, subStrtDate, subEndDate, cancelDate, subDomainDelDate, cnclRes, SBDdbType, srverIP, serverUserName, serverPassword, A02id 
         } = pa;
 
@@ -286,12 +286,12 @@ class UserController {
             if (action === 'A') {
                 return UserController.registerUser({
                     userId, firstName, middleName, lastName, dob, gender,
-                    email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, corpId, cusRole, decoded, req
+                    email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, corpId, cusRole, decoded, req, CmpList, BrcList
                 }, res);
             } else if (action === 'E') {
                 return UserController.updateUser({
                     userId, firstName, middleName, lastName, dob, gender,
-                    email, password, isPassword, roleId, address, phoneNumber, base64Image, cusRole
+                    email, password, isPassword, roleId, address, phoneNumber, base64Image, cusRole, CmpList, BrcList
                 }, res);
             } else if (action === 'L') {
                 return UserController.loginUser(corpId, userId, password, res);
@@ -308,7 +308,7 @@ class UserController {
 
     static async registerUser({
         userId, firstName, middleName, lastName, dob, gender,
-        email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, corpId, cusRole, req, decoded
+        email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, corpId, cusRole, req, decoded, CmpList, BrcList
     }, res) {
         try {
             if (roleId == '2') {
@@ -340,7 +340,9 @@ class UserController {
                     ADMIF10: gender,
                     ADMIF12: address,
                     ADMIF13: phoneNumber,
-                    ADMIF14: base64Image
+                    ADMIF14: base64Image,
+                    ADMIBRC: BrcList,
+                    ADMICOMP: CmpList
                 });
 
                 if (newUser) {
@@ -564,7 +566,9 @@ class UserController {
                     ADMIF13: phoneNumber,
                     ADMIF14: base64Image,
                     ADMICORP: superUserDetails.ADMICORP,
-                    ADMIROL: cusRole
+                    ADMIROL: cusRole,
+                    ADMIBRC: BrcList,
+                    ADMICOMP: CmpList
                 });
 
                 let superUsrCorpDtl = await PLRDBA01.findOne({
@@ -679,7 +683,7 @@ class UserController {
 
     static async updateUser({
         userId, updatedUserId, firstName, middleName, lastName, dob, gender,
-        email, password, isPassword, roleId, address, phoneNumber, base64Image, cusRole
+        email, password, isPassword, roleId, address, phoneNumber, base64Image, cusRole, CmpList, BrcList
     }, res) {
         try {
             let response = { status: 'SUCCESS', message: null };
@@ -721,6 +725,7 @@ class UserController {
                     ADMIF13: phoneNumber || existingUser.ADMIF13, // Phone Number
                     ADMIF14: base64Image || existingUser.ADMIF14, // Base64 Image
                     ADMIROL: cusRole,
+                    ADMIBRC: BrcList,
                     ADMICOMP: CmpList
                 };
             } else {
@@ -736,6 +741,7 @@ class UserController {
                     ADMIF13: phoneNumber || existingUser.ADMIF13, // Phone Number
                     ADMIF14: base64Image || existingUser.ADMIF14, // Base64 Image
                     ADMIROL: cusRole,
+                    ADMIBRC: BrcList,
                     ADMICOMP: CmpList
                 };
             }
@@ -795,67 +801,155 @@ class UserController {
                 return res.status(400).json({ encryptedResponse: encryptedResponse });
             }
 
-            let corpUnq = user.ADMICORP
-            let userM81Unq = user.ADMIF00
+            if (user.ADMIF06 == 2) {
+                let corpUnq = user.ADMICORP
+                let userM81Unq = user.ADMIF00
 
-            let corpExist = await PLRDBA01.findAll({
-                where: { A01F01: corpUnq }
-            });
+                let corpExist = await PLRDBA01.findAll({
+                    where: { A01F01: corpUnq }
+                });
 
-            let M81Row = await PLSDBM81.findAll({
-                where: { M81CHLD: userM81Unq }
-            });
+                let M81Row = await PLSDBM81.findAll({
+                    where: { M81CHLD: userM81Unq }
+                });
 
-            let uM82Row = M81Row.length > 0 ? M81Row[0].M81F01 : null;
+                let uM82Row = M81Row.length > 0 ? M81Row[0].M81F01 : null;
 
-            if (!corpExist) {
-                response.status = 'FAIL';
-                response.message = 'Invalid CorporateID';
-                const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
-                return res.status(400).json({ encryptedResponse: encryptedResponse });
-            } else {
-                for (const corp of corpExist) {
-                    if (corp.A01F03 == corpId) {
-                        corpRow = corp
-                    }
-                }
-                if (!corpRow) {
+                if (!corpExist) {
                     response.status = 'FAIL';
-                    response.message = 'Corporate ID not Matched';
+                    response.message = 'Invalid CorporateID';
                     const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                     return res.status(400).json({ encryptedResponse: encryptedResponse });
+                } else {
+                    for (const corp of corpExist) {
+                        if (corp.A01F03 == corpId) {
+                            corpRow = corp
+                        }
+                    }
+                    if (!corpRow) {
+                        response.status = 'FAIL';
+                        response.message = 'Corporate ID not Matched';
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                        return res.status(400).json({ encryptedResponse: encryptedResponse });
+                    }
                 }
+                let pwd = encryptor.decrypt(user.ADMIF05);
+                const isPasswordValid = pwd == password;
+                if (!isPasswordValid) {
+                    response.status = 'FAIL';
+                    response.message = 'Invalid password';
+                    let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                    return res.status(400).json({ encryptedResponse: encryptedResponse });
+                }
+
+                let userComp = new AuthenticationService(corpId, uM82Row);
+                let cmplist = await userComp.authenticateUser();
+
+
+
+                const token = jwt.sign({ userId: user.ADMIF01, roleId: user.ADMIF06, password: user.ADMIF05, corpId: corpId }, process.env.JWT_SECRET_KEY, { expiresIn: process.env.JWT_EXPIRATION });
+
+                response.data = {
+                    CustID: corpId,
+                    CustName: user.ADMIF02 + ' ' + user.ADMIF04,
+                    SubSDate: corpRow.A01F12,
+                    SubEDate: corpRow.A01F13,
+                    SoftVer: corpRow.A01F07,
+                    UserId: M81Row.M81F01,
+                    userNm: encryptor.decrypt(user.ADMIF01),
+                    DefCmp: cmplist.DefComp.cmpNo,
+                    cmpList: cmplist.CompList
+                };
+                response.message = 'Login successful';
+                response.token = token;
+                response.status = 'SUCCESS'
+                const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                return res.status(200).json({ encryptedResponse: encryptedResponse });
+
+            } else if (user.ADMIF06 == 3) {
+                let corpUnq = user.ADMICORP
+
+                let corpExist = await PLRDBA01.findAll({
+                    where: { A01F01: corpUnq }
+                });
+                let sprUsr;
+                for (let i of existing) {
+                    const decrypted = encryptor.decrypt(i.ADMIF01)
+                    if (i.ADMICORP == user.ADMICORP && i.ADMIF06 == 2) {
+                        sprUsr = i;
+                        response = {
+                            message: 'User ID valid'
+                        }
+                    }
+                }
+                let userM81Unq = sprUsr.ADMIF00
+
+                let M81Row = await PLSDBM81.findAll({
+                    where: { M81CHLD: userM81Unq }
+                });
+
+                let uM82Row = M81Row.length > 0 ? M81Row[0].M81F01 : null;
+
+                if (!corpExist) {
+                    response.status = 'FAIL';
+                    response.message = 'Invalid CorporateID';
+                    const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                    return res.status(400).json({ encryptedResponse: encryptedResponse });
+                } else {
+                    for (const corp of corpExist) {
+                        if (corp.A01F03 == corpId) {
+                            corpRow = corp
+                        }
+                    }
+                    if (!corpRow) {
+                        response.status = 'FAIL';
+                        response.message = 'Corporate ID not Matched';
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                        return res.status(400).json({ encryptedResponse: encryptedResponse });
+                    }
+                }
+                let pwd = encryptor.decrypt(user.ADMIF05);
+                const isPasswordValid = pwd == password;
+                if (!isPasswordValid) {
+                    response.status = 'FAIL';
+                    response.message = 'Invalid password';
+                    let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                    return res.status(400).json({ encryptedResponse: encryptedResponse });
+                }
+
+                let userComp = new AuthenticationService(corpId, uM82Row);
+                let cmplist = await userComp.authenticateUser();
+                let usrCompList;
+
+                if (user.ADMIROL != 2) {
+                    let assgncmpArray = user.ADMICOMP//.split(','); // Convert comma-separated string to an array
+                    for (const cmp of cmplist.CompList){
+                        if(assgncmpArray.includes(cmp.cmpNo)){
+                            usrCompList = {...cmp}
+                        }
+                    }
+                    // usrCompList = cmplist.CompList.filter(cmp => assgncmpArray.includes(cmp.cmpNo));
+                }
+
+                const token = jwt.sign({ userId: user.ADMIF01, roleId: user.ADMIF06, password: user.ADMIF05, corpId: corpId }, process.env.JWT_SECRET_KEY, { expiresIn: process.env.JWT_EXPIRATION });
+
+                response.data = {
+                    CustID: corpId,
+                    CustName: user.ADMIF02 + ' ' + user.ADMIF04,
+                    SubSDate: corpRow.A01F12,
+                    SubEDate: corpRow.A01F13,
+                    SoftVer: corpRow.A01F07,
+                    UserId: M81Row.M81F01,
+                    userNm: encryptor.decrypt(user.ADMIF01),
+                    DefCmp: cmplist.DefComp.cmpNo,
+                    cmpList: usrCompList
+                };
+                response.message = 'Login successful';
+                response.token = token;
+                response.status = 'SUCCESS'
+                const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                return res.status(200).json({ encryptedResponse: encryptedResponse });
             }
-            let pwd = encryptor.decrypt(user.ADMIF05);
-            const isPasswordValid = pwd == password;
-            if (!isPasswordValid) {
-                response.status = 'FAIL';
-                response.message = 'Invalid password';
-                let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
-                return res.status(400).json({ encryptedResponse: encryptedResponse });
-            }
-
-            let userComp = new AuthenticationService(corpId, uM82Row);
-            let cmplist = await userComp.authenticateUser();
-
-            const token = jwt.sign({ userId: user.ADMIF01, roleId: user.ADMIF06, password: user.ADMIF05, corpId: corpId }, process.env.JWT_SECRET_KEY, { expiresIn: process.env.JWT_EXPIRATION });
-
-            response.data = {
-                CustID: corpId,
-                CustName: user.ADMIF02 + ' ' + user.ADMIF04,
-                SubSDate: corpRow.A01F12,
-                SubEDate: corpRow.A01F13,
-                SoftVer: corpRow.A01F07,
-                UserId: M81Row.M81F01,
-                userNm: encryptor.decrypt(user.ADMIF01),
-                DefCmp: cmplist.DefComp.cmpNo,
-                cmpList: cmplist.CompList
-            };
-            response.message = 'Login successful';
-            response.token = token;
-            response.status = 'SUCCESS'
-            const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
-            return res.status(200).json({ encryptedResponse: encryptedResponse });
         } catch (error) {
             console.error(error);
             const encryptedResponse = encryptor.encrypt(JSON.stringify({ message: 'Login failed' }));

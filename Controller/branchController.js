@@ -6,15 +6,17 @@ const sequelizeSDB = db.getConnection('A00001SDB');
 const sequelizeRDB = db.getConnection('RDB');
 const sequelizeIDB = db.getConnection('IDBAPI');
 
-const definePLSDBADMI = require('../Models/SDB/PLSDBBRC'); // Model factory
+const definePLSDBBRC = require('../Models/SDB/PLSDBBRC'); // Model factory
 const definePLSDBREL = require('../Models/SDB/PLSDBBRC'); // Model factory
+const definePLSDBADMI = require('../Models/SDB/PLSDBADMI'); // Model factory
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01'); // Model factory
 const definePLSTATE = require('../Models/IDB/PLSTATE'); // Model factory
 const Encryptor = require('../Services/encryptor');
 const TokenService = require('../Services/tokenServices');
 
-const PLSDBBRC = definePLSDBADMI(sequelizeSDB);
+const PLSDBBRC = definePLSDBBRC(sequelizeSDB);
 const PLSDBREL = definePLSDBREL(sequelizeSDB);
+const PLSDBADMI = definePLSDBADMI(sequelizeSDB);
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 const PLSTATE = definePLSTATE(sequelizeIDB);
 
@@ -234,6 +236,7 @@ class BranchController {
                 branch.BRGST = updatedBRGST;
                 branch.BRCORP = BRCORP;
                 branch.BRSTATE = updatedBRSTATE;
+                branch.BRCCOMP = this.brccomp;
 
                 await branch.save();
 
@@ -287,39 +290,88 @@ class BranchController {
                 }
 
             } else if (action === 'G') {
-                let corpUnq = await PLRDBA01.findOne({
-                    where: { A01F03: corpId }
-                })
-                let allBRC = await PLSDBBRC.findAll({
-                    where: { BRCORP: corpUnq.A01F01 }
-                });
-                for (const item of allBRC) {
-                    let plstateRow;
+                if (decoded.roleId == 2) {
+                    let corpUnq = await PLRDBA01.findOne({
+                        where: { A01F03: corpId }
+                    })
+                    let allBRC = await PLSDBBRC.findAll({
+                        where: { BRCORP: corpUnq.A01F01 }
+                    });
+                    for (const item of allBRC) {
+                        let plstateRow;
 
-                    // Convert Sequelize instance to plain object (if needed)
-                    const plainItem = item.get({ plain: true });
+                        // Convert Sequelize instance to plain object (if needed)
+                        const plainItem = item.get({ plain: true });
 
-                    // Only query PLSTATE if BRSTATE exists
-                    if (plainItem.BRSTATE) {
-                        plstateRow = await PLSTATE.findOne({
-                            where: { PLSF01: plainItem.BRSTATE }
-                        });
+                        // Only query PLSTATE if BRSTATE exists
+                        if (plainItem.BRSTATE) {
+                            plstateRow = await PLSTATE.findOne({
+                                where: { PLSF01: plainItem.BRSTATE }
+                            });
+                        }
+
+                        // Add the new key-value pair to the plain object
+                        plainItem.BRCSTNM = plstateRow?.PLSF02 || ''; // Default to empty string if PLSF02 is undefined
                     }
 
-                    // Add the new key-value pair to the plain object
-                    plainItem.BRCSTNM = plstateRow?.PLSF02 || ''; // Default to empty string if PLSF02 is undefined
-                }
-
-                response.data = allBRC
-                encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-                return res.status(200).json({ encryptedResponse });
-            } else {
-                if (!this.lbool) {
-                    return false;
-                } else {
-                    response.status = 'FAIL'
+                    response.data = allBRC
                     encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-                    return res.status(400).json({ encryptedResponse });
+                    return res.status(200).json({ encryptedResponse });
+                } else if (decoded.roleId == 3) {
+                    let user = null
+                    const existing = await PLSDBADMI.findAll();
+                    const userId = encryptor.decrypt(decoded.userId)
+                    for (let i of existing) {
+                        const decrypted = encryptor.decrypt(i.ADMIF01)
+                        if (decrypted == userId) {
+                            user = i;
+                            response = {
+                                message: 'User ID valid'
+                            }
+                        }
+                    }
+                    if (user.ADMIBRC) {
+                        let brcValues = user.ADMIBRC.split(',');
+                        let allBRC = await PLSDBBRC.findAll({
+                            where: {
+                                BRID: {
+                                    [Op.in]: brcValues
+                                }
+                            }
+                        });
+                        for (const item of allBRC) {
+                            let plstateRow;
+
+                            // Convert Sequelize instance to plain object (if needed)
+                            const plainItem = item.get({ plain: true });
+
+                            // Only query PLSTATE if BRSTATE exists
+                            if (plainItem.BRSTATE) {
+                                plstateRow = await PLSTATE.findOne({
+                                    where: { PLSF01: plainItem.BRSTATE }
+                                });
+                            }
+
+                            // Add the new key-value pair to the plain object
+                            plainItem.BRCSTNM = plstateRow?.PLSF02 || ''; // Default to empty string if PLSF02 is undefined
+                        }
+                        response.data = allBRC
+                        encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.status(200).json({ encryptedResponse });
+                    } else {
+                        response.message = 'No Assigned Branches'
+                        encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.status(200).json({ encryptedResponse });
+                    }
+                }
+                else {
+                    if (!this.lbool) {
+                        return false;
+                    } else {
+                        response.status = 'FAIL'
+                        encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.status(400).json({ encryptedResponse });
+                    }
                 }
             }
         } catch (error) {
