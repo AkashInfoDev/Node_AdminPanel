@@ -197,7 +197,10 @@ class handleCompany {
 
                         oDic["P_GRPDT"] = await oM00.dtM00Grp(cUserID);
                         response.status = "SUCCESS";
-                        response.data = oDic;
+                        response.data = {...oDic};
+                        console.log(response);
+                        console.log(JSON.stringify(response));
+                                                
                         let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         res.status(200).json({ encryptedResponse })
                         break;

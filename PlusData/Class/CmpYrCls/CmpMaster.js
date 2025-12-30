@@ -296,7 +296,7 @@ class CmpMaster extends PlusInfo {
         this.cUserID = cUserID;
         this.existingCorpId = existingCorpId;
         this.cAction = cAction;
-        this.oEntDict = oEntDict;  // Instance-level dictionary initialized
+        this.oEntDict = oEntDict ? oEntDict : [];  // Instance-level dictionary initialized
         this.SDBH = new SDBHandler('A00001SDB');
         this.decoded = decoded;
         this.targDB;
@@ -480,7 +480,7 @@ class CmpMaster extends PlusInfo {
             console.log('Processing S13F02:', nI.S13F02);
 
             // Ensure 'M00' exists in oEntDict before assigning to it
-            if (!this.oEntDict["M00"]) {
+            if (this.oEntDict.length == 0) {
                 this.oEntDict["M00"] = {};  // Initialize M00 if it doesn't exist
                 console.log("Initialized M00 in oEntDict");
             }
