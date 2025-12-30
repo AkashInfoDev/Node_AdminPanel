@@ -159,6 +159,10 @@ class handleCompany {
                             }
                             // DSDATE, DEDATE, _ADDRESS_1, _ADDRESS_2, _ADDRESS_3, _CITY, _PINCODE, _PHONE1, _PHONE2, _MOBILE1, _MOBILE2, _FAX1, _FAX2, _EMAIL, _WEB, _STATE, _COUNTRY, _STCD, _RPTHD1, _RPTHD2, _RPTFT1, _RPTFT2, _CMPLOGO, _PHONE3, _SYNCID, _BSYNCID, _01, _02, _03, _05, _06, _07, _08, _16, _17, _09, _10, _11, _12, _13, _14, _15
                             console.log(cmpRow);
+                            if (oM00.oEntDict.length == 0) {
+                                oM00.oEntDict["M00"] = {};  // Initialize M00 if it doesn't exist
+                                console.log("Initialized M00 in oEntDict");
+                            }
                             oM00.oEntDict["M00"] = cmpRow[0];
                             oM00.oEntDict["M00"].DSDATE = startDate; //MApp.DTOS(startDate, true);    // Financial year start date
                             oM00.oEntDict["M00"].DEDATE = endDate; //MApp.DTOS(endDate, true);   // Financial year end date
@@ -197,10 +201,10 @@ class handleCompany {
 
                         oDic["P_GRPDT"] = await oM00.dtM00Grp(cUserID);
                         response.status = "SUCCESS";
-                        response.data = {...oDic};
+                        response.data = { ...oDic };
                         console.log(response);
                         console.log(JSON.stringify(response));
-                                                
+
                         let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         res.status(200).json({ encryptedResponse })
                         break;
@@ -407,7 +411,7 @@ class handleCompany {
                             CMPF01: parseInt(saveCmp.CmpNum),
                             CMPF02: cSData['M00'].FIELD02,
                             CMPF03: 'SQL',
-                            CMPF04: cSData['M00'].FIELD02,
+                            CMPF04: cSData['M00'].FIELD11,
                             CMPF11: cUserID,
                             CMPF12: formatDate(new Date()),
                             CMPF21: '94.176.235.105',
@@ -416,6 +420,8 @@ class handleCompany {
                             CMPF24: 'DATA',
                             CMPDEL: null
                         });
+                        response.status = 'SUCCESS';
+                        response.message = '';
                         let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         return res.status(201).json({ encryptedResponse: encryptedResponse });
                     } else {
