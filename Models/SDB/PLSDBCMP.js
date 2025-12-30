@@ -9,7 +9,7 @@ module.exports = (sequelize) => {
         CMPF01: {
             type: DataTypes.SMALLINT,
             primaryKey: true,
-            autoIncrement: true,
+            autoIncrement: false,
         },
         CMPF02: {
             type: DataTypes.STRING(120),
@@ -28,7 +28,7 @@ module.exports = (sequelize) => {
             allowNull: false,
         },
         CMPF12: {
-            type: DataTypes.DATE,
+            type: DataTypes.STRING(50),
             allowNull: false,
         },
         CMPF21: {
@@ -45,7 +45,7 @@ module.exports = (sequelize) => {
             defaultValue: true,
         },
         CMPF24: {
-            type: DataTypes.DATEONLY,
+            type: DataTypes.STRING(4000),
             allowNull: true,
         },
         CMPDEL: {

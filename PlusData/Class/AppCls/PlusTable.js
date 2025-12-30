@@ -286,7 +286,7 @@ class PlusTable extends PlusInfo {
             }
             if (lBegin) {
                 if (lCommit) {
-                    // await oTSs.Commit(cBeginID, obj);
+                    await oTSs.commit();
                     // if (lL01Rec) {
                     //     oCmp.AddL01Rec(cCode, cEntType + "-" + cAction, cTable.replace(oYear.TblYr, ""));
                     //     Task.Run(() => _notifier.NotifyChangeAsync(oYear));

@@ -21,7 +21,7 @@ const PLSTATE = definePLSTATE(sequelizeIDB);
 const encryptor = new Encryptor();
 
 class BranchController {
-    constructor(lbool, action, BRcode, BRname, BRgst, BRSTATE, BRCorp, BRDEF) {
+    constructor(lbool, action, BRcode, BRname, BRgst, BRSTATE, BRCorp, BRDEF, BRCCOMP) {
         this.act = action;
         this.brc = BRcode;
         this.brn = BRname;
@@ -30,6 +30,7 @@ class BranchController {
         this.brst = BRSTATE;
         this.lbool = lbool;
         this.defBrc = BRDEF
+        this.brccomp = BRCCOMP
     }
 
     // Generate a unique BRCODE in the format BRC-XXXX (where XXXX is a 4-digit number)
@@ -151,7 +152,8 @@ class BranchController {
                     BRGST: BRGST ? BRGST : mainBRC.BRGST,
                     BRCORP,
                     BRSTATE,
-                    BRDEF: this.defBrc == 'Y' ? 'Y' : 'N'
+                    BRDEF: this.defBrc == 'Y' ? 'Y' : 'N',
+                    BRCCOMP: this.brccomp
                 });
 
                 if (newBranch) {
@@ -253,7 +255,12 @@ class BranchController {
                 }
 
                 const branchRow = await PLSDBBRC.findOne({ where: { BRCODE } });
-                if (!branchRow || branchRow.BRDEF == 'Y') {
+                if (branchRow.BRCCOMP != '') {
+                    response.message = 'Branch is already assigned to Company'
+                    response.status = 'FAIL'
+                    encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                    return res.status(400).json({ encryptedResponse });
+                } else if (!branchRow || branchRow.BRDEF == 'Y') {
                     response.message = 'Default Branch Can Not be Deleted'
                     response.status = 'FAIL'
                     encryptedResponse = encryptor.encrypt(JSON.stringify(response));

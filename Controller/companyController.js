@@ -12,6 +12,7 @@ const { Op, QueryTypes } = require('sequelize');
 const TokenService = require('../Services/tokenServices');
 const CmpMaster = require('../PlusData/Class/CmpYrCls/CmpMaster');
 const BranchController = require('./branchController');
+const { LangType } = require('../PlusData/commonClass/plusCommon');
 
 // Get Sequelize instance for 'SDB' or your specific DB name
 const sequelizeSDB = db.getConnection('A00001SDB');
@@ -37,7 +38,7 @@ class CompanyService {
             userId, companyName, softSubType, softType, dbVersion, webVer,
             noOfUser, regDate, subStrtDate, subEndDate, cancelDate,
             subDomainDelDate, cnclRes, SBDdbType, srverIP, serverUserName,
-            serverPassword, A02id, phoneNumber, cSData, ExistingcorpId, GSTNumber, startDate, endDate
+            serverPassword, A02id, phoneNumber, cSData, ExistingcorpId, GSTNumber
         } = pa
         let response = {
             status: true,
@@ -184,11 +185,12 @@ class CompanyService {
             // console.log(cSData);
             CmpMaster.oEntDict = JSON.parse(cSData);
             CmpMaster.cAction = 'A';
-            let cMaster = new CmpMaster(userId, ExistingcorpId);
+            let cMaster = new CmpMaster(userId, ExistingcorpId, LangType, 'A', JSON.parse(cSData));
             CmpMaster.cUserID = userId;
             // console.log(typeof(CmpMaster.oEntDict));
 
-            if (!await cMaster.SaveCompany(nextCorpId, '', '', false, '', startDate, endDate)) {
+            let saveCmp = await cMaster.SaveCompany(nextCorpId, '', '', false, '')
+            if (!saveCmp.result) {
                 return res.status(201).json(message = 'error');
             }
 
@@ -213,7 +215,7 @@ class CompanyService {
                 BRcode = ''
             }
 
-            let BRCOntroller = new BranchController(false, 'A', BRcode, 'HOME-BRC', brGst, '', nextCorpId, 'Y')
+            let BRCOntroller = new BranchController(false, 'A', BRcode, 'HOME-BRC', brGst, '', nextCorpId, 'Y', '0000')
             let AddHomeBrc = await BRCOntroller.handleAction(req, res, true);
 
             if (!lbool) {

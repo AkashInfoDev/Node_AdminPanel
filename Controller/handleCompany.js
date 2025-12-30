@@ -13,10 +13,14 @@ const definePLSDBADMI = require('../Models/SDB/PLSDBADMI');
 const definePLSDBCMP = require('../Models/SDB/PLSDBCMP');
 const definePLSDBM81 = require('../Models/SDB/PLSDBM81');
 const definePLSDBM82 = require('../Models/SDB/PLSDBM82');
+const definePLSDBREL = require('../Models/SDB/PLSDBREL');
 const defineCRONLOGS = require('../Models/SDB/CRONLOGS');
 const Year = require('../PlusData/Class/CmpYrCls/Year');
 const Company = require('../PlusData/Class/CmpYrCls/Company');
 const queryService = require('../Services/queryService');
+const { error } = require('console');
+const { formatDate } = require('../Services/customServices');
+const BranchController = require('./branchController');
 const sequelizeIDB = db.getConnection('IDBAPI');
 const sequelizeA00001SDB = db.getConnection('A00001SDB');
 const PLSYSF02 = definePLSYSF02(sequelizeIDB);
@@ -25,6 +29,7 @@ const PLSDBCMP = definePLSDBCMP(sequelizeA00001SDB);
 const PLSDBM81 = definePLSDBM81(sequelizeA00001SDB);
 const PLSDBM82 = definePLSDBM82(sequelizeA00001SDB);
 const CRONLOGS = defineCRONLOGS(sequelizeA00001SDB);
+const PLSDBREL = definePLSDBREL(sequelizeA00001SDB);
 
 class handleCompany {
     constructor({ year, oCmp, oEntDict, dbName, databaseName }) {
@@ -267,6 +272,161 @@ class handleCompany {
         catch (ex) {
             console.error(ex);
             return res.status(500).json(ex)
+        }
+    }
+
+    static async PostM00Ent(req, res) {
+        const parameterString = encryptor.decrypt(req.body.pa);
+        let decodedParam = decodeURIComponent(parameterString);
+        let pa = JSON.parse(decodedParam);
+        let response = { data: null, status: 'SUCCESS', message: '' }
+        const token = req.headers['authorization']?.split(' ')[1]; // 'Bearer <token>'
+
+        let decoded;
+        if (!token) {
+            response.message = 'No token provided, authorization denied.'
+            response.status = 'FAIL'
+            const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(401).json({ encryptedResponse });
+        } else {
+            decoded = await TokenService.validateToken(token);
+        }
+        try {
+            console.log(typeof pa);
+            let cAction = pa.action
+            let CmpNo = pa.CmpNo
+            let cSData = pa.cSData
+            let cErr = "";
+            let oUser = {};
+            oUser.lCode = LangType.English;
+            let qS = CmpNo ? queryService.generateDatabaseName(decoded.corpId, CmpNo) : '';
+            let isComapny = false;
+            let userInfo = {};
+            let admin;
+            let adminId = encryptor.decrypt(decoded.userId);
+            const existingAdmin = await PLSDBADMI.findAll();
+            for (let i of existingAdmin) {
+                const decrypted = encryptor.decrypt(i.ADMIF01)
+                if (decrypted == adminId) {
+                    admin = i;
+                    response = {
+                        message: 'User ID valid'
+                    }
+                }
+            }
+            if (!admin) {
+                response = {
+                    message: 'Invalid UserId'
+                }
+                let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                return res.status(400).json({ encryptedResponse: encryptedResponse });
+            }
+            let M81Info = await PLSDBM81.findOne({
+                where: { M81CHLD: admin.ADMIF00 }
+            });
+
+            let cUserID = M81Info.M81F01;
+
+            let M82;
+            if (cAction == 'E' && CmpNo) {
+                M82 = await PLSDBM82.findOne({
+                    where: {
+                        M82F02: CmpNo,
+                        M82F01: cUserID
+                    }
+                });
+                if (M82) {
+                    if (M82.M82ADA == 'A') {
+                        let dbCmp = await PLSDBCMP.findOne({
+                            where: {
+                                CMPF11: M82.M82F01,
+                                CMPF01: M82.M82F02
+                            }
+                        });
+                        if (dbCmp) {
+                            isComapny = true
+                        };
+                    }
+                } else {
+                    response = {
+                        message: 'Company Does not Exists'
+                    }
+                }
+            }
+            if (cSData) {
+                let cMaster = new CmpMaster(decoded.userId, decoded.corpId, LangType, cAction, JSON.parse(cSData), decoded);
+                // CmpMaster.oEntDict = JSON.parse(cSData);
+                CmpMaster.cUserID = decoded.userId;
+                if (cAction == "E" && isComapny) {
+                    if (!await cMaster.SaveCompany(decoded.corpId, '', '', false, '')) {
+                        let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.status(201).json({ encryptedResponse: encryptedResponse });
+                    }
+                } else if (cAction == "A") {
+                    if (decoded.corpId != 'PL-P-00001') {
+                        let totCMP = await PLSDBM82.findAll({
+                            where: { M82F01: cUserID }
+                        })
+                        if (totCMP.length > admin.ADMICOMP) {
+                            console.log("Not enough companies");
+                            response.message = "Need to Purchase More Companies to Create One";
+                            let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                            return res.status(400).json({ encryptedResponse: encryptedResponse });
+                        }
+                    }
+                    let saveCmp = await cMaster.SaveCompany(decoded.corpId, '', '', false, '');
+                    console.log(cSData);
+                    cSData = JSON.parse(cSData);
+                    let BRCOntroller = new BranchController(false, 'A', BRcode, 'HOME-BRC', brGst, '', nextCorpId, 'Y', saveCmp.CmpNum)
+                    let AddHomeBrc = await BRCOntroller.handleAction(req, res, true);
+                    if (!saveCmp.result) {
+                        await PLSDBREL.create({
+                            M00F01: admin.ADMICORP,
+                            M00F02: admin.ADMIF01,
+                            M00F03: parseInt(saveCmp.CmpNum),
+                            M00F04: ''
+                        });
+                        await PLSDBM82.create({
+                            M82F01: cUserID,
+                            M82F02: parseInt(saveCmp.CmpNum),
+                            M82F11: '',
+                            M82F12: '',
+                            M82F13: '',
+                            M82F14: '',
+                            M82F21: '',
+                            M82F22: '',
+                            M82F23: '',
+                            M82CMP: 'N',
+                            M82YRN: (new Date().getFullYear() % 100).toString(),
+                            M82ADA: 'A'
+                        });
+                        await PLSDBCMP.create({
+                            CMPF01: parseInt(saveCmp.CmpNum),
+                            CMPF02: cSData['M00'].FIELD02,
+                            CMPF03: 'SQL',
+                            CMPF04: cSData['M00'].FIELD02,
+                            CMPF11: cUserID,
+                            CMPF12: formatDate(new Date()),
+                            CMPF21: '94.176.235.105',
+                            CMPF22: 'aipharma_aakash',
+                            CMPF23: 'Aipharma@360',
+                            CMPF24: 'DATA',
+                            CMPDEL: null
+                        });
+                        let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.status(201).json({ encryptedResponse: encryptedResponse });
+                    } else {
+                        console.error("Some error occured");
+                        response.message = "Some error occured";
+                        let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.status(500).json({ encryptedResponse: encryptedResponse });
+                    }
+                }
+            } else {
+                console.error("No company details provided");
+            }
+        } catch (error) {
+            console.log(error);
         }
     }
 }

@@ -49,8 +49,12 @@ class F02Table extends PlusTable {
         return await this.GetDictionary(cCode, cWhere, lAddNew, lFull);
     }
 
-    async saveDataDict(oEntD, lValidate, cBeginID, lDelete, cDelWhr){
-        return await this.SaveDataDict(oEntD, lValidate, cBeginID, lDelete, cDelWhr)
+    async saveDataDict(oEntD, lValidate, cBeginID, lDelete, cDelWhr) {
+        if (await this.SaveDataDict(oEntD, lValidate, cBeginID, lDelete, cDelWhr)) {
+            return true;
+        } else {
+            return false;
+        }
     }
 }
 

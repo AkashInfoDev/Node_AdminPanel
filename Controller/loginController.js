@@ -720,7 +720,8 @@ class UserController {
                     ADMIF12: address || existingUser.ADMIF12, // Address
                     ADMIF13: phoneNumber || existingUser.ADMIF13, // Phone Number
                     ADMIF14: base64Image || existingUser.ADMIF14, // Base64 Image
-                    ADMIROL: cusRole
+                    ADMIROL: cusRole,
+                    ADMICOMP: CmpList
                 };
             } else {
                 updateData = {
@@ -734,7 +735,8 @@ class UserController {
                     ADMIF12: address || existingUser.ADMIF12, // Address
                     ADMIF13: phoneNumber || existingUser.ADMIF13, // Phone Number
                     ADMIF14: base64Image || existingUser.ADMIF14, // Base64 Image
-                    ADMIROL: cusRole
+                    ADMIROL: cusRole,
+                    ADMICOMP: CmpList
                 };
             }
 
@@ -786,6 +788,13 @@ class UserController {
                 }
             }
 
+            if (!user) {
+                response.status = 'FAIL';
+                response.message = 'Incorrect UserID';
+                const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                return res.status(400).json({ encryptedResponse: encryptedResponse });
+            }
+
             let corpUnq = user.ADMICORP
             let userM81Unq = user.ADMIF00
 
@@ -817,13 +826,6 @@ class UserController {
                     return res.status(400).json({ encryptedResponse: encryptedResponse });
                 }
             }
-            if (!user) {
-                response.status = 'FAIL';
-                response.message = 'Incorrect UserID';
-                const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
-                return res.status(400).json({ encryptedResponse: encryptedResponse });
-            }
-
             let pwd = encryptor.decrypt(user.ADMIF05);
             const isPasswordValid = pwd == password;
             if (!isPasswordValid) {

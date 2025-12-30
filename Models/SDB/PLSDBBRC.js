@@ -30,6 +30,10 @@ module.exports = (sequelize) => {
         BRDEF: {
             type: DataTypes.STRING(1),
             allowNull: false
+        },
+        BRCCOMP: {
+            type: DataTypes.STRING(100),
+            allowNull: false
         }
     }, {
         tableName: 'PLSDBBRC',

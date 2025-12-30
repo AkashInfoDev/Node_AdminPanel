@@ -74,15 +74,15 @@ const CompanyService = require("../../../Controller/companySetupController");
 
 //         let cDBType = DcDefine.DBSQL;
 //         let cBPath = MApp.setBasePath();
-//         let cCmpNo = MApp._evlSTU(CmpMaster.oEntDict["M00"].FIELD01);
-//         let cCmpNM = MApp._evlStr(CmpMaster.oEntDict["M00"].FIELD02).trim();
-//         let cGrpNM = MApp._evlStr(CmpMaster.oEntDict["M00"].FIELD11);
+//         let cCmpNo = MApp._evlSTU(this.oEntDict["M00"].FIELD01);
+//         let cCmpNM = MApp._evlStr(this.oEntDict["M00"].FIELD02).trim();
+//         let cGrpNM = MApp._evlStr(this.oEntDict["M00"].FIELD11);
 //         let TbleYr = '';
 //         let newDb
 //         let newDatabase = '';
 
-//         CmpMaster.oEntDict["M00"].FIELD81 = MApp._evlSTU(CmpMaster.oEntDict["M00"].FIELD81, LangType.English);
-//         CmpMaster.oEntDict["M00"].DBSVER = 0;
+//         this.oEntDict["M00"].FIELD81 = MApp._evlSTU(this.oEntDict["M00"].FIELD81, LangType.English);
+//         this.oEntDict["M00"].DBSVER = 0;
 
 //         try {
 //             //--------------------------------------------------------
@@ -113,8 +113,8 @@ const CompanyService = require("../../../Controller/companySetupController");
 //             let result;
 //             let corpNumbers = corpids.map(item => parseInt(item.A01F03.slice(5))).filter(Number.isFinite);
 //             let nextCorpNum = (corpNumbers.length > 0 ? Math.max(...corpNumbers) : 0) + 1;
-//             let nextCorpId = 'PL-P-' + nextCorpNum.toString().padStart(5, '0');
-//             let targetDbName = 'A' + nextCorpNum.toString().padStart(5, '0') + 'CMP' + this.cmpNum;
+//             nextCorpId = 'PL-P-' + nextCorpNum.toString().padStart(5, '0');
+//             targetDbName = 'A' + nextCorpNum.toString().padStart(5, '0') + 'CMP' + this.cmpNum;
 //             do {
 //                 result = await sequelizeMaster.query(
 //                     `SELECT name FROM sys.databases WHERE name = :targetDbName`,
@@ -142,8 +142,8 @@ const CompanyService = require("../../../Controller/companySetupController");
 //             let updateData = {
 //                 ADMICORP: nextCorpId || null
 //             }
-//             if (CmpMaster.cAction === "A") {
-//                 CmpMaster.oEntDict["M00"].FIELD03 = await MApp.NextNumber(null, "", "", 20, "", ""); // Company GUID
+//             if (this.cAction === "A") {
+//                 this.oEntDict["M00"].FIELD03 = await MApp.NextNumber(null, "", "", 20, "", ""); // Company GUID
 
 //                 // Clone DB
 //                 const sourceDbName = 'A00001CMP0031';
@@ -170,7 +170,7 @@ const CompanyService = require("../../../Controller/companySetupController");
 
 //             }
 
-//             let CS = new CompanyService({ TbleYr: TbleYr, oEntDict: CmpMaster.oEntDict, databaseName: newDatabase });
+//             let CS = new CompanyService({ TbleYr: TbleYr, oEntDict: this.oEntDict, databaseName: newDatabase });
 //             await CS.getSetF02(false, newDb);
 
 //             // await PLSDBADMI.update(updateData, {
@@ -291,14 +291,15 @@ class CmpMaster extends PlusInfo {
     static oYear;
 
     // Constructor with necessary parameters
-    constructor(cUserID, existingCorpId, LangType, cAction) {
+    constructor(cUserID, existingCorpId, LangType, cAction, oEntDict, decoded) {
         super(LangType);
         this.cUserID = cUserID;
         this.existingCorpId = existingCorpId;
         this.cAction = cAction;
-        this.oEntDict = {};  // Instance-level dictionary initialized
+        this.oEntDict = oEntDict;  // Instance-level dictionary initialized
         this.SDBH = new SDBHandler('A00001SDB');
-
+        this.decoded = decoded;
+        this.targDB;
     }
 
     // Set default values for the properties
@@ -319,25 +320,26 @@ class CmpMaster extends PlusInfo {
     }
 
     // Method to save the company
-    async SaveCompany(nextCorpId, cError, oCUser, lInitCmp, CustId, startDate, endDate) {
+    async SaveCompany(nextCorpId, cError, oCUser, lInitCmp, CustId) {
         this.SetDefValue();
 
         let cDBType = DcDefine.DBSQL;
         let cBPath = MApp.setBasePath();
-        let cCmpNo = MApp._evlSTU(CmpMaster.oEntDict["M00"].FIELD01);
-        let cCmpNM = MApp._evlStr(CmpMaster.oEntDict["M00"].FIELD02).trim();
-        let cGrpNM = MApp._evlStr(CmpMaster.oEntDict["M00"].FIELD11);
+        let cCmpNo = MApp._evlSTU(this.oEntDict["M00"].FIELD01);
+        let cCmpNM = MApp._evlStr(this.oEntDict["M00"].FIELD02).trim();
+        let cGrpNM = MApp._evlStr(this.oEntDict["M00"].FIELD11);
         let TbleYr = '';
         let newDb;
         let newDatabase = '';
 
-        CmpMaster.oEntDict["M00"].FIELD81 = MApp._evlSTU(CmpMaster.oEntDict["M00"].FIELD81, LangType.English);
-        CmpMaster.oEntDict["M00"].DBSVER = 0;
+        this.oEntDict["M00"].FIELD81 = MApp._evlSTU(this.oEntDict["M00"].FIELD81, LangType.English);
+        this.oEntDict["M00"].DBSVER = 0;
 
         try {
             //--------------------------------------------------------
 
             let admin = this.cUserID;
+            admin = encryptor.decrypt(admin);
             const existingAdmin = await PLSDBADMI.findAll();
             for (let i of existingAdmin) {
                 const decrypted = encryptor.decrypt(i.ADMIF01);
@@ -359,11 +361,43 @@ class CmpMaster extends PlusInfo {
                     }
                 }
             });
+            let userUid = await PLSDBM81.findOne({
+                where: {
+                    M81CHLD: admin.ADMIF00
+                }
+            });
+            let cmpNumbers = await PLSDBM82.findAll({
+                attributes: ['M82F02'],
+                where: {
+                    M82F01: userUid.M81F01
+                },
+                order: [['M82F02', 'DESC']]
+            });
+            let lastCompanyNumber = cmpNumbers.length > 0 ? cmpNumbers[0].M82F02 : 0
+            const companyNumbers = cmpNumbers.map(row => row.M82F02);
+            if (companyNumbers.length != 0) {
+                for (let i = 1; i <= lastCompanyNumber; i++) {
+                    if (!companyNumbers.includes(i)) {
+                        this.cmpNum = i;
+                        break;
+                    }
+                }
+            }
             let result;
-            let corpNumbers = corpids.map(item => parseInt(item.A01F03.slice(5))).filter(Number.isFinite);
-            let nextCorpNum = (corpNumbers.length > 0 ? Math.max(...corpNumbers) : 0) + 1;
-            let nextCorpId = 'PL-P-' + nextCorpNum.toString().padStart(5, '0');
-            let targetDbName = 'A' + nextCorpNum.toString().padStart(5, '0') + 'CMP' + this.cmpNum;
+            let targetDbName;
+            let nextCorpId;
+            if (this.decoded) {
+                let cNum = this.decoded.corpId.split('-');
+                nextCorpId = this.decoded.corpId;
+                targetDbName = 'A' + cNum[2].toString().padStart(5, '0') + 'CMP' + this.cmpNum.toString().padStart(4, '0');
+                this.targDB = targetDbName;
+            } else {
+                let corpNumbers = corpids.map(item => parseInt(item.A01F03.slice(5))).filter(Number.isFinite);
+                let nextCorpNum = (corpNumbers.length > 0 ? Math.max(...corpNumbers) : 0) + 1;
+                nextCorpId = 'PL-P-' + nextCorpNum.toString().padStart(5, '0');
+                targetDbName = 'A' + nextCorpNum.toString().padStart(5, '0') + 'CMP' + this.cmpNum.toString().padStart(4, '0');
+                this.targDB = targetDbName;
+            }
             do {
                 result = await sequelizeMaster.query(
                     `SELECT name FROM sys.databases WHERE name = :targetDbName`,
@@ -373,7 +407,8 @@ class CmpMaster extends PlusInfo {
                     }
                 );
 
-                if (result) {
+                if (result.length > 0) {
+                    console.log(result);
                     const regex = /(\d{4})$/;
                     const match = targetDbName.match(regex);
                     this.cmpNum = parseInt(this.cmpNum) + 1;
@@ -391,8 +426,8 @@ class CmpMaster extends PlusInfo {
             let updateData = {
                 ADMICORP: nextCorpId || null
             };
-            if (CmpMaster.cAction === "A") {
-                CmpMaster.oEntDict["M00"].FIELD03 = await MApp.NextNumber(null, "", "", 20, "", ""); // Company GUID
+            if (this.cAction === "A") {
+                this.oEntDict["M00"].FIELD03 = await MApp.NextNumber(null, "", "", 20, "", ""); // Company GUID
 
                 // Clone DB
                 const sourceDbName = 'A00001CMP0031';
@@ -401,7 +436,7 @@ class CmpMaster extends PlusInfo {
                 const replaceSuffix = 'YR' + new Date().getFullYear() % 100;
                 TbleYr = replaceSuffix;
 
-                await dbCloneService.cloneDatabase(sourceDbName, targetDbName, replaceSuffix, startDate, endDate);
+                await dbCloneService.cloneDatabase(sourceDbName, targetDbName, replaceSuffix, this.oEntDict["M00"].DSDATE, this.oEntDict["M00"].DEDATE);
                 if (cError) return false;
 
                 let sequelize = db.getConnection("master");
@@ -415,16 +450,19 @@ class CmpMaster extends PlusInfo {
                     type: QueryTypes.SELECT
                 });
                 newDb = db.getConnection(targetDbName);
-
             }
 
-            let CS = new CompanyService({ TbleYr: TbleYr, oEntDict: CmpMaster.oEntDict, databaseName: newDatabase });
-            await CS.getSetF02(false, newDb);
+            let CS = new CompanyService({ TbleYr: TbleYr, oEntDict: this.oEntDict, databaseName: newDatabase });
+            if (await CS.getSetF02(false, newDb)) {
+                return true;
+            } else {
+                return {result :false, CmpNum : newDatabase.slice(-4), cSdata : this.oEntDict };
+            }
 
         } catch (ex) {
             console.error(ex);
             if (this.cAction === "A") {
-                this.RemoveCompany(this.oEntDict["M00"].FIELD01.toString(), cError, CustId);
+                await sequelizeMaster.query(`DROP DATABASE ${this.targDB}`, { type: QueryTypes.RAW });
             }
             cError = ex.message;
         }
@@ -440,27 +478,27 @@ class CmpMaster extends PlusInfo {
         for (let nI of DT) {
             // Log the value of S13F02 for debugging
             console.log('Processing S13F02:', nI.S13F02);
-        
+
             // Ensure 'M00' exists in oEntDict before assigning to it
             if (!this.oEntDict["M00"]) {
                 this.oEntDict["M00"] = {};  // Initialize M00 if it doesn't exist
                 console.log("Initialized M00 in oEntDict");
             }
-        
+
             // Validate and clean the S13F02 value
             const rawValue = nI.S13F02 && nI.S13F02.toString().trim();
-            
+
             // Skip invalid or empty values for S13F02
             if (!rawValue) {
                 console.warn('Skipping invalid or empty S13F02 value:', nI.S13F02);
                 continue; // Skip this iteration and move to the next
             }
-        
+
             const key = rawValue.toUpperCase();
-        
+
             // Log the key being generated for better debugging
             console.log('Generated Key:', key);
-        
+
             // Check if the key already exists in M00 to prevent overwriting
             if (this.oEntDict["M00"][key] !== undefined) {
                 console.warn('Key already exists in M00:', key);
@@ -470,10 +508,10 @@ class CmpMaster extends PlusInfo {
                 console.log('Added Key:', key, 'to oEntDict["M00"]');
             }
         }
-        
+
         // Optionally, log the final object to see the results
         console.log('Final oEntDict["M00"]:', this.oEntDict["M00"]);
-        
+
 
         // Optionally log the final object for debugging
         console.log('Final oEntDict["M00"]:', this.oEntDict["M00"]);
@@ -481,9 +519,10 @@ class CmpMaster extends PlusInfo {
 
 
         // Year Date Range Primary
-        if (this.cAction == "G") {
+        if (this.cAction == "G" || this.cAction == "A") {
             let SYr = new Date().getFullYear() - (((new Date().getMonth() + 1) < 4) ? 1 : 0);
             let EYr = SYr + 1;
+            this.oEntDict["M00"].FIELD01 = await MApp.GetEmptyCmpNo(decoded); // Company No
             this.oEntDict["M00"].DSDATE = MApp.DTOS(new Date(SYr, 4, 1), true);    // Financial year start date
             this.oEntDict["M00"].DEDATE = MApp.DTOS(new Date(EYr, 3, 31), true);   // Financial year end date
         } else {

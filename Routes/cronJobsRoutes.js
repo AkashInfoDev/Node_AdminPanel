@@ -4,6 +4,6 @@ const { AdminController, UserController } = require('../Controller/loginControll
 const cronJob = require('../Services/cronJobServices');
 
 // Now this handles /api/User/UserInfo
-router.get('/deleteCmp', cronJob);
+router.get('/deleteCmp', cronJob.runCronJob);
 
 module.exports = router;
