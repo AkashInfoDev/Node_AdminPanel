@@ -315,7 +315,7 @@ class CmpMaster extends PlusInfo {
         this.oEntDict["M00"]._COUNTRY = MApp._evlSTU(this.oEntDict["M00"]._COUNTRY, "C0000095");     // Country - Default India
         this.oEntDict["M00"]._STATE = MApp._evlSTU(this.oEntDict["M00"]?._STATE, "ST000012");         // State - Default Gujarat
         this.oEntDict["M00"].FIELD81 = MApp._evlSTU(this.oEntDict["M00"]?.FIELD81, LangType.English); // Language - Default English
-        this.oEntDict["M00"].FIELD25 = MApp._evlStr(this.oEntDict["M00"]?.FIELD25, "GENERAL");        // Category code for patch Company
+        this.oEntDict["M00"].FIELD25 = MApp._evlStr(this.oEntDict["M00"]?.FIELD25, "MULTIPTAX");        // Category code for patch Company
         this.oEntDict["M00"].FIELD11 = MApp._evlStr(this.oEntDict["M00"]?.FIELD11, "");      // Group Name
     }
 
