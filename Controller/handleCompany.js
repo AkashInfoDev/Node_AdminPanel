@@ -21,6 +21,7 @@ const queryService = require('../Services/queryService');
 const { error } = require('console');
 const { formatDate } = require('../Services/customServices');
 const BranchController = require('./branchController');
+const FTPService = require('../Services/FTPServices');
 const sequelizeIDB = db.getConnection('IDBAPI');
 const sequelizeA00001SDB = db.getConnection('A00001SDB');
 const PLSYSF02 = definePLSYSF02(sequelizeIDB);
@@ -368,7 +369,7 @@ class handleCompany {
                 }
             }
             if (cSData) {
-                cSData["M00"]._CMPLOGO = req.body.img
+                // cSData["M00"]._CMPLOGO = req.body.img
                 let cMaster = new CmpMaster(decoded.userId, decoded.corpId, LangType, cAction, JSON.parse(cSData), decoded);
                 // CmpMaster.oEntDict = JSON.parse(cSData);
                 CmpMaster.cUserID = decoded.userId;
@@ -394,6 +395,7 @@ class handleCompany {
                     console.log(cSData);
                     cSData = JSON.parse(cSData);
                     if (!saveCmp.result) {
+                        let uploadFile = new FTPService(decoded, req.file, saveCmp.CmpNum)
                         let BRCOntroller = new BranchController(false, 'A', '', `${saveCmp.CmpNum}-HOME-BRC`, cSData["M00"]._16, '', decoded.corpId, 'Y', saveCmp.CmpNum)
                         let AddHomeBrc = await BRCOntroller.handleAction(req, res, true);
                         await PLSDBREL.create({

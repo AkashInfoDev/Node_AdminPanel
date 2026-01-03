@@ -79,6 +79,21 @@ module.exports = (sequelize) => {
         A01UNQ: {
             type: DataTypes.STRING(10),
             autoIncrement: true
+        },
+        FTPURL: {
+            type: DataTypes.TEXT,
+        },
+        FTPUID: {
+            type: DataTypes.TEXT,
+        },
+        FTPPWD: {
+            type: DataTypes.TEXT,
+        },
+        FTPDIR: {
+            type: DataTypes.TEXT,
+        },
+        FTPPATH: {
+            type: DataTypes.TEXT,
         }
     }, {
         tableName: 'PLRDBA01',
