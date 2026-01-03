@@ -204,6 +204,76 @@ class DBHandler {
         return !lError;
     }
 
+    async AppendEntryDict(cTblNm, DRDict, lDelete = false, cWhere = "", transaction) {
+        if (!await this.appendEntryDict(cTblNm, DRDict, lDelete, cWhere, transaction)) {
+            let ToDT = await this.sequelizeDynamic.query(`SELECT TOP 1 * FROM ${cTblNm}`);
+            ToDT = ToDT[0];
+            let lCol, lColUpper;
+            try {
+                let SbF = "", SbV = "", ColNM;
+                let ColList = Object.keys(ToDT[0]);
+
+                for (let nI = 0; nI < ColList.length; nI++) {
+                    let ColNM = ColList[nI].toString();
+                    if (ColNM === "FLDUNQ") continue;
+
+                    let hasOriginal = DRDict.hasOwnProperty(ColNM);
+                    let hasUpper = DRDict.hasOwnProperty(ColNM.toUpperCase());
+
+                    if (!hasOriginal && !hasUpper) continue;
+
+                    // Resolve column name and value
+                    ColNM = hasOriginal ? ColNM : ColNM.toUpperCase();
+                    let value = DRDict[ColNM];
+
+                    // Special case: FLDAED default value
+                    if (ColNM === "FLDAED") {
+                        value = value?.toString().trim() ? value : "A";
+                    }
+
+                    // Prepare value for SQL
+                    let valueStr;
+
+                    if (value === undefined || value === null || value === "") {
+                        valueStr = "NULL";
+                    } else if (typeof value === "string") {
+                        // Escape single quotes in SQL strings
+                        valueStr = `'${value.replace(/'/g, "''")}'`;
+                    } else {
+                        valueStr = `'${value}'`; // Numbers, booleans, etc.
+                    }
+
+                    // Append to final strings
+                    SbF += (SbF.length === 0 ? "" : ", ") + ColNM;
+                    SbV += (SbV.length === 0 ? "" : ", ") + valueStr;
+                }
+
+                // const query = `INSERT INTO YR28M01 (${SbF}) VALUES (${SbV})`;
+                // Now execute the query
+
+                if (SbF.length > 0) {
+                    if (SbV.endsWith(",")) {
+                        SbV = SbV.slice(0, -1);
+                    }
+                    const insertQuery = `INSERT INTO ${cTblNm} (${SbF}) VALUES (${SbV})`;
+                    console.log(insertQuery);
+                    let result = await this.sequelizeDynamic.query(insertQuery);
+                    console.log(result);
+                }
+            }
+            catch (Ex) {
+                //if (true)
+                await Rollback(obj.cBeginID, obj)
+                console.error(Ex);
+                // SetError("AppendEntryDict : " + cTblNm + TrapInsertError(cTblNm, DRDict, ToDT), Ex);
+
+                //else
+                //    SetError("AppendEntryDict : " + cTblNm, Ex);
+            }
+        }
+        return true;
+    }
+
     /**
 * Deletes rows from the specified table based on condition.
 * 
@@ -365,10 +435,14 @@ class DBHandler {
           request = transactionMap[obj.cBeginID].request;
           let qry = getQuery(cExFld, cTblNM, cWhere, '', '');
           DTable = await this.sequelizeDynamic.query(qry, {
-            type: sequelizeDynamic.QueryTypes.SELECT
+            type: this.sequelizeDynamic.QueryTypes.SELECT
         });
         } else {
-          DTable = getQuery('TOP 1 *', cTblNM, cWhere, '', '');
+          let qry = getQuery('TOP 1 *', cTblNM, cWhere, '', '');
+          DTable = await this.sequelizeDynamic.query(qry, {
+            type: this.sequelizeDynamic.QueryTypes.SELECT
+        });
+
         //   await DT('DynamicPool', 'get', 'TOP 1 *', cTblNM, cWhere, '', '', '', obj.corporateID, obj.companyID, obj.YrNo);
         }
         // DTable = DTable.recordset;

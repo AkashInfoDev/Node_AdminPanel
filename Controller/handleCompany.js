@@ -98,6 +98,7 @@ class handleCompany {
                         M82F01: cUserID
                     }
                 });
+                oUser.YrNo = M82.M82YRN;
                 if (M82) {
                     if (M82.M82ADA == 'A') {
                         let dbCmp = await PLSDBCMP.findOne({
@@ -118,13 +119,13 @@ class handleCompany {
             }
             if ((cAction == "E" && isComapny) || cAction == "G" || cAction == "D") {
                 let oCmp = (qS && CmpNo) ? new Company(qS, CmpNo) : null;
-                let oYear = oUser.oYear;
+                let oYear = oUser.YrNo;
 
 
                 //M00Table oM00 = new M00Table(oCmp);
                 console.log('CmpMaster class:', CmpMaster); // Log to confirm the class
                 let oM00 = new CmpMaster(cUserID, decoded.corpId, LangType, cAction);
-                oM00.oCmp = oCmp;
+                CmpMaster.oCmp = oCmp;
                 oM00.oYear = oYear;
                 let cWhere = "";
                 switch (cAction) {
@@ -139,6 +140,7 @@ class handleCompany {
                             oYear = new Year(oCmp);
                             oDic = await oM00.GetDictionary(decoded);
                         } else if (cAction == 'E') {
+                            CmpMaster.newDatabase = qS;
                             let dynamicDB = db.createPool(qS);
                             let cmpRow = await dynamicDB.query("SELECT TOP 1 * FROM CMPM00", {
                                 type: sequelizeIDB.QueryTypes.SELECT
@@ -146,6 +148,11 @@ class handleCompany {
                             let yrRow = await dynamicDB.query("SELECT TOP 1 * FROM CMPF01 ORDER BY FIELD01", {
                                 type: sequelizeIDB.QueryTypes.SELECT
                             });
+                            // dynamicDB.close().then(() => {
+                            //     console.log('SQL Server pool closed');
+                            // }).catch((err) => {
+                            //     console.error('Error closing SQL Server pool:', err);
+                            // });
                             if (yrRow.length > 1) {
                                 for (let yr of yrRow) {
                                     if (yr.FIELD01 == M82.M82YRN) {
@@ -361,10 +368,12 @@ class handleCompany {
                 }
             }
             if (cSData) {
+                cSData["M00"]._CMPLOGO = req.body.img
                 let cMaster = new CmpMaster(decoded.userId, decoded.corpId, LangType, cAction, JSON.parse(cSData), decoded);
                 // CmpMaster.oEntDict = JSON.parse(cSData);
                 CmpMaster.cUserID = decoded.userId;
                 if (cAction == "E" && isComapny) {
+                    CmpMaster.newDatabase = qS;
                     if (!await cMaster.SaveCompany(decoded.corpId, '', '', false, '')) {
                         let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         return res.status(201).json({ encryptedResponse: encryptedResponse });

@@ -85,7 +85,7 @@ module.exports = (sequelize) => {
             allowNull: true
         },
         ADMICOMP: {
-            type: DataTypes.STRING(100),
+            type: DataTypes.STRING(4000),
             allowNull: true
         }
     }, {

@@ -289,6 +289,7 @@ class CmpMaster extends PlusInfo {
     static compNo = '0001';
     static oCmp;
     static oYear;
+    static newDatabase = '';
 
     // Constructor with necessary parameters
     constructor(cUserID, existingCorpId, LangType, cAction, oEntDict, decoded) {
@@ -330,7 +331,7 @@ class CmpMaster extends PlusInfo {
         let cGrpNM = MApp._evlStr(this.oEntDict["M00"].FIELD11);
         let TbleYr = '';
         let newDb;
-        let newDatabase = '';
+        
 
         this.oEntDict["M00"].FIELD81 = MApp._evlSTU(this.oEntDict["M00"].FIELD81, LangType.English);
         this.oEntDict["M00"].DBSVER = 0;
@@ -398,7 +399,14 @@ class CmpMaster extends PlusInfo {
                 targetDbName = 'A' + nextCorpNum.toString().padStart(5, '0') + 'CMP' + this.cmpNum.toString().padStart(4, '0');
                 this.targDB = targetDbName;
             }
-            do {
+            
+            let updateData = {
+                ADMICORP: nextCorpId || null
+            };
+            const replaceSuffix = 'YR' + new Date().getFullYear() % 100;
+            TbleYr = replaceSuffix;
+            if (this.cAction === "A") {
+                do {
                 result = await sequelizeMaster.query(
                     `SELECT name FROM sys.databases WHERE name = :targetDbName`,
                     {
@@ -423,24 +431,17 @@ class CmpMaster extends PlusInfo {
                     }
                 }
             } while (result.length > 0);
-            let updateData = {
-                ADMICORP: nextCorpId || null
-            };
-            if (this.cAction === "A") {
                 this.oEntDict["M00"].FIELD03 = await MApp.NextNumber(null, "", "", 20, "", ""); // Company GUID
 
                 // Clone DB
                 const sourceDbName = 'A00001CMP0031';
                 const corpNum = parseInt(nextCorpId.split('-')[2]);
 
-                const replaceSuffix = 'YR' + new Date().getFullYear() % 100;
-                TbleYr = replaceSuffix;
-
                 await dbCloneService.cloneDatabase(sourceDbName, targetDbName, replaceSuffix, this.oEntDict["M00"].DSDATE, this.oEntDict["M00"].DEDATE);
                 if (cError) return false;
 
                 let sequelize = db.getConnection("master");
-                newDatabase = targetDbName;
+                CmpMaster.newDatabase = targetDbName;
                 const [result] = await sequelize.query(`
                 SELECT name
                 FROM sys.databases
@@ -451,12 +452,37 @@ class CmpMaster extends PlusInfo {
                 });
                 newDb = db.getConnection(targetDbName);
             }
+            console.log(this.oEntDict);
 
-            let CS = new CompanyService({ TbleYr: TbleYr, oEntDict: this.oEntDict, databaseName: newDatabase });
+            if (newDb) {
+                await newDb.query(`
+    TRUNCATE TABLE CMPM00;
+
+    INSERT INTO CMPM00 (FIELD01, FIELD02, FIELD03, FIELD25, FIELD81, DBSVER, FLDAED, M00V01, M00V02, M00V03, FIELD10, FIELD11)
+    VALUES (:FIELD01, :FIELD02, :FIELD03, :FIELD25, :FIELD81, :DBSVER, 'A', :M00V01, :M00V02, :M00V03, :FIELD10, :FIELD11);
+`, {
+                    type: QueryTypes.INSERT,
+                    replacements: {
+                        FIELD01: this.oEntDict["M00"].FIELD01,
+                        FIELD02: this.oEntDict["M00"].FIELD02,
+                        FIELD03: this.oEntDict["M00"].FIELD03,
+                        FIELD25: this.oEntDict["M00"].FIELD25,
+                        FIELD81: this.oEntDict["M00"].FIELD81,
+                        DBSVER: this.oEntDict["M00"].DBSVER,
+                        M00V01: this.oEntDict["M00"].M00V01,
+                        M00V02: this.oEntDict["M00"].M00V02,
+                        M00V03: this.oEntDict["M00"].M00V03,
+                        FIELD10: this.oEntDict["M00"].FIELD10,
+                        FIELD11: this.oEntDict["M00"].FIELD11
+                    }
+                });
+
+            }
+            let CS = new CompanyService({ TbleYr: TbleYr, oEntDict: this.oEntDict, databaseName: CmpMaster.newDatabase });
             if (await CS.getSetF02(false, newDb)) {
                 return true;
             } else {
-                return {result :false, CmpNum : newDatabase.slice(-4), cSdata : this.oEntDict };
+                return { result: false, CmpNum: CmpMaster.newDatabase.slice(-4), cSdata: this.oEntDict };
             }
 
         } catch (ex) {
@@ -523,21 +549,27 @@ class CmpMaster extends PlusInfo {
             let SYr = new Date().getFullYear() - (((new Date().getMonth() + 1) < 4) ? 1 : 0);
             let EYr = SYr + 1;
             this.oEntDict["M00"].FIELD01 = await MApp.GetEmptyCmpNo(decoded); // Company No
-            this.oEntDict["M00"].DSDATE = MApp.DTOS(new Date(SYr, 4, 1), true);    // Financial year start date
-            this.oEntDict["M00"].DEDATE = MApp.DTOS(new Date(EYr, 3, 31), true);   // Financial year end date
+            this.oEntDict["M00"].DSDATE = MApp.DTOS(new Date(SYr, 3, 1), true);    // Financial year start date
+            this.oEntDict["M00"].DEDATE = MApp.DTOS(new Date(EYr, 2, 31), true);   // Financial year end date
         } else {
             // this.oEntDict["M00"].DSDATE = MApp.DTOS(M82, true);    // Financial year start date
             // this.oEntDict["M00"].DEDATE = MApp.DTOS(M92, true);   // Financial year end date
         }
 
-        if (this.oCmp == null) {
+        // this.oCmp = super.oCmp ? super.oCmp : null
+        let oM00setup
+        if (CmpMaster.oCmp == null) {
             this.oEntDict["M00"].FIELD01 = await MApp.GetEmptyCmpNo(decoded); // Company No
             this.oEntDict["M00"].FIELD02 = "";                               // Company Name
         } else {
-            let oM00setup = (new M00Table(this.oCmp, dbName, LType).getDictionary(this.oCmp.cCmpNo, "", false, true), this.oEntDict);
+            let ent = await CmpMaster.oCmp.oCon.query(`SELECT TOP 1 *  FROM CMPM00 WHERE FIELD01= ${CmpMaster.oCmp.cCmpNo}`, {
+                type: CmpMaster.oCmp.oCon.QueryTypes.SELECT
+            })
+            let om00 = new M00Table(this.oCmp, dbName, LType)
+            this.oEntDict["M00"] = ent[0];
         }
 
-        let CS = new CompanyService({ oCmp: this.oCmp, oEntDict: this.oEntDict });
+        let CS = new CompanyService({ oCmp: CmpMaster.oCmp, oEntDict: this.oEntDict, dbName: dbName, databaseName: dbName, year: this.oYear });
         await CS.getSetF02(true, dbName, '', this.lCode);
         this.SetDefValue();
 

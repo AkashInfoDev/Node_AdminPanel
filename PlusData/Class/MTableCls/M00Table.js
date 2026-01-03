@@ -36,7 +36,10 @@ class M00Table extends PlusTable {
             lAddNew = false;
         }
 
-        return await super.GetDictionary(cCode, cWhere, lAddNew, lFull);
+        let oEntD = await Promise.resolve(super.GetDictionary(cCode, cWhere, lAddNew, lFull));
+        console.log(oEntD);
+        
+        return this.oEntD["M00"];
     }
 
     async saveDataDict(oEntD = null, lValidate = true, cBeginID = "", lDelete = true, cDelWhr = "") {

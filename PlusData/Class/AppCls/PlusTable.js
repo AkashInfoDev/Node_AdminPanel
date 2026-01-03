@@ -263,10 +263,9 @@ class PlusTable extends PlusInfo {
             // }
             //---------------------------------------//
 
-            lCommit = await this.DBHand.appendEntryDict(this.cTable, this.oEntDict, lDelete, cDelWhr, this.transaction);
-            if (lCommit)
-                this.SaveErr.addErr(ODB.cError);
-
+            lCommit = await this.DBHand.AppendEntryDict(this.cTable, this.oEntDict, lDelete, cDelWhr, this.transaction);
+            // if (lCommit)
+                // this.SaveErr.addErr();
 
             let oOldEntDict = {};
 

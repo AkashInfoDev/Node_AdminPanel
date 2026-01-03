@@ -46,8 +46,8 @@ class CompanyService {
       let dtCF02 = [];
 
       if (this.oCmp) {
-        let defYrno = await this.oCmp.oCon.query(`SELECT * FROM CMPCMM WHERE FIELD01 = '_CMPYEAR'`, { type: QueryTypes.SELECT });
-        const f02Table = new F02Table('YR' + defYrno[0].FIELD02, this.databaseName, langtpe);
+        //let defYrno = await this.oCmp.oCon.query(`SELECT * FROM CMPCMM WHERE FIELD01 = '_CMPYEAR'`, { type: QueryTypes.SELECT });
+        const f02Table = new F02Table('YR' + this.year, this.databaseName, langtpe);
         let table = f02Table.cTable
         dtCF02 = await this.oCmp.oCon.query(`SELECT * FROM ${table}`, { type: QueryTypes.SELECT });
         // dtCF02 = await f02Table.getList(); // Should return array of objects
@@ -74,9 +74,14 @@ class CompanyService {
             fieldToFetch = 'FIELD07';
           }
 
+          console.log(dtCF02);
+          console.log(filterStr);
+          console.log(fieldToFetch);
+          
           cVal = MApp.DTSeekFld(dtCF02, filterStr, fieldToFetch);
         }
 
+        console.log(this.oEntDict["M00"][cKey], "  ", cVal);
         this.oEntDict["M00"][cKey] = cVal;
       }
     } else {
@@ -115,16 +120,11 @@ class CompanyService {
         } else {
           dict.FIELD07 = MApp._evlStr(this.oEntDict["M00"][cKey]);
         }
-
-        if (await f02Table.saveDataDict(dict, false, cBeginID, true, "FIELD01 = '" + cID + "'")) {
-          return true;
-        } else {
-          return false;
-        }
+        await f02Table.saveDataDict(dict, false, cBeginID, true, "FIELD01 = '" + cID + "'");
       }
 
       // f02Table.release();
-      return;
+      return false;
     }
   }
 }
