@@ -92,7 +92,7 @@ class handleCompany {
             let cUserID = M81Info.M81F01;
 
             let M82;
-            if (cAction == 'E' && CmpNo) {
+            if ((cAction == 'E' || cAction == 'D') && CmpNo) {
                 M82 = await PLSDBM82.findOne({
                     where: {
                         M82F02: CmpNo,
@@ -238,7 +238,7 @@ class handleCompany {
                             }
                         }
                         if (isComapny) {
-                            let dtobj = Date.now();
+                            let dtobj = new Date();
                             let dateString = MApp.DTOS(dtobj);
                             updtToDel = await PLSDBCMP.update({
                                 CMPDEL: dateString
@@ -259,7 +259,7 @@ class handleCompany {
                             await CRONLOGS.create({
                                 CRONF02: decoded.corpId,
                                 CRONF03: CmpNo,
-                                CRONF04: MApp.DTOS(Date.now()),
+                                CRONF04: MApp.DTOS(dtobj),
                                 CRONF05: '',
                                 CRONF07: 'Y',
                             });
@@ -371,11 +371,19 @@ class handleCompany {
             if (cSData) {
                 // cSData["M00"]._CMPLOGO = req.body.img
                 let cMaster = new CmpMaster(decoded.userId, decoded.corpId, LangType, cAction, JSON.parse(cSData), decoded);
-                // CmpMaster.oEntDict = JSON.parse(cSData);
+                CmpMaster.oEntDict = JSON.parse(cSData);
                 CmpMaster.cUserID = decoded.userId;
                 if (cAction == "E" && isComapny) {
                     CmpMaster.newDatabase = qS;
-                    if (!await cMaster.SaveCompany(decoded.corpId, '', '', false, '')) {
+                    let saveCmp = await cMaster.SaveCompany(decoded.corpId, '', '', false, '');
+                    if (!saveCmp.result) {
+                        // if (req.files[0].originalname) {
+                        //     console.log('File Size from API:', req.files);  // Check the file size right after upload
+                        //     let uploadFile = new FTPService(decoded, req.files[0].originalname, saveCmp.CmpNum);
+                        //     let upFile = await uploadFile.uploadFile(req);
+                        // }
+                        response.status = 'SUCCESS';
+                        response.message = '';
                         let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         return res.status(201).json({ encryptedResponse: encryptedResponse });
                     }
@@ -395,7 +403,10 @@ class handleCompany {
                     console.log(cSData);
                     cSData = JSON.parse(cSData);
                     if (!saveCmp.result) {
-                        let uploadFile = new FTPService(decoded, req.file, saveCmp.CmpNum)
+                        // if (req.files[0].originalname) {
+                        //     let uploadFile = new FTPService(decoded, req.files[0].originalname, saveCmp.CmpNum);
+                        //     let upFile = await uploadFile.uploadFile(req);
+                        // }
                         let BRCOntroller = new BranchController(false, 'A', '', `${saveCmp.CmpNum}-HOME-BRC`, cSData["M00"]._16, '', decoded.corpId, 'Y', saveCmp.CmpNum)
                         let AddHomeBrc = await BRCOntroller.handleAction(req, res, true);
                         await PLSDBREL.create({

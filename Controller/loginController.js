@@ -779,6 +779,7 @@ class UserController {
 
     static async loginUser(corpId, userId, password, res) {
         try {
+            corpId = corpId.toUpperCase();
             let response = { status: 'SUCCESS', message: null };
             const encryptedId = encryptor.encrypt(userId);
             let corpRow = null;
@@ -919,17 +920,18 @@ class UserController {
 
                 let userComp = new AuthenticationService(corpId, uM82Row);
                 let cmplist = await userComp.authenticateUser();
-                let usrCompList;
+                let usrCompList = [];
 
                 if (user.ADMIROL != 2) {
-                    let assgncmpArray = user.ADMICOMP//.split(','); // Convert comma-separated string to an array
-                    for (const cmp of cmplist.CompList){
-                        if(assgncmpArray.includes(cmp.cmpNo)){
-                            usrCompList = {...cmp}
+                    let assgncmpArray = user.ADMICOMP; // Assuming ADMICOMP is already an array or it's a string that's split elsewhere
+
+                    for (const cmp of cmplist.CompList) {
+                        if (assgncmpArray.includes(cmp.cmpNo)) {
+                            usrCompList.push(cmp); // Push the whole cmp object into the list
                         }
                     }
-                    // usrCompList = cmplist.CompList.filter(cmp => assgncmpArray.includes(cmp.cmpNo));
                 }
+
 
                 const token = jwt.sign({ userId: user.ADMIF01, roleId: user.ADMIF06, password: user.ADMIF05, corpId: corpId }, process.env.JWT_SECRET_KEY, { expiresIn: process.env.JWT_EXPIRATION });
 

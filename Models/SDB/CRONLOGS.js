@@ -8,12 +8,13 @@ module.exports = (sequelize) => {
     return sequelize.define('CRONLOGS', {
         CRONF01: {
             type: DataTypes.INTEGER,
-            primaryKey: true,
+            autoIncrement: true, // This will be the only auto-increment field
+            primaryKey: true, // Add a primary key designation
+            allowNull: false, // Ensure it's not nullable
         },
-
         CRONF02: {
             type: DataTypes.STRING(255),
-            unique: true,
+            allowNull: false,
         },
         CRONF03: {
             type: DataTypes.INTEGER,

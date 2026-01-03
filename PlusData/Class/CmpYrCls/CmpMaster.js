@@ -301,6 +301,7 @@ class CmpMaster extends PlusInfo {
         this.SDBH = new SDBHandler('A00001SDB');
         this.decoded = decoded;
         this.targDB;
+        this.result;
     }
 
     // Set default values for the properties
@@ -309,7 +310,7 @@ class CmpMaster extends PlusInfo {
 
         // Set default values for the fields in oEntDict dictionary
         console.log(this.oEntDict);
-        this.oEntDict["M00"].FIELD10 = MApp._evlSTU(this.oEntDict["M00"]?.M00V01, "");               // Short Name
+        this.oEntDict["M00"].FIELD10 = MApp._evlSTU(this.oEntDict["M00"]?.FIELD10, "");               // Short Name
         this.oEntDict["M00"].M00V01 = MApp._evlSTU(this.oEntDict["M00"]?.M00V01, Define.CDBVer);     // Company Database Version 1,2, 3 etc
         this.oEntDict["M00"].M00V02 = MApp._evlSTU(this.oEntDict["M00"]?.M00V02, Define.CodeVer);    // Company Code Version 1,2,3 etc
         this.oEntDict["M00"].M00V03 = MApp._evlSTU(this.oEntDict["M00"]?.M00V03, Mp.SoftType);     // Company Software Type (Plus-PL, Kishan, KP, Pharma - ....)
@@ -331,7 +332,7 @@ class CmpMaster extends PlusInfo {
         let cGrpNM = MApp._evlStr(this.oEntDict["M00"].FIELD11);
         let TbleYr = '';
         let newDb;
-        
+
 
         this.oEntDict["M00"].FIELD81 = MApp._evlSTU(this.oEntDict["M00"].FIELD81, LangType.English);
         this.oEntDict["M00"].DBSVER = 0;
@@ -384,7 +385,6 @@ class CmpMaster extends PlusInfo {
                     }
                 }
             }
-            let result;
             let targetDbName;
             let nextCorpId;
             if (this.decoded) {
@@ -399,7 +399,7 @@ class CmpMaster extends PlusInfo {
                 targetDbName = 'A' + nextCorpNum.toString().padStart(5, '0') + 'CMP' + this.cmpNum.toString().padStart(4, '0');
                 this.targDB = targetDbName;
             }
-            
+
             let updateData = {
                 ADMICORP: nextCorpId || null
             };
@@ -407,30 +407,30 @@ class CmpMaster extends PlusInfo {
             TbleYr = replaceSuffix;
             if (this.cAction === "A") {
                 do {
-                result = await sequelizeMaster.query(
-                    `SELECT name FROM sys.databases WHERE name = :targetDbName`,
-                    {
-                        replacements: { targetDbName },
-                        type: Sequelize.QueryTypes.SELECT,
-                    }
-                );
+                    this.result = await sequelizeMaster.query(
+                        `SELECT name FROM sys.databases WHERE name = :targetDbName`,
+                        {
+                            replacements: { targetDbName },
+                            type: Sequelize.QueryTypes.SELECT,
+                        }
+                    );
 
-                if (result.length > 0) {
-                    console.log(result);
-                    const regex = /(\d{4})$/;
-                    const match = targetDbName.match(regex);
-                    this.cmpNum = parseInt(this.cmpNum) + 1;
+                    if (this.result.length > 0) {
+                        // console.log(result);
+                        const regex = /(\d{4})$/;
+                        const match = targetDbName.match(regex);
+                        this.cmpNum = parseInt(this.cmpNum) + 1;
 
-                    if (match) {
-                        let num = parseInt(match[0], 10);
-                        num += 1;
-                        targetDbName = targetDbName.replace(regex, num.toString().padStart(4, '0'));
-                    } else {
-                        console.log('No match for the numbering pattern.');
-                        break;
+                        if (match) {
+                            let num = parseInt(match[0], 10);
+                            num += 1;
+                            targetDbName = targetDbName.replace(regex, num.toString().padStart(4, '0'));
+                        } else {
+                            console.log('No match for the numbering pattern.');
+                            break;
+                        }
                     }
-                }
-            } while (result.length > 0);
+                } while (this.result.length > 0);
                 this.oEntDict["M00"].FIELD03 = await MApp.NextNumber(null, "", "", 20, "", ""); // Company GUID
 
                 // Clone DB
@@ -463,7 +463,30 @@ class CmpMaster extends PlusInfo {
 `, {
                     type: QueryTypes.INSERT,
                     replacements: {
-                        FIELD01: this.oEntDict["M00"].FIELD01,
+                        FIELD01: parseInt(CmpMaster.newDatabase.slice(-4)),
+                        FIELD02: this.oEntDict["M00"].FIELD02,
+                        FIELD03: this.oEntDict["M00"].FIELD03,
+                        FIELD25: this.oEntDict["M00"].FIELD25,
+                        FIELD81: this.oEntDict["M00"].FIELD81,
+                        DBSVER: this.oEntDict["M00"].DBSVER,
+                        M00V01: this.oEntDict["M00"].M00V01,
+                        M00V02: this.oEntDict["M00"].M00V02,
+                        M00V03: this.oEntDict["M00"].M00V03,
+                        FIELD10: this.oEntDict["M00"].FIELD10,
+                        FIELD11: this.oEntDict["M00"].FIELD11
+                    }
+                });
+
+            } else  {
+                await CmpMaster.oCmp.oCon.query(`
+    TRUNCATE TABLE CMPM00;
+
+    INSERT INTO CMPM00 (FIELD01, FIELD02, FIELD03, FIELD25, FIELD81, DBSVER, FLDAED, M00V01, M00V02, M00V03, FIELD10, FIELD11)
+    VALUES (:FIELD01, :FIELD02, :FIELD03, :FIELD25, :FIELD81, :DBSVER, 'A', :M00V01, :M00V02, :M00V03, :FIELD10, :FIELD11);
+`, {
+                    type: QueryTypes.INSERT,
+                    replacements: {
+                        FIELD01: parseInt(CmpMaster.newDatabase.slice(-4)),
                         FIELD02: this.oEntDict["M00"].FIELD02,
                         FIELD03: this.oEntDict["M00"].FIELD03,
                         FIELD25: this.oEntDict["M00"].FIELD25,
@@ -565,7 +588,7 @@ class CmpMaster extends PlusInfo {
             let ent = await CmpMaster.oCmp.oCon.query(`SELECT TOP 1 *  FROM CMPM00 WHERE FIELD01= ${CmpMaster.oCmp.cCmpNo}`, {
                 type: CmpMaster.oCmp.oCon.QueryTypes.SELECT
             })
-            let om00 = new M00Table(this.oCmp, dbName, LType)
+            let om00 = new M00Table(this.oCmp, dbName, LType);
             this.oEntDict["M00"] = ent[0];
         }
 
