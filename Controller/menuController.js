@@ -163,9 +163,11 @@ class MenuController {
 
       // Build the menu tree from the fetched menus
       const menuTree = MenuController.buildMenuTree(menus);
-      response.data = menuTree;
-
+      
       // Prepare response data
+      response.data = menuTree;
+      response.message = ""
+      response.status = "SUCCESS"
 
       // Encrypt the response (assuming you have an `encryptor` utility set up)
       let encryptedResponse = encryptor.encrypt(JSON.stringify(response));

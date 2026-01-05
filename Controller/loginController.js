@@ -225,7 +225,7 @@ class AdminController {
             const isPasswordValid = pwd == password;
             if (!isPasswordValid) {
                 response = {
-                    message: 'Invalid password'
+                    message: 'Invalid Credentials'
                 }
                 let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                 return res.status(400).json({ encryptedResponse: encryptedResponse });
@@ -797,7 +797,7 @@ class UserController {
 
             if (!user) {
                 response.status = 'FAIL';
-                response.message = 'Incorrect UserID';
+                response.message = 'Invalid Credentials';
                 const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                 return res.status(400).json({ encryptedResponse: encryptedResponse });
             }
@@ -818,7 +818,7 @@ class UserController {
 
                 if (!corpExist) {
                     response.status = 'FAIL';
-                    response.message = 'Invalid CorporateID';
+                    response.message = 'Invalid Credentials';
                     const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                     return res.status(400).json({ encryptedResponse: encryptedResponse });
                 } else {
@@ -829,7 +829,7 @@ class UserController {
                     }
                     if (!corpRow) {
                         response.status = 'FAIL';
-                        response.message = 'Corporate ID not Matched';
+                        response.message = 'Invalid Credentials';
                         const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                         return res.status(400).json({ encryptedResponse: encryptedResponse });
                     }
@@ -838,7 +838,7 @@ class UserController {
                 const isPasswordValid = pwd == password;
                 if (!isPasswordValid) {
                     response.status = 'FAIL';
-                    response.message = 'Invalid password';
+                    response.message = 'Invalid Credentials';
                     let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                     return res.status(400).json({ encryptedResponse: encryptedResponse });
                 }
@@ -893,7 +893,7 @@ class UserController {
 
                 if (!corpExist) {
                     response.status = 'FAIL';
-                    response.message = 'Invalid CorporateID';
+                    response.message = 'Invalid Credentials';
                     const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                     return res.status(400).json({ encryptedResponse: encryptedResponse });
                 } else {
@@ -904,7 +904,7 @@ class UserController {
                     }
                     if (!corpRow) {
                         response.status = 'FAIL';
-                        response.message = 'Corporate ID not Matched';
+                        response.message = 'Invalid Credentials';
                         const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                         return res.status(400).json({ encryptedResponse: encryptedResponse });
                     }
@@ -913,7 +913,7 @@ class UserController {
                 const isPasswordValid = pwd == password;
                 if (!isPasswordValid) {
                     response.status = 'FAIL';
-                    response.message = 'Invalid password';
+                    response.message = 'Invalid Credentials';
                     let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                     return res.status(400).json({ encryptedResponse: encryptedResponse });
                 }
