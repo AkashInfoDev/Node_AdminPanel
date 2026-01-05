@@ -163,6 +163,7 @@ class MenuController {
 
       // Build the menu tree from the fetched menus
       const menuTree = MenuController.buildMenuTree(menus);
+      response.data = menuTree;
 
       // Prepare response data
 
