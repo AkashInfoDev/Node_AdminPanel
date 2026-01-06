@@ -13,6 +13,7 @@ const TokenService = require('../Services/tokenServices');
 const CmpMaster = require('../PlusData/Class/CmpYrCls/CmpMaster');
 const BranchController = require('./branchController');
 const { LangType } = require('../PlusData/commonClass/plusCommon');
+const Company = require('../PlusData/Class/CmpYrCls/Company');
 
 // Get Sequelize instance for 'SDB' or your specific DB name
 const sequelizeSDB = db.getConnection('A00001SDB');
@@ -34,7 +35,7 @@ class CompanyService {
         const parameterString = encryptor.decrypt(req.query.pa);
         let decodedParam = decodeURIComponent(parameterString);
         let pa = querystring.parse(decodedParam);
-        const {
+        let {
             userId, companyName, softSubType, softType, dbVersion, webVer,
             noOfUser, regDate, subStrtDate, subEndDate, cancelDate,
             subDomainDelDate, cnclRes, SBDdbType, srverIP, serverUserName,
@@ -56,16 +57,6 @@ class CompanyService {
         }
 
         const decoded = await TokenService.validateToken(token);
-
-        if (!userId || !companyName || !regDate || !subStrtDate || !subEndDate || !cancelDate || !cSData) {
-            if (!lbool) {
-                return res.status(500).json({ message: 'Provide valid data for company' })
-            } else {
-                response.status = false;
-                response.message = 'Provide valid data for company';
-                return response
-            }
-        }
 
         try {
             let existingCompName = await PLRDBA01.findAll();
@@ -116,7 +107,25 @@ class CompanyService {
 
             let user = await PLSDBADMI.findOne({
                 where: { ADMICORP: nextId }
-            })
+            });
+            if (!user) {
+                const existing = await PLSDBADMI.findAll();
+                for (let i of existing) {
+                    const decrypted = encryptor.decrypt(i.ADMIF01);
+                    if (decrypted === userId) {
+                        await PLSDBADMI.update({
+                            ADMICORP: nextId
+                        }, {
+                            where: {
+                                ADMIF01: i.ADMIF01
+                            }
+                        });
+                    }
+                }
+            }
+            user = await PLSDBADMI.findOne({
+                where: { ADMICORP: nextId }
+            });
 
             // Create company record
             const createCMP = await PLRDBA01.create({
@@ -141,6 +150,11 @@ class CompanyService {
                 A01F52: srverIP ? srverIP : '94.176.235.105',
                 A01F53: serverUserName ? serverUserName : 'aipharma_aakash',
                 A01F54: serverPassword ? serverPassword : 'Aipharma@360',
+                FTPURL: 's01.lyfexplore.com',
+                FTPUID: 'ftpuser',
+                FTPPWD: 'ftp@3360',
+                FTPDIR: '/html/eplus/',
+                FTPPATH: 'https://s01.lyfexplore.com/eplus/',
                 A02F01: A02id,
                 A01CHLD: '',
             });
@@ -149,7 +163,7 @@ class CompanyService {
                 const relMng = await PLSDBREL.create({
                     M00F01: nextId,
                     M00F02: userId,
-                    M00F03: A02id,
+                    M00F03: A02id ? A02id : '',
                     M00F04: ""
                 });
                 if (A02id) {
@@ -166,33 +180,29 @@ class CompanyService {
 
             // Update user to attach company
             const existing = await PLSDBADMI.findAll({ attributes: ['ADMIF01', 'ADMIF05'] });
-            let decryuser = userId.includes(':') ? encryptor.decrypt(userId) : userId;
-            // let update = await PLSDBADMI.update({ ADMICORP: nextId }, { where: { ADMIF01: encryptedUserId } });
-
-            // // Clone DB
-            // const sourceDbName = 'A00001CMP0031';
-            // const corpNum = parseInt(nextCorpId.split('-')[2]);
-            // const targetDbName = 'A' + corpNum.toString().padStart(5, '0') + 'CMP0001';
-            // const replaceSuffix = 'YR29';
-
-            // await dbCloneService.createCloneProcedure();
-            // await dbCloneService.cloneDatabase(sourceDbName, targetDbName, replaceSuffix);
-
-            // const newDb = db.getConnection(targetDbName);
-
-            let cmpmstr = CmpMaster.oEntDict
-            // console.log(typeof(cSData));
-            // console.log(cSData);
-            CmpMaster.oEntDict = JSON.parse(cSData);
+            let encryuser = userId.includes(':') ? userId : encryptor.encrypt(userId);
+            let cMaster = new CmpMaster(encryuser, ExistingcorpId, LangType, 'A');
+            if (!cSData) {
+                // CmpMaster.oCmp = new Company('A00001CMP0031');
+                let compCon = db.createPool('A00001CMP0031');
+                let oent = await compCon.query(`SELECT TOP 1 * FROM CMPM00`, { type: QueryTypes.SELECT })
+                cMaster.oEntDict["M00"] = oent[0];
+            }
+            // CmpMaster.oEntDict = JSON.parse(cSData);
             CmpMaster.cAction = 'A';
-            let cMaster = new CmpMaster(userId, ExistingcorpId, LangType, 'A', JSON.parse(cSData));
             CmpMaster.cUserID = userId;
             // console.log(typeof(CmpMaster.oEntDict));
 
-            let saveCmp = await cMaster.SaveCompany(nextCorpId, '', '', false, '')
+            let saveCmp = await cMaster.SaveCompany(nextCorpId, '', '', false, '', false)
+            if(!lbool){
             if (!saveCmp.result) {
                 return res.status(201).json(message = 'error');
             }
+        }else{
+            if (!saveCmp.result) {
+                return {status : true, CmpNum: saveCmp.CmpNum, cSdata: saveCmp.cSdata, nextCorpId: saveCmp.nextCorpId}
+            }
+        }
 
             // Return response
             const updatedToken = {

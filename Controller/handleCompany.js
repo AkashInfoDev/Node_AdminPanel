@@ -175,6 +175,8 @@ class handleCompany {
                             oM00.oEntDict["M00"].DSDATE = startDate; //MApp.DTOS(startDate, true);    // Financial year start date
                             oM00.oEntDict["M00"].DEDATE = endDate; //MApp.DTOS(endDate, true);   // Financial year end date
                             oDic = await oM00.GetDictionary(decoded, qS, oUser.lCode);
+                            let formattedCmpNo = CmpNo.toString().padStart(4, '0');
+                            oDic["M00"]._CMPLOGO = `https://www.S01.lyfexplore.com/html/eplus/${decoded.corpId}/${formattedCmpNo}/images/${oDic["M00"]._CMPLOGO}`
                         }
                         //M00 Entry
 
@@ -315,6 +317,8 @@ class handleCompany {
             let oUser = {};
             oUser.lCode = LangType.English;
             let qS = CmpNo ? queryService.generateDatabaseName(decoded.corpId, CmpNo) : '';
+            let oCmp = (qS && CmpNo) ? new Company(qS, CmpNo) : null;
+            CmpMaster.oCmp = oCmp;
             let isComapny = false;
             let userInfo = {};
             let admin;
@@ -377,11 +381,11 @@ class handleCompany {
                     CmpMaster.newDatabase = qS;
                     let saveCmp = await cMaster.SaveCompany(decoded.corpId, '', '', false, '');
                     if (!saveCmp.result) {
-                        // if (req.files[0].originalname) {
-                        //     console.log('File Size from API:', req.files);  // Check the file size right after upload
-                        //     let uploadFile = new FTPService(decoded, req.files[0].originalname, saveCmp.CmpNum);
-                        //     let upFile = await uploadFile.uploadFile(req);
-                        // }
+                        if (req.files[0]?.originalname) {
+                            console.log('File Size from API:', req.files);  // Check the file size right after upload
+                            let uploadFile = new FTPService(decoded, req.files[0].originalname, saveCmp.CmpNum);
+                            let upFile = await uploadFile.uploadFile(req);
+                        }
                         response.status = 'SUCCESS';
                         response.message = '';
                         let encryptedResponse = encryptor.encrypt(JSON.stringify(response));

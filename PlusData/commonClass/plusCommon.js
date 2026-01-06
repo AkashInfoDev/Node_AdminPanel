@@ -321,19 +321,6 @@ class MApp {
 
     static async GetEmptyCmpNo(dtoken, cBPath = "") // Method To Load Empty Company No for Create new Company no
     {
-        // let nMaxCmp = 0, nCmpNo = 0;
-        // nMaxCmp = parseInt("99999999999999".substring(1, define.CMP_NOLENGTH));
-
-        // cBPath = SetBasePath(cBPath);
-
-        // for (nI = 1; nI <= nMaxCmp; nI++) {
-        //     if (CmpExists(nI.toString(), cBaseDBPath))
-        //         continue;
-        //     nCmpNo = nI;
-        //     break;
-        // }
-        // return nCmpNo.toString().Trim();
-
         let admin = null
         let existingAdmin = await PLSDBADMI.findAll();
         let userId = encryptor.decrypt(dtoken.userId);

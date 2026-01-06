@@ -186,20 +186,20 @@ const CompanyService = require("../../../Controller/companySetupController");
 //                 where: { M81F03: uId }
 //             })
 
-//             await PLSDBM82.create({
-//                 M82F01: M82F01val.dataValues.M81F01,
-//                 M82F02: parseInt(this.cmpNum),
-//                 M82F11: '',
-//                 M82F12: '',
-//                 M82F13: '',
-//                 M82F14: '',
-//                 M82F21: '',
-//                 M82F22: '',
-//                 M82F23: '',
-//                 M82CMP: parseInt(this.cmpNum) == 1 ? 'Y' : 'N',
-//                 M82YRN: '',
-//                 M82ADA: '',
-//             });
+            // await PLSDBM82.create({
+            //     M82F01: M82F01val.dataValues.M81F01,
+            //     M82F02: parseInt(this.cmpNum),
+            //     M82F11: '',
+            //     M82F12: '',
+            //     M82F13: '',
+            //     M82F14: '',
+            //     M82F21: '',
+            //     M82F22: '',
+            //     M82F23: '',
+            //     M82CMP: parseInt(this.cmpNum) == 1 ? 'Y' : 'N',
+            //     M82YRN: '',
+            //     M82ADA: '',
+            // });
 
 
 
@@ -322,7 +322,7 @@ class CmpMaster extends PlusInfo {
     }
 
     // Method to save the company
-    async SaveCompany(nextCorpId, cError, oCUser, lInitCmp, CustId) {
+    async SaveCompany(nextCorpId, cError, oCUser, lInitCmp, CustId, lbool) {
         this.SetDefValue();
 
         let cDBType = DcDefine.DBSQL;
@@ -386,17 +386,18 @@ class CmpMaster extends PlusInfo {
                 }
             }
             let targetDbName;
-            let nextCorpId;
+            // let nextCorpId;
             if (this.decoded) {
                 let cNum = this.decoded.corpId.split('-');
                 nextCorpId = this.decoded.corpId;
                 targetDbName = 'A' + cNum[2].toString().padStart(5, '0') + 'CMP' + this.cmpNum.toString().padStart(4, '0');
                 this.targDB = targetDbName;
             } else {
-                let corpNumbers = corpids.map(item => parseInt(item.A01F03.slice(5))).filter(Number.isFinite);
-                let nextCorpNum = (corpNumbers.length > 0 ? Math.max(...corpNumbers) : 0) + 1;
-                nextCorpId = 'PL-P-' + nextCorpNum.toString().padStart(5, '0');
-                targetDbName = 'A' + nextCorpNum.toString().padStart(5, '0') + 'CMP' + this.cmpNum.toString().padStart(4, '0');
+                // let corpNumbers = corpids.map(item => parseInt(item.A01F03.slice(5))).filter(Number.isFinite);
+                // let nextCorpNum = (corpNumbers.length > 0 ? Math.max(...corpNumbers) : 0) + 1;
+                // nextCorpId = 'PL-P-' + nextCorpNum.toString().padStart(5, '0');
+                let nextCorpNum = nextCorpId.split('-')
+                targetDbName = 'A' + nextCorpNum[2].toString().padStart(5, '0') + 'CMP' + this.cmpNum.toString().padStart(4, '0');
                 this.targDB = targetDbName;
             }
 
@@ -436,8 +437,27 @@ class CmpMaster extends PlusInfo {
                 // Clone DB
                 const sourceDbName = 'A00001CMP0031';
                 const corpNum = parseInt(nextCorpId.split('-')[2]);
+                let startsDate;
+                let endDate;
+                if (!lbool) {
+                    // Get current date
+                    let currentDate = new Date();
 
-                await dbCloneService.cloneDatabase(sourceDbName, targetDbName, replaceSuffix, this.oEntDict["M00"].DSDATE, this.oEntDict["M00"].DEDATE);
+                    // Get date one year later
+                    let oneYearLater = new Date();
+                    oneYearLater.setFullYear(currentDate.getFullYear() + 1);
+
+                    startsDate = MApp.DTOS(currentDate);
+                    endDate = MApp.DTOS(oneYearLater)
+                    // Output the dates
+                    console.log("Current Date:", currentDate.toISOString().split('T')[0]);
+                    console.log("One Year Later:", oneYearLater.toISOString().split('T')[0]);
+
+                }else{
+                    startsDate = this.oEntDict["M00"].DSDATE;
+                    endDate = this.oEntDict["M00"].DEDATE
+                }
+                await dbCloneService.cloneDatabase(sourceDbName, targetDbName, replaceSuffix, startsDate, endDate);
                 if (cError) return false;
 
                 let sequelize = db.getConnection("master");
@@ -477,7 +497,7 @@ class CmpMaster extends PlusInfo {
                     }
                 });
 
-            } else  {
+            } else {
                 await CmpMaster.oCmp.oCon.query(`
     TRUNCATE TABLE CMPM00;
 
@@ -505,7 +525,7 @@ class CmpMaster extends PlusInfo {
             if (await CS.getSetF02(false, newDb)) {
                 return true;
             } else {
-                return { result: false, CmpNum: CmpMaster.newDatabase.slice(-4), cSdata: this.oEntDict };
+                return { result: false, CmpNum: CmpMaster.newDatabase.slice(-4), cSdata: this.oEntDict, nextCorpId: nextCorpId };
             }
 
         } catch (ex) {
@@ -519,7 +539,7 @@ class CmpMaster extends PlusInfo {
         return true;
     }
 
-    async GetDictionary(decoded, dbName, LType) {
+    async GetDictionary(decoded, dbName, LType, cmpnm) {
         // Fill oEntDict directly for the instance
         let DT = await PLSYS13.findAll({
             where: { S13F01: 'M00' }
@@ -571,7 +591,7 @@ class CmpMaster extends PlusInfo {
         if (this.cAction == "G" || this.cAction == "A") {
             let SYr = new Date().getFullYear() - (((new Date().getMonth() + 1) < 4) ? 1 : 0);
             let EYr = SYr + 1;
-            this.oEntDict["M00"].FIELD01 = await MApp.GetEmptyCmpNo(decoded); // Company No
+            this.oEntDict["M00"].FIELD01 = cmpnm ? cmpnm : await MApp.GetEmptyCmpNo(decoded); // Company No
             this.oEntDict["M00"].DSDATE = MApp.DTOS(new Date(SYr, 3, 1), true);    // Financial year start date
             this.oEntDict["M00"].DEDATE = MApp.DTOS(new Date(EYr, 2, 31), true);   // Financial year end date
         } else {

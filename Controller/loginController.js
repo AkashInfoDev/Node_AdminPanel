@@ -8,12 +8,15 @@ const definePLSDBADMI = require('../Models/SDB/PLSDBADMI'); // Model factory
 const definePLSDBREL = require('../Models/SDB/PLSDBREL'); // Model factory
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01'); // Model factory
 const definePLSDBM81 = require('../Models/SDB/PLSDBM81');
+const definePLSDBM82 = require('../Models/SDB/PLSDBM82');
+const definePLSDBCMP = require('../Models/SDB/PLSDBCMP');
 const Encryptor = require('../Services/encryptor');
 const { Op } = require('sequelize');
 // const PLRDBA01 = require('../Models/RDB/PLRDBA01');
 const TokenService = require('../Services/tokenServices');
 const CompanyService = require('../Controller/companyController');
 const AuthenticationService = require('../Services/loginServices');
+const { formatDate } = require('../Services/customServices');
 
 // Get Sequelize instance for 'SDB' or your specific DB name
 const sequelizeSDB = db.getConnection('A00001SDB');
@@ -23,6 +26,8 @@ const sequelizeRDB = db.getConnection('RDB');
 const PLSDBADMI = definePLSDBADMI(sequelizeSDB);
 const PLSDBREL = definePLSDBREL(sequelizeSDB);
 const PLSDBM81 = definePLSDBM81(sequelizeSDB);
+const PLSDBM82 = definePLSDBM82(sequelizeSDB);
+const PLSDBCMP = definePLSDBCMP(sequelizeSDB);
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 const encryptor = new Encryptor();
 // let response = { data: null, Status: "SUCCESS", message: null }
@@ -270,7 +275,7 @@ class UserController {
         const token = req.headers['authorization']?.split(' ')[1]; // 'Bearer <token>'
 
         let decoded;
-        if (action != 'L') {
+        if (action != 'L' && roleId != '2') {
             if (!token) {
                 response.message = 'No token provided, authorization denied.'
                 response.status = 'FAIL'
@@ -460,6 +465,47 @@ class UserController {
                     return res.status(500).json(companyResult); // Make sure the response is returned here
                 } else {
                     try {
+                        let admin;
+                        let adminId = userId;
+                        const existingAdmin = await PLSDBADMI.findAll();
+                        for (let i of existingAdmin) {
+                            const decrypted = encryptor.decrypt(i.ADMIF01)
+                            if (decrypted == adminId) {
+                                admin = i;
+                            }
+                        }
+                        let M81Info = await PLSDBM81.findOne({
+                            where: { M81CHLD: admin.ADMIF00 }
+                        });
+
+                        let cUserID = M81Info.M81F01;
+                        await PLSDBM82.create({
+                            M82F01: cUserID,
+                            M82F02: parseInt(companyResult.CmpNum),
+                            M82F11: '',
+                            M82F12: '',
+                            M82F13: '',
+                            M82F14: '',
+                            M82F21: '',
+                            M82F22: '',
+                            M82F23: '',
+                            M82CMP: 'Y',
+                            M82YRN: (new Date().getFullYear() % 100).toString(),
+                            M82ADA: 'A'
+                        });
+                        await PLSDBCMP.create({
+                            CMPF01: parseInt(companyResult.CmpNum),
+                            CMPF02: companyName,
+                            CMPF03: 'SQL',
+                            CMPF04: 'No Group',
+                            CMPF11: cUserID,
+                            CMPF12: formatDate(new Date()),
+                            CMPF21: '94.176.235.105',
+                            CMPF22: 'aipharma_aakash',
+                            CMPF23: 'Aipharma@360',
+                            CMPF24: 'DATA',
+                            CMPDEL: null
+                        });
                         // Fetch user info based on company name
                         let userInfo = await PLRDBA01.findOne({
                             where: { A01F02: companyName }
@@ -505,7 +551,9 @@ class UserController {
                         const response = {
                             status: 'SUCCESS',
                             message: 'User registered successfully',
-                            userId: encryptedUserId,
+                            userId: encryptor.decrypt(newUser.ADMIF01),
+                            password: encryptor.decrypt(newUser.ADMIF05),
+                            corpId: companyResult.nextCorpId,
                             updatedToken: updatedToken
                         };
 
@@ -521,9 +569,6 @@ class UserController {
                         return res.status(500).json({ message: 'An error occurred', error: error.message });
                     }
                 }
-
-
-
             } else if (roleId == '3') {
                 let corpId = decoded.corpId
                 let response = { status: 'SUCCESS', message: null };

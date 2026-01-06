@@ -9,7 +9,7 @@ class Company {
     constructor(dbName, cCmpNo) {
         this.oCon = db.getConnection(dbName);
         this.lcon = this.oCon ? true : false;
-        this.cCmpNo = cCmpNo
+        this.cCmpNo = cCmpNo ? cCmpNo : '0000'
     }
 
     async LoadCMP()   // Method to load company Data Object
