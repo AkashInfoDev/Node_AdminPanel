@@ -151,7 +151,7 @@ class BranchController {
                 const newBranch = await PLSDBBRC.create({
                     BRCODE: newBRCODE,
                     BRNAME,
-                    BRGST: BRGST ? BRGST : mainBRC.BRGST,
+                    BRGST: BRGST ? BRGST : mainBRC.BRGST ? mainBRC.BRGST : '',
                     BRCORP,
                     BRSTATE,
                     BRDEF: this.defBrc == 'Y' ? 'Y' : 'N',

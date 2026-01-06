@@ -193,16 +193,20 @@ class CompanyService {
             CmpMaster.cUserID = userId;
             // console.log(typeof(CmpMaster.oEntDict));
 
+            let BRcode;
+            let brGst = '';
             let saveCmp = await cMaster.SaveCompany(nextCorpId, '', '', false, '', false)
-            if(!lbool){
-            if (!saveCmp.result) {
-                return res.status(201).json(message = 'error');
+            if (!lbool) {
+                if (!saveCmp.result) {
+                    return res.status(201).json(message = 'error');
+                }
+            } else {
+                if (!saveCmp.result) {
+                    let BRCOntroller = new BranchController(false, 'A', BRcode, '000-HOME-BRC', brGst, '', saveCmp.nextCorpId, 'Y', '0000');
+                    let AddHomeBrc = await BRCOntroller.handleAction(req, res, true);
+                    return { status: true, CmpNum: saveCmp.CmpNum, cSdata: saveCmp.cSdata, nextCorpId: saveCmp.nextCorpId }
+                }
             }
-        }else{
-            if (!saveCmp.result) {
-                return {status : true, CmpNum: saveCmp.CmpNum, cSdata: saveCmp.cSdata, nextCorpId: saveCmp.nextCorpId}
-            }
-        }
 
             // Return response
             const updatedToken = {
@@ -218,8 +222,7 @@ class CompanyService {
                 // dbName: targetDbName,
                 newToken
             };
-            let BRcode;
-            let brGst;
+            
             if (!GSTNumber) {
                 brGst = '';
                 BRcode = ''

@@ -15,6 +15,7 @@ const definePLSDBM81 = require('../Models/SDB/PLSDBM81');
 const definePLSDBM82 = require('../Models/SDB/PLSDBM82');
 const definePLSDBREL = require('../Models/SDB/PLSDBREL');
 const defineCRONLOGS = require('../Models/SDB/CRONLOGS');
+const definePLRDBA01 = require('../Models/RDB/PLRDBA01');
 const Year = require('../PlusData/Class/CmpYrCls/Year');
 const Company = require('../PlusData/Class/CmpYrCls/Company');
 const queryService = require('../Services/queryService');
@@ -24,6 +25,7 @@ const BranchController = require('./branchController');
 const FTPService = require('../Services/FTPServices');
 const sequelizeIDB = db.getConnection('IDBAPI');
 const sequelizeA00001SDB = db.getConnection('A00001SDB');
+const sequelizeRDB = db.getConnection('RDB');
 const PLSYSF02 = definePLSYSF02(sequelizeIDB);
 const PLSDBADMI = definePLSDBADMI(sequelizeA00001SDB);
 const PLSDBCMP = definePLSDBCMP(sequelizeA00001SDB);
@@ -31,6 +33,7 @@ const PLSDBM81 = definePLSDBM81(sequelizeA00001SDB);
 const PLSDBM82 = definePLSDBM82(sequelizeA00001SDB);
 const CRONLOGS = defineCRONLOGS(sequelizeA00001SDB);
 const PLSDBREL = definePLSDBREL(sequelizeA00001SDB);
+const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 
 class handleCompany {
     constructor({ year, oCmp, oEntDict, dbName, databaseName }) {
@@ -175,8 +178,13 @@ class handleCompany {
                             oM00.oEntDict["M00"].DSDATE = startDate; //MApp.DTOS(startDate, true);    // Financial year start date
                             oM00.oEntDict["M00"].DEDATE = endDate; //MApp.DTOS(endDate, true);   // Financial year end date
                             oDic = await oM00.GetDictionary(decoded, qS, oUser.lCode);
+                            let path = await PLRDBA01.findOne({
+                                A01F03 : decoded.corpId
+                            })
                             let formattedCmpNo = CmpNo.toString().padStart(4, '0');
-                            oDic["M00"]._CMPLOGO = `https://www.S01.lyfexplore.com/html/eplus/${decoded.corpId}/${formattedCmpNo}/images/${oDic["M00"]._CMPLOGO}`
+                            oDic["M00"]._CMPLOGO = `${path.FTPPATH}${decoded.corpId}/${formattedCmpNo}/images/${oDic["M00"]._CMPLOGO}`;
+                            console.log(oDic["M00"]._CMPLOGO);
+                            
                         }
                         //M00 Entry
 
