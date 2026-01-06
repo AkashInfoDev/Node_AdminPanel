@@ -148,16 +148,28 @@ class BranchController {
                     }
                 });
 
-                const newBranch = await PLSDBBRC.create({
-                    BRCODE: newBRCODE,
-                    BRNAME,
-                    BRGST: BRGST ? BRGST : mainBRC.BRGST ? mainBRC.BRGST : '',
-                    BRCORP,
-                    BRSTATE,
-                    BRDEF: this.defBrc == 'Y' ? 'Y' : 'N',
-                    BRCCOMP: this.brccomp
-                });
-
+                let newBranch
+                if (!this.lbool) {
+                    newBranch = await PLSDBBRC.create({
+                        BRCODE: newBRCODE,
+                        BRNAME,
+                        BRGST: '',
+                        BRCORP,
+                        BRSTATE,
+                        BRDEF: this.defBrc == 'Y' ? 'Y' : 'N',
+                        BRCCOMP: this.brccomp
+                    });
+                } else {
+                    newBranch = await PLSDBBRC.create({
+                        BRCODE: newBRCODE,
+                        BRNAME,
+                        BRGST: BRGST ? BRGST : mainBRC.BRGST ? mainBRC.BRGST : '',
+                        BRCORP,
+                        BRSTATE,
+                        BRDEF: this.defBrc == 'Y' ? 'Y' : 'N',
+                        BRCCOMP: this.brccomp
+                    });
+                }
                 if (newBranch) {
                     const relMng = await PLSDBREL.update(
                         {

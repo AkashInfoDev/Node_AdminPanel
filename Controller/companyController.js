@@ -202,7 +202,7 @@ class CompanyService {
                 }
             } else {
                 if (!saveCmp.result) {
-                    let BRCOntroller = new BranchController(false, 'A', BRcode, '000-HOME-BRC', brGst, '', saveCmp.nextCorpId, 'Y', '0000');
+                    let BRCOntroller = new BranchController(false, 'A', BRcode, '0000-HOME-BRC', brGst, '', saveCmp.nextCorpId, 'Y', '0000');
                     let AddHomeBrc = await BRCOntroller.handleAction(req, res, true);
                     return { status: true, CmpNum: saveCmp.CmpNum, cSdata: saveCmp.cSdata, nextCorpId: saveCmp.nextCorpId }
                 }
