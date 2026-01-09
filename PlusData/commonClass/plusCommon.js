@@ -9,6 +9,9 @@ const definePLSDBM82 = require('../../Models/SDB/PLSDBM82');
 const definePLSDBADMI = require('../../Models/SDB/PLSDBADMI');
 const Company = require('../Class/CmpYrCls/Company');
 const Encryptor = require('../../Services/encryptor');
+const ADMIController = require('../../Controller/ADMIController');
+const M81Controller = require('../../Controller/M81Controller');
+const M82Controller = require('../../Controller/M82Controller');
 const PLSDBM82 = definePLSDBM82(sequelizeSDB);
 const PLSDBM81 = definePLSDBM81(sequelizeSDB);
 const PLSDBADMI = definePLSDBADMI(sequelizeSDB);
@@ -321,8 +324,13 @@ class MApp {
 
     static async GetEmptyCmpNo(dtoken, cBPath = "") // Method To Load Empty Company No for Create new Company no
     {
-        let admin = null
-        let existingAdmin = await PLSDBADMI.findAll();
+        let sdbSeq = (dtoken.corpId).split('-');
+        let sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB'
+        let admi = new ADMIController(sdbdbname);
+        let m81 = new M81Controller(sdbdbname);
+        let m82 = new M82Controller(sdbdbname);
+        let admin = null;
+        let existingAdmin = await admi.findAll();
         let userId = encryptor.decrypt(dtoken.userId);
         for (let i of existingAdmin) {
             const decrypted = encryptor.decrypt(i.ADMIF01)
@@ -330,13 +338,21 @@ class MApp {
                 admin = i;
             }
         }
-        let M81 = await PLSDBM81.findOne({
-            where: { M81CHLD: admin.ADMIF00 }
-        });
-        let M82 = await PLSDBM82.findAll({
-            attributes: ['M82F01', 'M82F02'],
-            where: { M82F01: M81.M81F01 }
-        });
+        let M81
+        if (dtoken.corpId == 'PL-P-00001') {
+            M81 = await m81.findOne({
+                M81CHLD: admin.ADMIF00
+            });
+        } else {
+            M81 = await m81.findOne({
+                M81UNQ: admin.ADMIF00
+            });
+        }
+        let M82 = await m82.findAll(
+            { M82F01: M81.M81F01 },
+            [],
+            ['M82F01', 'M82F02'], 
+        );
 
         // Extract the numbers from M82F02 field
         let numbers = M82.map(item => item.M82F02);
@@ -463,11 +479,11 @@ class LangType {
 class plusCommon {
     RC(field, lCode, dtPLSYSCAP) {
         const row = dtPLSYSCAP?.find(record => record.CAPF00 === field);
-    
+
         if (!row) {
             return field;
         }
-    
+
         switch (lCode) {
             case '01':
                 return row.CAPF01;

@@ -13,6 +13,9 @@ const definePLRDBA01 = require('../Models/RDB/PLRDBA01'); // Model factory
 const definePLSTATE = require('../Models/IDB/PLSTATE'); // Model factory
 const Encryptor = require('../Services/encryptor');
 const TokenService = require('../Services/tokenServices');
+const ADMIController = require('./ADMIController');
+const RELController = require('./RELController');
+const BRCController = require('./BRCController');
 
 const PLSDBBRC = definePLSDBBRC(sequelizeSDB);
 const PLSDBREL = definePLSDBREL(sequelizeSDB);
@@ -36,15 +39,14 @@ class BranchController {
     }
 
     // Generate a unique BRCODE in the format BRC-XXXX (where XXXX is a 4-digit number)
-    async generateUniqueBRCODE() {
-        const existingBranches = await PLSDBBRC.findAll({
-            attributes: ['BRCODE'],
-            where: {
-                BRCODE: {
-                    [Op.like]: 'BRC-%',
-                },
+    async generateUniqueBRCODE(tblbrc) {
+        const existingBranches = await tblbrc.findAll({
+            BRCODE: {
+                [Op.like]: 'BRC-%',
             },
-        });
+        }, [],
+            ['BRCODE']
+        );
 
         const usedCodes = new Set(
             existingBranches
@@ -100,8 +102,21 @@ class BranchController {
                     return res.status(401).json({ encryptedResponse });
                 }
                 decoded = await TokenService.validateToken(token);
-                corpId = decoded.corpId
             }
+            // corpId = decoded.corpId
+            console.log(this.brcr);
+            let sdbseq;
+            if(this.brcr){
+                sdbseq = (this.brcr).split('-');
+            }else{
+                corpId = decoded.corpId
+                sdbseq = (corpId).split('-');
+            }
+            // sdbseq = (this.brcr).split('-');
+            let sdbdbname = sdbseq[0] + sdbseq[1] + sdbseq[2] + 'SDB'
+            let admi = new ADMIController(sdbdbname);
+            let rel = new RELController(sdbdbname);
+            let tblbrc = new BRCController(sdbdbname);
 
             if (!action) {
                 if (!this.lbool) {
@@ -140,27 +155,18 @@ class BranchController {
                 }
 
                 const BRCORP = corpRow.A01F01;
-                const newBRCODE = await this.generateUniqueBRCODE();
-                let mainBRC = await PLSDBBRC.findOne({
-                    where: {
-                        BRCORP: BRCORP,
-                        BRDEF: 'Y'
-                    }
+                const newBRCODE = await this.generateUniqueBRCODE(tblbrc);
+                let mainBRC = await tblbrc.findOne({
+                    BRCORP: BRCORP.trim(),
+                    BRDEF: 'Y'
                 });
 
                 let newBranch
                 if (!this.lbool) {
-                    newBranch = await PLSDBBRC.create({
-                        BRCODE: newBRCODE,
-                        BRNAME,
-                        BRGST: '',
-                        BRCORP,
-                        BRSTATE,
-                        BRDEF: this.defBrc == 'Y' ? 'Y' : 'N',
-                        BRCCOMP: this.brccomp
-                    });
+                    newBranch = await tblbrc.create(newBRCODE, BRNAME, this.brg, BRCORP, BRSTATE, this.defBrc == 'Y' ? 'Y' : 'N', this.brccomp
+                    );
                 } else {
-                    newBranch = await PLSDBBRC.create({
+                    newBranch = await tblbrc.create({
                         BRCODE: newBRCODE,
                         BRNAME,
                         BRGST: BRGST ? BRGST : mainBRC.BRGST ? mainBRC.BRGST : '',
@@ -171,13 +177,10 @@ class BranchController {
                     });
                 }
                 if (newBranch) {
-                    const relMng = await PLSDBREL.update(
-                        {
-                            M00F04: newBRCODE
-                        }, {
-                        where: {
-                            M00F01: corpRow.A01F01  // Example condition
-                        }
+                    const relMng = await rel.update({
+                        M00F04: newBRCODE
+                    }, {
+                        M00F01: corpRow.A01F01  // Example condition
                     });
                 }
                 if (this.lbool == false) {
@@ -201,7 +204,7 @@ class BranchController {
                     }
                 }
 
-                const branch = await PLSDBBRC.findOne({ where: { BRCODE } });
+                const branch = await tblbrc.findOne({ BRCODE: BRCODE });
                 if (!branch) {
                     response.message = 'Branch not found';
                     response.status = 'FAIL'
@@ -211,7 +214,7 @@ class BranchController {
 
                 let BRCORP = branch.BRCORP;
                 if (corpId) {
-                    const corpRow = await PLRDBA01.findOne({ where: { A01F03: corpId } });
+                    const corpRow = await PLRDBA01.findOne({ A01F03: corpId });
                     if (!corpRow) {
                         if (!lbool) {
                             return false;
@@ -225,11 +228,9 @@ class BranchController {
                     BRCORP = corpRow.A01F01;
                 }
 
-                let mainBRC = await PLSDBBRC.findOne({
-                    where: {
-                        BRCORP: BRCORP,
-                        BRDEF: 'Y'
-                    }
+                let mainBRC = await tblbrc.findOne({
+                    BRCORP: BRCORP,
+                    BRDEF: 'Y'
                 });
 
                 const updatedBRNAME = BRNAME || branch.BRNAME;
@@ -269,7 +270,7 @@ class BranchController {
                     }
                 }
 
-                const branchRow = await PLSDBBRC.findOne({ where: { BRCODE } });
+                const branchRow = await tblbrc.findOne({ BRCODE: BRCODE });
                 if (branchRow.BRCCOMP != '') {
                     response.message = 'Branch is already assigned to Company'
                     response.status = 'FAIL'
@@ -281,7 +282,7 @@ class BranchController {
                     encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                     return res.status(400).json({ encryptedResponse });
                 } else {
-                    const deletedCount = await PLSDBBRC.destroy({ where: { BRCODE } });
+                    const deletedCount = await tblbrc.destroy({ BRCODE: BRCODE });
                     if (deletedCount === 0) {
                         if (!this.lbool) {
                             return false;
@@ -306,8 +307,8 @@ class BranchController {
                     let corpUnq = await PLRDBA01.findOne({
                         where: { A01F03: corpId }
                     })
-                    let allBRC = await PLSDBBRC.findAll({
-                        where: { BRCORP: corpUnq.A01F01 }
+                    let allBRC = await tblbrc.findAll({
+                        BRCORP: corpUnq.A01F01
                     });
                     for (const item of allBRC) {
                         let plstateRow;
@@ -331,7 +332,7 @@ class BranchController {
                     return res.status(200).json({ encryptedResponse });
                 } else if (decoded.roleId == 3) {
                     let user = null
-                    const existing = await PLSDBADMI.findAll();
+                    const existing = await admi.findAll();
                     const userId = encryptor.decrypt(decoded.userId)
                     for (let i of existing) {
                         const decrypted = encryptor.decrypt(i.ADMIF01)
@@ -344,11 +345,9 @@ class BranchController {
                     }
                     if (user.ADMIBRC) {
                         let brcValues = user.ADMIBRC.split(',');
-                        let allBRC = await PLSDBBRC.findAll({
-                            where: {
-                                BRID: {
-                                    [Op.in]: brcValues
-                                }
+                        let allBRC = await tblbrc.findAll({
+                            BRID: {
+                                [Op.in]: brcValues
                             }
                         });
                         for (const item of allBRC) {

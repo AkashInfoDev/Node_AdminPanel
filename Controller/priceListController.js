@@ -6,6 +6,7 @@ const TokenService = require('../Services/tokenServices');
 
 const definePLRDBA02 = require('../Models/RDB/PLRDBA02'); // Model factory
 const definePLSDBADMI = require('../Models/SDB/PLSDBADMI'); // Model factory
+const ADMIController = require('./ADMIController');
 
 const sequelizeRDB = db.getConnection('RDB');
 const sequelizeSDB = db.getConnection('A00001SDB');
@@ -47,7 +48,10 @@ class PricingPlanController {
 
         const decoded = await TokenService.validateToken(token);
         const decryptedId = encryptor.decrypt(decoded.userId);
-        const existing = await PLSDBADMI.findAll();
+        let sdbseq = (decoded.corpId).split('-');
+        let sdbdbname = sdbseq[0] + sdbseq[1] + sdbseq[2] + 'SDB'
+        let admi = new ADMIController(sdbdbname)
+        const existing = await admi.findAll();
             for (let i of existing) {
                 const decrypted = encryptor.decrypt(i.ADMIF01);
                 if (decrypted === decryptedId) {

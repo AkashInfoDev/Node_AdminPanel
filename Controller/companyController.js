@@ -14,6 +14,10 @@ const CmpMaster = require('../PlusData/Class/CmpYrCls/CmpMaster');
 const BranchController = require('./branchController');
 const { LangType } = require('../PlusData/commonClass/plusCommon');
 const Company = require('../PlusData/Class/CmpYrCls/Company');
+const dbCloneService = require('../Services/dbCloneService');
+const ADMIController = require('./ADMIController');
+const RELController = require('./RELController');
+const M81Controller = require('./M81Controller');
 
 // Get Sequelize instance for 'SDB' or your specific DB name
 const sequelizeSDB = db.getConnection('A00001SDB');
@@ -35,12 +39,7 @@ class CompanyService {
         const parameterString = encryptor.decrypt(req.query.pa);
         let decodedParam = decodeURIComponent(parameterString);
         let pa = querystring.parse(decodedParam);
-        let {
-            userId, companyName, softSubType, softType, dbVersion, webVer,
-            noOfUser, regDate, subStrtDate, subEndDate, cancelDate,
-            subDomainDelDate, cnclRes, SBDdbType, srverIP, serverUserName,
-            serverPassword, A02id, phoneNumber, cSData, ExistingcorpId, GSTNumber
-        } = pa
+        let { firstName, middleName, lastName, dob, gender, email, password, roleId, address, base64Image, GUaction, rpname, corpId, cusRole, CmpList, BrcList, userId, companyName, softSubType, softType, dbVersion, webVer, noOfUser, regDate, subStrtDate, subEndDate, cancelDate, subDomainDelDate, cnclRes, SBDdbType, srverIP, serverUserName, serverPassword, A02id, phoneNumber, cSData, ExistingcorpId, GSTNumber } = pa
         let response = {
             status: true,
             message: '',
@@ -105,27 +104,34 @@ class CompanyService {
 
             }
 
-            let user = await PLSDBADMI.findOne({
-                where: { ADMICORP: nextId }
-            });
+            let crnum = nextCorpId.split('-')
+            let SDBdbname = crnum[0] + crnum[1] + crnum[2] + "SDB"
+            await dbCloneService.usrSDB(SDBdbname);
+            let admi = new ADMIController(SDBdbname);
+            const encryptedUserId = encryptor.encrypt(userId);
+            const hashedPassword = encryptor.encrypt(password);
+            A02id
+            const newUser = await admi.create(encryptedUserId, firstName, middleName, lastName, hashedPassword, roleId, email, dob, gender, address, phoneNumber, base64Image, BrcList, CmpList);
+            let m81 = new M81Controller(SDBdbname)
+            let m81row = await m81.create('U', 'U0000000', firstName + lastName, userId, password, '', 'ADMIN', phoneNumber, '', '', '', 'A', '', newUser.ADMIF00);
+            let rel = new RELController(SDBdbname)
+            if (newUser) {
+                const newUser = await rel.create("", encryptedUserId, "", "");
+            }
+
+            let user = await admi.findOne({ ADMICORP: nextId });
             if (!user) {
-                const existing = await PLSDBADMI.findAll();
+                const existing = await admi.findAll();
                 for (let i of existing) {
                     const decrypted = encryptor.decrypt(i.ADMIF01);
                     if (decrypted === userId) {
-                        await PLSDBADMI.update({
-                            ADMICORP: nextId
-                        }, {
-                            where: {
-                                ADMIF01: i.ADMIF01
-                            }
-                        });
+                        await admi.update(
+                            { ADMICORP: nextId },
+                            { ADMIF01: i.ADMIF01 });
                     }
                 }
             }
-            user = await PLSDBADMI.findOne({
-                where: { ADMICORP: nextId }
-            });
+            user = await admi.findOne({ ADMICORP: nextId });
 
             // Create company record
             const createCMP = await PLRDBA01.create({
@@ -160,33 +166,29 @@ class CompanyService {
             });
 
             if (createCMP) {
-                const relMng = await PLSDBREL.create({
-                    M00F01: nextId,
-                    M00F02: userId,
-                    M00F03: A02id ? A02id : '',
-                    M00F04: ""
-                });
+                const relMng = await rel.create(nextId, userId, A02id ? A02id : '', "");
                 if (A02id) {
                     let planDetail = await PLRDBA01.findOne({
                         where: { A02F01: A02id }
                     });
-                    const modList = await PLSDBADMI.update({
+                    const modList = await admi.update({
                         ADMIMOD: planDetail.A02id
-                    }, {
-                        where: { ADMICORP: nextId }
-                    });
+                    }, { ADMICORP: nextId }
+                    );
                 }
             }
 
             // Update user to attach company
-            const existing = await PLSDBADMI.findAll({ attributes: ['ADMIF01', 'ADMIF05'] });
+            const existing = await admi.findAll({}, [], ['ADMIF01', 'ADMIF05']);
             let encryuser = userId.includes(':') ? userId : encryptor.encrypt(userId);
-            let cMaster = new CmpMaster(encryuser, ExistingcorpId, LangType, 'A');
+            let cMaster = new CmpMaster(encryuser, ExistingcorpId, LangType, 'A', null, null, SDBdbname);
             if (!cSData) {
                 // CmpMaster.oCmp = new Company('A00001CMP0031');
                 let compCon = db.createPool('A00001CMP0031');
                 let oent = await compCon.query(`SELECT TOP 1 * FROM CMPM00`, { type: QueryTypes.SELECT })
                 cMaster.oEntDict["M00"] = oent[0];
+            } else {
+                cMaster.oEntDict["M00"] = JSON.parse(cSData);
             }
             // CmpMaster.oEntDict = JSON.parse(cSData);
             CmpMaster.cAction = 'A';
@@ -194,7 +196,7 @@ class CompanyService {
             // console.log(typeof(CmpMaster.oEntDict));
 
             let BRcode;
-            let brGst = '';
+            let brGst = GSTNumber ? GSTNumber : '';
             let saveCmp = await cMaster.SaveCompany(nextCorpId, '', '', false, '', false)
             if (!lbool) {
                 if (!saveCmp.result) {
@@ -202,9 +204,9 @@ class CompanyService {
                 }
             } else {
                 if (!saveCmp.result) {
-                    let BRCOntroller = new BranchController(false, 'A', BRcode, '0000-HOME-BRC', brGst, '', saveCmp.nextCorpId, 'Y', '0000');
+                    let BRCOntroller = new BranchController(false, 'A', BRcode, '0001-HOME-BRC', brGst, '', saveCmp.nextCorpId, 'Y', '0000');
                     let AddHomeBrc = await BRCOntroller.handleAction(req, res, true);
-                    return { status: true, CmpNum: saveCmp.CmpNum, cSdata: saveCmp.cSdata, nextCorpId: saveCmp.nextCorpId }
+                    return { status: true, CmpNum: saveCmp.CmpNum, cSdata: saveCmp.cSdata, nextCorpId: saveCmp.nextCorpId, SDBdbname }
                 }
             }
 
@@ -222,7 +224,7 @@ class CompanyService {
                 // dbName: targetDbName,
                 newToken
             };
-            
+
             if (!GSTNumber) {
                 brGst = '';
                 BRcode = ''

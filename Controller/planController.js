@@ -16,6 +16,7 @@ const { Op } = require('sequelize');
 const TokenService = require('../Services/tokenServices');
 const CompanyService = require('../Controller/companyController');
 const AuthenticationService = require('../Services/loginServices');
+const ADMIController = require('./ADMIController');
 
 // Get Sequelize instance for 'SDB' or your specific DB name
 const sequelizeSDB = db.getConnection('A00001SDB');
@@ -65,7 +66,10 @@ class UpgradePlan {
             }
             decoded = await TokenService.validateToken(token);
             let corpId = decoded.corpId;
-            let userId = decoded.userId
+            let userId = decoded.userId;
+            let sdbSeq = corpId.split('-');
+            let sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB';
+            let admi = new ADMIController(sdbdbname);
             if (!action) {
                 return sendResponse('FAIL', 'Invalid action');
             }
@@ -141,7 +145,7 @@ class UpgradePlan {
                 }
 
                 if (additionalBranch > 0) {
-                    await PLSDBADMI.update({
+                    await admi.update({
                         ADMIBRC: additionalBranch,
                     }, {
                         where: {
@@ -152,7 +156,7 @@ class UpgradePlan {
                 }
 
                 if (additionalCompany > 0) {
-                    await PLSDBADMI.update({
+                    await admi.update({
                         ADMICOMP: additionalCompany,
                     }, {
                         where: {
@@ -182,7 +186,7 @@ class UpgradePlan {
 
                 let user
                 let decryptedUserId = encryptor.decrypt(decoded.userId)
-                const existing = await PLSDBADMI.findAll();
+                const existing = await admi.findAll();
                 for (let i of existing) {
                     const decrypted = encryptor.decrypt(i.ADMIF01)
                     if (decrypted == decryptedUserId) {
@@ -198,7 +202,7 @@ class UpgradePlan {
                     // Ensure A01F01 and moduleId are numbers (optional but recommended)
                     const newADMIMOD = user.ADMIMOD + ',' + moduleId;
 
-                    await PLSDBADMI.update({
+                    await admi.update({
                         ADMIMOD: newADMIMOD
                     }, {
                         where: { ADMIF00: user.ADMIF00 }

@@ -9,6 +9,9 @@ const definePLSYS01 = require('../Models/IDB/PLSYS01');
 const Encryptor = require('../Services/encryptor');
 const MenuController = require('./menuController');
 const TokenService = require('../Services/tokenServices');
+const USROLEController = require('./USROLEController');
+const CROLEController = require('./CROLOEController');
+const ADMIController = require('./ADMIController');
 
 const sequelizeSDB = db.getConnection('A00001SDB');
 const sequelizeIDB = db.getConnection('IDBAPI');
@@ -29,6 +32,19 @@ class UsrRole {
         const { action, cusRoleId, USRF00, USRF01, USRF02, USRF03, USRF04, USRF05, USRF06, USRF07, menuIds } = pa;
         let response = { data: null, status: 'SUCCESS', message: null };
         let encryptedResponse;
+        let decoded;
+        const token = req.headers['authorization']?.split(' ')[1]; // 'Bearer <token>'
+
+        if (!token) {
+            response.message = 'No token provided, authorization denied.'
+            response.status = 'FAIL'
+            const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(401).json({ encryptedResponse });
+        }
+        decoded = await TokenService.validateToken(token);
+        let sdbSeq = (decoded.corpId).split('-');
+        let sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB';
+        let usrole = new USROLEController(sdbdbname);
 
         if (!action) {
             response.message = 'No Action Passed';
@@ -37,9 +53,10 @@ class UsrRole {
             return res.status(400).json({ encryptedResponse });
         }
 
-        let existingrole = await PLSDBUSROLE.findAll({
-            attributes: ['USRF00', 'USRF01']
-        });
+
+        let existingrole = await usrole.findAll({}, [],
+            ['USRF00', 'USRF01']
+        );
         for (const ex of existingrole) {
             if (ex.USRF00 === USRF00) {
                 action = 'E';
@@ -51,25 +68,25 @@ class UsrRole {
             switch (action) {
                 case 'A':
                     // Add a new role record
-                    let existingCusRoleId = await PLSDBUSROLE.findOne({
-                        where: { USRF01: USRF01 }
+                    let existingCusRoleId = await usrole.findOne({
+                        USRF00: USRF01
                     })
                     if (!existingCusRoleId) {
-                        const newRole = await PLSDBUSROLE.create({
-                            USRF01: USRF01,
-                            USRF02: USRF02,
-                            USRF03: USRF03,
-                            USRF04: USRF04,
-                            USRF05: USRF05,
-                            USRF06: USRF06,
-                            USRF07: USRF07,
-                        });
+                        const newRole = await usrole.create(
+                            USRF01,
+                            USRF02,
+                            USRF03,
+                            USRF04,
+                            USRF05,
+                            USRF06,
+                            USRF07,
+                        );
                         response.message = 'Role added successfully!'
                         response.data = newRole
                         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         return res.status(201).json({ encryptedResponse });
                     } else {
-                        let updatedRole = await PLSDBUSROLE.update({
+                        let updatedRole = await usrole.update({
                             USRF02: USRF02,
                             USRF03: USRF03,
                             USRF04: USRF04,
@@ -77,7 +94,7 @@ class UsrRole {
                             USRF06: USRF06,
                             USRF07: USRF07,
                         }, {
-                            where: { USRF01: USRF01 }
+                            USRF01: USRF01
                         });
                         response.message = 'Role added successfully!'
                         response.data = updatedRole
@@ -97,14 +114,14 @@ class UsrRole {
                         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         return res.status(400).json({ encryptedResponse });
                     }
-                    const roleToEdit = await PLSDBUSROLE.findOne({ where: { USRF00 } });
+                    const roleToEdit = await usrole.findOne({ USRF00: USRF00 });
                     if (!roleToEdit) {
                         response.message = 'Role not found.'
                         response.status = 'FAIL'
                         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         return res.status(404).json({ encryptedResponse });
                     }
-                    await roleToEdit.update({
+                    await roleToEdit.update(
                         USRF01,
                         USRF02,
                         USRF03,
@@ -112,7 +129,7 @@ class UsrRole {
                         USRF05,
                         USRF06,
                         USRF07,
-                    });
+                    );
                     response.message = 'Role updated successfully!'
                     response.data = roleToEdit
                     encryptedResponse = encryptor.encrypt(JSON.stringify(response));
@@ -126,7 +143,7 @@ class UsrRole {
                         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         return res.status(400).json({ encryptedResponse });
                     }
-                    const roleToDelete = await PLSDBUSROLE.findOne({ where: { USRF00 } });
+                    const roleToDelete = await usrole.findOne({ USRF00: USRF00 });
                     if (!roleToDelete) {
                         response.message = 'Role not found.'
                         response.status = 'FAIL'
@@ -140,8 +157,8 @@ class UsrRole {
 
                 case 'G':
                     // View all records
-                    const allRoles = await PLSDBUSROLE.findOne({
-                        where: { USRF01: USRF01 }
+                    const allRoles = await usrole.findOne({
+                        USRF00: USRF01
                     });
                     let menus
                     let menuIdsArray = menuIds.split(','); // This splits the string into an array
@@ -242,6 +259,11 @@ class UsrRole {
                 return res.status(401).json({ encryptedResponse });
             }
             decoded = await TokenService.validateToken(token);
+            let sdbSeq = (decoded.corpId).split('-');
+            let sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB';
+            let usrole = new USROLEController(sdbdbname);
+            let crole = new CROLEController(sdbdbname);
+            let admi = new ADMIController(sdbdbname);
             if (!action) {
                 response.message = 'No Action Passed';
                 response.status = 'FAIL'
@@ -252,31 +274,22 @@ class UsrRole {
             switch (action) {
                 case 'A':
                     // Add a new role record
-                    existingRole = await PLSDBCROLE.findAll({
-                        attributes: ['CROLF01']
-                    });
+                    existingRole = await crole.findAll({}, [],
+                        ['CROLF01']
+                    );
                     for (const role of existingRole) {
                         if (role.CROLF01 === CROLF01) {
-                            response.message = 'Roll Name Already Exist';
+                            response.message = 'Role Name Already Exist';
                             response.status = 'FAIL'
                             encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                             return res.status(400).json({ encryptedResponse });
                         }
                     }
-                    const newRole = await PLSDBCROLE.create({
-                        CROLF01: CROLF01,
-                        CROLF02: decoded.corpId
-                    });
-                    let newcrole = await PLSDBUSROLE.create({
-                        USRF01: newRole.CROLF00,
-                        USRF02: '',
-                        USRF03: '',
-                        USRF04: '',
-                        USRF05: '',
-                        USRF06: '',
-                        USRF07: ''
-
-                    })
+                    const newRole = await crole.create(
+                        CROLF01,
+                        decoded.corpId
+                    );
+                    let newcrole = await usrole.create(newRole.CROLF00, '', '', '', '', '', '')
                     response.data = newRole;
                     response.message = 'Role added successfully!';
                     encryptedResponse = encryptor.encrypt(JSON.stringify(response));
@@ -290,7 +303,7 @@ class UsrRole {
                         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         return res.status(400).json({ encryptedResponse });
                     }
-                    existingRole = await PLSDBCROLE.findAll({
+                    existingRole = await crole.findAll({
                         attributes: ['CROLF01']
                     });
                     for (const role of existingRole) {
@@ -301,14 +314,14 @@ class UsrRole {
                             return res.status(400).json({ encryptedResponse });
                         }
                     }
-                    const roleToEdit = await PLSDBCROLE.findOne({ where: { CROLF00 } });
+                    const roleToEdit = await crole.findOne({ CROLF00 });
                     if (!roleToEdit) {
                         response.message = 'Role not found.';
                         response.status = 'FAIL';
                         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         return res.status(404).json({ encryptedResponse });
                     }
-                    let editedRole = await PLSDBCROLE.update({
+                    let editedRole = await crole.update({
                         CROLF01: CROLF01,
                         CROLF02: decoded.corpId
                     }, {
@@ -327,11 +340,9 @@ class UsrRole {
                         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         return res.status(400).json({ encryptedResponse });
                     }
-                    const roleToDelete = await PLSDBCROLE.findOne({
-                        where: {
-                            CROLF00,
-                            CROLF02: decoded.corpId
-                        }
+                    const roleToDelete = await crole.findOne({
+                        CROLF00,
+                        CROLF02: decoded.corpId
                     });
 
                     let corpDetails = await PLRDBA01.findOne({
@@ -345,18 +356,14 @@ class UsrRole {
                         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         return res.status(404).json({ encryptedResponse });
                     }
-                    const allroles = await PLSDBCROLE.findAll({
-                        where: {
-                            CROLF02: decoded.corpId
-                        }
+                    const allroles = await crole.findAll({
+                        CROLF02: decoded.corpId
                     });
-                    let allUsrs = await PLSDBADMI.findAll({
+                    let allUsrs = await admi.update({
                         ADMIROL: updateRoleId
                     }, {
-                        where: {
-                            ADMICORP: corpUnq,
-                            ADMIROL: roleToDelete.CROLF00
-                        }
+                        ADMICORP: corpUnq,
+                        ADMIROL: roleToDelete.CROLF00
                     });
                     let i = 0;
                     for (let usr of allUsrs) {
@@ -373,13 +380,11 @@ class UsrRole {
                         }
                     }
                     if (allroles.length > 1) {
-                        await PLSDBADMI.update({
+                        await admi.update({
                             ADMIROL: updateRoleId
                         }, {
-                            where: {
-                                ADMICORP: corpUnq,
-                                ADMIROL: roleToDelete.CROLF00
-                            }
+                            ADMICORP: corpUnq,
+                            ADMIROL: roleToDelete.CROLF00
                         });
                         await roleToDelete.destroy();
                     } else {
@@ -393,7 +398,7 @@ class UsrRole {
 
                 case 'G':
                     // View all records
-                    const allRoles = await PLSDBCROLE.findAll();
+                    const allRoles = await crole.findAll();
                     response.message = 'All roles fetched.';
                     response.data = allRoles
                     encryptedResponse = encryptor.encrypt(JSON.stringify(response));

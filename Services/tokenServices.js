@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../Config/config'); // Your Database class
 const definePLSDBADMI = require('../Models/SDB/PLSDBADMI'); // Model factory
 const Encryptor = require('./encryptor'); // Assuming this is for decrypting adminId
+const ADMIController = require('../Controller/ADMIController');
 const sequelizeSDB = db.getConnection('A00001SDB');
 const PLSDBADMI = definePLSDBADMI(sequelizeSDB);
 
@@ -19,7 +20,7 @@ class TokenService {
             // Attempt to verify and decode the token
             decodedToken = jwt.verify(token, process.env.JWT_SECRET_KEY);
         } catch (err) {
-            if(isCron){
+            if (isCron) {
                 return false;
             }
             // Throw an error if the token is invalid or expired
@@ -31,17 +32,25 @@ class TokenService {
         if (decodedToken.roleId == 1) {
             adminId = encryptor.decrypt(decodedToken.adminId); // Assuming Encryptor is used for adminId decryption
             password = encryptor.decrypt(decodedToken.password); // Assuming the token has a password field
-        }else{
+        } else {
             adminId = encryptor.decrypt(decodedToken.userId)
             password = encryptor.decrypt(decodedToken.password)
         }
 
         try {
             // Find user by adminId and password in the database
-            const existingAdmin = await PLSDBADMI.findAll({
-                attributes: ['ADMIF01', 'ADMIF05', 'ADMIF06']
-                // where: { ADMIF01: encrypted } 
-            });
+            let sdbdbname;
+            if (decodedToken.roleId == '1') {
+                sdbdbname = 'A00001SDB';
+            } else {
+                let sdbSeq = (decodedToken.corpId).split('-');
+                sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB'
+            }
+            let admi = new ADMIController(sdbdbname);
+            const existingAdmin = await admi.findAll(
+                {}, [],
+                ['ADMIF01', 'ADMIF05', 'ADMIF06']
+            );
             let admin;
             for (let i of existingAdmin) {
                 const decrypted = encryptor.decrypt(i.ADMIF01);

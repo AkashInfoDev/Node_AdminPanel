@@ -23,6 +23,11 @@ const { error } = require('console');
 const { formatDate } = require('../Services/customServices');
 const BranchController = require('./branchController');
 const FTPService = require('../Services/FTPServices');
+const ADMIController = require('./ADMIController');
+const M81Controller = require('./M81Controller');
+const CMPController = require('./CMPController');
+const M82Controller = require('./M82Controller');
+const RELController = require('./RELController');
 const sequelizeIDB = db.getConnection('IDBAPI');
 const sequelizeA00001SDB = db.getConnection('A00001SDB');
 const sequelizeRDB = db.getConnection('RDB');
@@ -49,7 +54,6 @@ class handleCompany {
         let pa = querystring.parse(decodedParam);
         let response = { data: null, status: 'SUCCESS', message: '' }
         const token = req.headers['authorization']?.split(' ')[1]; // 'Bearer <token>'
-
         let decoded;
         if (!token) {
             response.message = 'No token provided, authorization denied.'
@@ -59,6 +63,12 @@ class handleCompany {
         } else {
             decoded = await TokenService.validateToken(token);
         }
+        let sdbSeq = (decoded.corpId).split('-');
+        let sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB';
+        let m82 = new M82Controller(sdbdbname);
+        let cmp = new CMPController(sdbdbname);
+        let admi = new ADMIController(sdbdbname);
+        let m81 = new M81Controller(sdbdbname);
         try {
             console.log(typeof pa);
             let cAction = pa.action
@@ -71,7 +81,7 @@ class handleCompany {
             let userInfo = {};
             let admin;
             let adminId = encryptor.decrypt(decoded.userId);
-            const existingAdmin = await PLSDBADMI.findAll();
+            const existingAdmin = await admi.findAll();
             for (let i of existingAdmin) {
                 const decrypted = encryptor.decrypt(i.ADMIF01)
                 if (decrypted == adminId) {
@@ -88,28 +98,30 @@ class handleCompany {
                 let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                 return res.status(400).json({ encryptedResponse: encryptedResponse });
             }
-            let M81Info = await PLSDBM81.findOne({
-                where: { M81CHLD: admin.ADMIF00 }
-            });
-
+            let M81Info
+            if (decoded.corpId == 'PL-P-00001') {
+                M81Info = await m81.findOne({
+                    M81CHLD: admin.ADMIF00
+                });
+            } else {
+                M81Info = await m81.findOne({
+                    M81UNQ: admin.ADMIF00
+                });
+            }
             let cUserID = M81Info.M81F01;
 
             let M82;
             if ((cAction == 'E' || cAction == 'D') && CmpNo) {
-                M82 = await PLSDBM82.findOne({
-                    where: {
-                        M82F02: CmpNo,
-                        M82F01: cUserID
-                    }
+                M82 = await m82.findOne({
+                    M82F02: CmpNo,
+                    M82F01: cUserID
                 });
                 oUser.YrNo = M82.M82YRN;
                 if (M82) {
                     if (M82.M82ADA == 'A') {
-                        let dbCmp = await PLSDBCMP.findOne({
-                            where: {
-                                CMPF11: M82.M82F01,
-                                CMPF01: M82.M82F02
-                            }
+                        let dbCmp = await cmp.findOne({
+                            CMPF11: M82.M82F01,
+                            CMPF01: M82.M82F02
                         });
                         if (dbCmp) {
                             isComapny = true
@@ -179,12 +191,12 @@ class handleCompany {
                             oM00.oEntDict["M00"].DEDATE = endDate; //MApp.DTOS(endDate, true);   // Financial year end date
                             oDic = await oM00.GetDictionary(decoded, qS, oUser.lCode);
                             let path = await PLRDBA01.findOne({
-                                A01F03 : decoded.corpId
+                                A01F03: decoded.corpId
                             })
                             let formattedCmpNo = CmpNo.toString().padStart(4, '0');
                             oDic["M00"]._CMPLOGO = `${path.FTPPATH}${decoded.corpId}/${formattedCmpNo}/images/${oDic["M00"]._CMPLOGO}`;
                             console.log(oDic["M00"]._CMPLOGO);
-                            
+
                         }
                         //M00 Entry
 
@@ -232,11 +244,9 @@ class handleCompany {
                         let updtToDelM82;
                         if (M82) {
                             if (M82.M82ADA == 'A') {
-                                let dbCmp = await PLSDBCMP.findOne({
-                                    where: {
-                                        CMPF11: M82.M82F01,
-                                        CMPF01: M82.M82F02
-                                    }
+                                let dbCmp = await cmp.findOne({
+                                    CMPF11: M82.M82F01,
+                                    CMPF01: M82.M82F02
                                 });
                                 if (dbCmp) {
                                     isComapny = true
@@ -250,21 +260,17 @@ class handleCompany {
                         if (isComapny) {
                             let dtobj = new Date();
                             let dateString = MApp.DTOS(dtobj);
-                            updtToDel = await PLSDBCMP.update({
+                            updtToDel = await cmp.update({
                                 CMPDEL: dateString
                             }, {
-                                where: {
-                                    CMPF01: CmpNo,
-                                    CMPF11: cUserID
-                                }
+                                CMPF01: CmpNo,
+                                CMPF11: cUserID
                             });
-                            updtToDelM82 = await PLSDBM82.update({
+                            updtToDelM82 = await m82.update({
                                 M82ADA: 'D',
                             }, {
-                                where: {
-                                    M82F01: cUserID,
-                                    M82F02: CmpNo
-                                }
+                                M82F01: cUserID,
+                                M82F02: CmpNo
                             });
                             await CRONLOGS.create({
                                 CRONF02: decoded.corpId,
@@ -275,6 +281,7 @@ class handleCompany {
                             });
                         }
                         if (updtToDel) {
+                            response.data = null;
                             response.status = "SUCCESS";
                             response.message = "The Company And Database will be deleted in next 30 days";
                             let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
@@ -316,6 +323,13 @@ class handleCompany {
         } else {
             decoded = await TokenService.validateToken(token);
         }
+        let sdbSeq = (decoded.corpId).split('-');
+        let sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB';
+        let m82 = new M82Controller(sdbdbname);
+        let cmp = new CMPController(sdbdbname);
+        let admi = new ADMIController(sdbdbname);
+        let m81 = new M81Controller(sdbdbname);
+        let rel = new RELController(sdbdbname);
         try {
             console.log(typeof pa);
             let cAction = pa.action
@@ -331,7 +345,7 @@ class handleCompany {
             let userInfo = {};
             let admin;
             let adminId = encryptor.decrypt(decoded.userId);
-            const existingAdmin = await PLSDBADMI.findAll();
+            const existingAdmin = await admi.findAll();
             for (let i of existingAdmin) {
                 const decrypted = encryptor.decrypt(i.ADMIF01)
                 if (decrypted == adminId) {
@@ -348,27 +362,29 @@ class handleCompany {
                 let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                 return res.status(400).json({ encryptedResponse: encryptedResponse });
             }
-            let M81Info = await PLSDBM81.findOne({
-                where: { M81CHLD: admin.ADMIF00 }
-            });
-
+            let M81Info
+            if (decoded.corpId == 'PL-P-00001') {
+                M81Info = await m81.findOne({
+                    M81CHLD: admin.ADMIF00
+                });
+            } else {
+                M81Info = await m81.findOne({
+                    M81UNQ: admin.ADMIF00
+                });
+            }
             let cUserID = M81Info.M81F01;
 
             let M82;
             if (cAction == 'E' && CmpNo) {
-                M82 = await PLSDBM82.findOne({
-                    where: {
-                        M82F02: CmpNo,
-                        M82F01: cUserID
-                    }
+                M82 = await m82.findOne({
+                    M82F02: CmpNo,
+                    M82F01: cUserID
                 });
                 if (M82) {
                     if (M82.M82ADA == 'A') {
-                        let dbCmp = await PLSDBCMP.findOne({
-                            where: {
-                                CMPF11: M82.M82F01,
-                                CMPF01: M82.M82F02
-                            }
+                        let dbCmp = await cmp.findOne({
+                            CMPF11: M82.M82F01,
+                            CMPF01: M82.M82F02
                         });
                         if (dbCmp) {
                             isComapny = true
@@ -387,7 +403,7 @@ class handleCompany {
                 CmpMaster.cUserID = decoded.userId;
                 if (cAction == "E" && isComapny) {
                     CmpMaster.newDatabase = qS;
-                    let saveCmp = await cMaster.SaveCompany(decoded.corpId, '', '', false, '');
+                    let saveCmp = await cMaster.SaveCompany(decoded.corpId, '', '', false, '', true);
                     if (!saveCmp.result) {
                         if (req.files[0]?.originalname) {
                             console.log('File Size from API:', req.files);  // Check the file size right after upload
@@ -401,8 +417,8 @@ class handleCompany {
                     }
                 } else if (cAction == "A") {
                     if (decoded.corpId != 'PL-P-00001') {
-                        let totCMP = await PLSDBM82.findAll({
-                            where: { M82F01: cUserID }
+                        let totCMP = await m82.findAll({
+                            M82F01: cUserID
                         })
                         if (totCMP.length > admin.ADMICOMP) {
                             console.log("Not enough companies");
@@ -421,39 +437,16 @@ class handleCompany {
                         // }
                         let BRCOntroller = new BranchController(false, 'A', '', `${saveCmp.CmpNum}-HOME-BRC`, cSData["M00"]._16, '', decoded.corpId, 'Y', saveCmp.CmpNum)
                         let AddHomeBrc = await BRCOntroller.handleAction(req, res, true);
-                        await PLSDBREL.create({
+                        await rel.create({
                             M00F01: admin.ADMICORP,
                             M00F02: admin.ADMIF01,
                             M00F03: parseInt(saveCmp.CmpNum),
                             M00F04: ''
                         });
-                        await PLSDBM82.create({
-                            M82F01: cUserID,
-                            M82F02: parseInt(saveCmp.CmpNum),
-                            M82F11: '',
-                            M82F12: '',
-                            M82F13: '',
-                            M82F14: '',
-                            M82F21: '',
-                            M82F22: '',
-                            M82F23: '',
-                            M82CMP: 'N',
-                            M82YRN: (new Date().getFullYear() % 100).toString(),
-                            M82ADA: 'A'
-                        });
-                        await PLSDBCMP.create({
-                            CMPF01: parseInt(saveCmp.CmpNum),
-                            CMPF02: cSData['M00'].FIELD02,
-                            CMPF03: 'SQL',
-                            CMPF04: cSData['M00'].FIELD11,
-                            CMPF11: cUserID,
-                            CMPF12: formatDate(new Date()),
-                            CMPF21: '94.176.235.105',
-                            CMPF22: 'aipharma_aakash',
-                            CMPF23: 'Aipharma@360',
-                            CMPF24: 'DATA',
-                            CMPDEL: null
-                        });
+                        await m82.create(cUserID, parseInt(saveCmp.CmpNum), '', '', '', '', '', '', '', 'N', (new Date().getFullYear() % 100).toString(), 'A'
+                        );
+                        await cmp.create(parseInt(saveCmp.CmpNum), cSData['M00'].FIELD02, 'SQL', cSData['M00'].FIELD11, cUserID, formatDate(new Date()), '94.176.235.105', 'aipharma_aakash', 'Aipharma@360', 'DATA', null
+                        );
                         response.status = 'SUCCESS';
                         response.message = '';
                         let encryptedResponse = encryptor.encrypt(JSON.stringify(response));

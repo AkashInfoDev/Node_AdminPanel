@@ -1,26 +1,30 @@
 const db = require('../Config/config');
 const definePLSDBM82 = require('../Models/SDB/PLSDBM82');
 const definePLSDBCMP = require('../Models/SDB/PLSDBCMP');
+const M82Controller = require('../Controller/M82Controller');
+const CMPController = require('../Controller/CMPController');
 const sequelizeSDB = db.getConnection('A00001SDB');
 const PLSDBM82 = definePLSDBM82(sequelizeSDB);
 const PLSDBCMP = definePLSDBCMP(sequelizeSDB);
 
 class AuthenticationService {
-  constructor(corporateID, userUnq) {
+  constructor(corporateID, userUnq, sdbdbname) {
     this.corporateID = corporateID
     this.uniqId = userUnq
+    this.sdbdb = sdbdbname
   }
 
   async authenticateUser() {
     try {
-
-      let resultM82 = await PLSDBM82.findAll({
-        attributes: ['M82F01', 'M82F02', 'M82CMP'],
-        where: {
+      let m82 = new M82Controller(this.sdbdb);
+      let cmp = new CMPController(this.sdbdb);
+      let resultM82 = await m82.findAll(
+        {
           M82F01: this.uniqId,
           M82ADA: 'A'
-        }
-      })
+        },[],
+        ['M82F01', 'M82F02', 'M82CMP'],
+      )
       let defaultCompany = null;
       const CompList = [];
 
@@ -37,10 +41,10 @@ class AuthenticationService {
           const { GId, isDefault } = userData;
 
           try {
-            const resultCMP = await PLSDBCMP.findAll({
-              attributes: ['CMPF01', 'CMPF02', 'CMPF04'],
-              where: { CMPF01: GId }
-            })
+            const resultCMP = await cmp.findAll(
+              { CMPF01: GId },[],
+              ['CMPF01', 'CMPF02', 'CMPF04'],
+            )
             if (resultCMP.length > 0) {
               const groupDetails = resultCMP[0];
 

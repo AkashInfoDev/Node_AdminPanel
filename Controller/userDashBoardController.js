@@ -9,6 +9,9 @@ const definePLSDBCROLE = require('../Models/SDB/PLSDBCROLE');
 const definePLRDBA02 = require('../Models/RDB/PLRDBA02');
 const Encryptor = require('../Services/encryptor');
 const TokenService = require('../Services/tokenServices');
+const CROLEController = require('./CROLOEController');
+const ADMIController = require('./ADMIController');
+const BRCController = require('./BRCController');
 const sequelizeSDB = db.getConnection('A00001SDB');
 const sequelizeRDB = db.getConnection('RDB');
 
@@ -39,6 +42,11 @@ class dashboardController {
             return res.status(401).json({ encryptedResponse });
         }
         let decoded = await TokenService.validateToken(token);
+        let sdbSeq = (decoded.corpId).split('-');
+        let sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB';
+        let tblbrc = new BRCController(sdbdbname);
+        let crole = new CROLEController(sdbdbname);
+        let admi = new ADMIController(sdbdbname);
         let corpId = decoded.corpId
         if (!corpId) {
             response.message = 'Corporate Id is required'
@@ -48,11 +56,11 @@ class dashboardController {
         let compDetail = await PLRDBA01.findOne({
             where: { A01F03: corpId }
         });
-        let userDetails = await PLSDBADMI.findAll({
-            where: { ADMICORP: compDetail.A01F01 }
+        let userDetails = await admi.findAll({
+            ADMICORP: compDetail.A01F01.trim()
         });
-        let brcDetail = await PLSDBBRC.findAll({
-            where: { BRCORP: compDetail.A01F01 }
+        let brcDetail = await tblbrc.findAll({
+            BRCORP: compDetail.A01F01
         });
         let planDetail = await PLRDBA02.findOne({
             where: { A02F01: compDetail.A02F01 }
@@ -60,7 +68,7 @@ class dashboardController {
 
         for (let user of userDetails) {
             if (user.ADMIF06 != '2') {
-                let cusRole = await PLSDBCROLE.findOne({
+                let cusRole = await crole.findOne({
                     where: {
                         CROLF02: user.ADMICORP,
                         CROLF00: user.ADMIROL

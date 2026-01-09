@@ -16,7 +16,7 @@ const Token = require('./tokenRoutes');
 // Use loginRoutes under /User path
 router.use('/User', loginRoutes);
 router.use('/PriceList', PriceList);
-router.use('/Company', Company);
+router.use('/Company', Company);  // panding
 router.use('/Branch', Branch);
 router.use('/Role', Roles);
 router.use('/Module', Module);
