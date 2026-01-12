@@ -1,4 +1,5 @@
 const { Sequelize } = require('sequelize');
+require('tedious');
 require('dotenv').config();
 
 class Database {
