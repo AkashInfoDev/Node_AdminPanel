@@ -178,11 +178,11 @@ class BranchController {
                     newBranch = await tblbrc.create(
                         newBRCODE,
                         BRNAME,
-                        BRGST ? BRGST : mainBRC.BRGST ? mainBRC.BRGST : '',
-                        BRCORP,
+                        BRGST ? BRGST : mainBRC?.BRGST ? mainBRC?.BRGST : '',
+                        BRCORP.trim(),
                         BRSTATE,
                         this.defBrc == 'Y' ? 'Y' : 'N',
-                        BRCCOMP
+                        parseInt(BRCCOMP)
                     );
                 }
                 if (newBranch) {
@@ -223,7 +223,7 @@ class BranchController {
 
                 let BRCORP = branch.BRCORP;
                 if (corpId) {
-                    const corpRow = await PLRDBA01.findOne({ A01F03: corpId });
+                    const corpRow = await PLRDBA01.findOne({ where: { A01F03: corpId } });
                     if (!corpRow) {
                         if (!lbool) {
                             return false;

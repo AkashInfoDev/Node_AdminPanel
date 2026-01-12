@@ -281,7 +281,7 @@ class AdminController {
             console.error(error);
             let response = {
                 status: 'FAIL',
-                message: 'Login failed'
+                message: 'Invalid Credentials'
             }
             let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
             return res.status(500).json({ encryptedResponse: encryptedResponse });
@@ -666,8 +666,71 @@ class UserController {
                         nextNumber = GU + (maxNumber + 1).toString().padStart(7, '0');  // Pad with zeros to maintain the format
                     }
 
-                    await m81.create(GU, GUID, firstName + lastName, userId, password, nextNumber, grpname ? grpname : roleId == '1' ? 'Admin' : roleId == '2' || '3' ? 'User' : 'Employee', phoneNumber, email, '', '', 'A', newUser.ADMIF00, 'ABCD'
-                    );
+                    await m81.create(GU, GUID, firstName + lastName, userId, password, nextNumber, grpname ? grpname : roleId == '1' ? 'Admin' : roleId == '2' || '3' ? 'User' : 'Employee', phoneNumber, email, '', '', 'A', newUser.ADMIF00, 'ABCD');
+                } else {
+                    if (GUaction == 'G') {
+                        GU = 'G';  // Change prefix to 'G'
+
+                        // If the list is empty, start from 'G0000000'
+                        if (grpCodeList.length === 0) {
+                            GUID = 'G0000000';  // Initialize GUID for 'G'
+                        } else {
+                            // Extract the numeric part and increment it
+                            let numericPart = parseInt(GUID.slice(1));  // Remove 'G' and get the number
+                            GUID = GU + (numericPart + 1).toString().padStart(7, '0');  // Add 'G' and pad with zeros
+                        }
+                    }
+
+                    // Fetch all records for M81F05
+                    let grpCodeList = await m81.findAll({
+                        attributes: ['M81F05']
+                    });
+
+                    usrCodeList = await m81.findAll({
+                        M81F01: {
+                            [Op.like]: 'U%'  // This will match strings that start with 'U'
+                        }
+                    });
+
+                    do {
+                        // Check if a user with the same GUID exists
+                        usrCodeList = await m81.findAll({
+                            where: { M81F01: GUID }
+                        });
+
+                        // If a user exists with that GUID, generate a new GUID
+                        if (usrCodeList.length > 0) {
+                            // Increment GUID by 1
+                            let numericPart = parseInt(GUID.slice(1));  // Get the numeric part of GUID
+                            GUID = GU + (numericPart + 1).toString().padStart(7, '0');  // Update GUID
+                        } else {
+                            GUID = GU + '0000000';  // Reset GUID to the default value if no user is found
+                        }
+
+                        usrCodeList = await m81.findAll({
+                            where: { M81F01: GUID }
+                        });
+
+                    } while (usrCodeList.length > 0);  // Keep checking until GUID is unique
+
+                    // If grpCodeList is empty, start from 'G0000000'
+                    if (grpCodeList.length === 0) {
+                        GUID = 'G0000000';
+                    } else {
+                        // Extract the numeric part and find the highest number
+                        const numbers = grpCodeList
+                            .map(item => {
+                                const numberPart = item.M81F05.slice(1); // Remove 'G' and get the numeric part
+                                return parseInt(numberPart, 10);  // Convert to integer
+                            })
+                            .filter(num => !isNaN(num));  // Remove NaN values
+
+                        // Now find the maximum number and increment it
+                        const maxNumber = numbers.length > 0 ? Math.max(...numbers) : 0;  // If numbers is empty, maxNumber is 0
+                        nextNumber = GU + (maxNumber + 1).toString().padStart(7, '0');  // Pad with zeros to maintain the format
+                    }
+
+                    await m81.create(GU, GUID, firstName + lastName, userId, password, nextNumber, grpname ? grpname : roleId == '1' ? 'Admin' : roleId == '2' || '3' ? 'User' : 'Employee', phoneNumber, email, '', '', 'A', newUser.ADMIF00, 'ABCD');
                 }
                 response.status = 'SUCCESS';
                 const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
@@ -1001,6 +1064,31 @@ class UserController {
         let m81 = new M81Controller(sdbdbname);
         let user;
         let response = { status: 'SUCCESS', message: null };
+
+        let crnum = (decoded.corpId).split('-')
+        let SDBdbname = crnum[0] + crnum[1] + crnum[2] + "SDB"
+        let dbName = queryService.generateDatabaseName(decoded.corpId, CmpNo);
+        let dbConn = db.createPool(dbName);
+        let m82 = new M82Controller(SDBdbname);
+        let cmpdet = await m82.findOne({ M82F02: parseInt(CmpNo) });
+        let defYr = cmpdet.M82YRN;
+        let listOfYr = await dbConn.query('SELECT FIELD01 FROM CMPF01', {
+            type: QueryTypes.SELECT
+        });
+        let connectedRows;
+        if (listOfYr) {
+            for (const ly of listOfYr) {
+                connectedRows = await dbConn.query(`SELECT * FROM YR${ly.FIELD01}T41`, {
+                    type: QueryTypes.SELECT
+                });
+                if (connectedRows.length > 0) {
+                    response.message = 'This Company Contains Transaction so it can not be deleted';
+                    response.status = 'FAIL'
+                    let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                    return res.status(200).json({ encryptedResponse });
+                }
+            }
+        }
 
         const existing = await admi.findAll();
         for (let i of existing) {

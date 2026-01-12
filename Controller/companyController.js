@@ -6,6 +6,7 @@ const db = require('../Config/config'); // Your Database class
 const definePLSDBADMI = require('../Models/SDB/PLSDBADMI'); // Model factory
 const definePLSDBREL = require('../Models/SDB/PLSDBREL'); // Model factory
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01'); // Model factory
+const definePLRDBA02 = require('../Models/RDB/PLRDBA02'); // Model factory
 const Encryptor = require('../Services/encryptor');
 const { Op, QueryTypes } = require('sequelize');
 // const PLRDBA01 = require('../Models/RDB/PLRDBA01');
@@ -18,6 +19,7 @@ const dbCloneService = require('../Services/dbCloneService');
 const ADMIController = require('./ADMIController');
 const RELController = require('./RELController');
 const M81Controller = require('./M81Controller');
+const { formatDate } = require('../Services/customServices');
 
 // Get Sequelize instance for 'SDB' or your specific DB name
 const sequelizeSDB = db.getConnection('A00001SDB');
@@ -28,6 +30,7 @@ const sequelizeMASTER = db.getConnection('master');
 const PLSDBADMI = definePLSDBADMI(sequelizeSDB);
 const PLSDBREL = definePLSDBREL(sequelizeSDB);
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
+const PLRDBA02 = definePLRDBA02(sequelizeRDB);
 const encryptor = new Encryptor();
 // let response = { data: null, Status: "SUCCESS", message: null }
 
@@ -45,6 +48,12 @@ class CompanyService {
             message: '',
             corpId: ''
         }
+        const today = new Date();
+        regDate = formatDate(today);
+        subStrtDate = formatDate(today);
+        const endDate = new Date(today);
+        endDate.setFullYear(endDate.getFullYear() + 1);
+        subEndDate = formatDate(endDate);
 
         const token = req.headers['authorization']?.split(' ')[1]; // 'Bearer <token>'
 
@@ -105,7 +114,7 @@ class CompanyService {
             }
 
             let crnum = nextCorpId.split('-')
-            let SDBdbname = crnum[0] + crnum[1] + crnum[2] + "SDB"
+            let SDBdbname = crnum[0] + crnum[1] + crnum[2] + "SDB";
             await dbCloneService.usrSDB(SDBdbname);
             let admi = new ADMIController(SDBdbname);
             const encryptedUserId = encryptor.encrypt(userId);
@@ -168,7 +177,7 @@ class CompanyService {
             if (createCMP) {
                 const relMng = await rel.create(nextId, userId, A02id ? A02id : '', "");
                 if (A02id) {
-                    let planDetail = await PLRDBA01.findOne({
+                    let planDetail = await PLRDBA02.findOne({
                         where: { A02F01: A02id }
                     });
                     const modList = await admi.update({

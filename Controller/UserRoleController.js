@@ -150,7 +150,7 @@ class UsrRole {
                         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         return res.status(404).json({ encryptedResponse });
                     }
-                    await roleToDelete.destroy({ USRF00: USRF00 });
+                    await roleToDelete.destroy();
                     response.message = 'Role deleted successfully!'
                     encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                     return res.status(200).json({ encryptedResponse });
@@ -303,9 +303,8 @@ class UsrRole {
                         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         return res.status(400).json({ encryptedResponse });
                     }
-                    existingRole = await crole.findAll({
-                        attributes: ['CROLF01']
-                    });
+                    existingRole = await crole.findAll({}, [], ['CROLF01']
+                    );
                     for (const role of existingRole) {
                         if (role.CROLF01 === CROLF01) {
                             response.message = 'Roll Name Already Exist';
@@ -324,9 +323,8 @@ class UsrRole {
                     let editedRole = await crole.update({
                         CROLF01: CROLF01,
                         CROLF02: decoded.corpId
-                    }, {
-                        where: { CROLF00 }
-                    });
+                    }, { CROLF00 }
+                    );
                     response.message = 'Role updated successfully!';
                     response.data = editedRole;
                     encryptedResponse = encryptor.encrypt(JSON.stringify(response));
@@ -365,6 +363,8 @@ class UsrRole {
                         ADMICORP: corpUnq,
                         ADMIROL: roleToDelete.CROLF00
                     });
+
+                    allUsrs = await admi.findAll();
                     let i = 0;
                     for (let usr of allUsrs) {
                         if (usr.ADMIROL == roleToDelete.CROLF00) {
