@@ -75,6 +75,14 @@ class M81Controller {
             throw error;
         }
     }
+
+    async destroy(where) {
+        try {
+            return await this.PLSDBM81.destroy(where);
+        } catch (error) {
+            throw new Error(`Failed to destroy record: ${error.message}`);
+        }
+    }
 }
 
 module.exports = M81Controller;

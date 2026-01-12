@@ -114,10 +114,19 @@ class CmpMaster extends PlusInfo {
                     }
                 }
             });
-            let m81 = new M81Controller(this.sdbdbname);
-            let userUid = await m81.findOne({
-                M81UNQ: admin.ADMIF00
-            });
+            // if(corpids)
+            let userUid;
+            if (nextCorpId == 'PL-P-00001') {
+                let m81 = new M81Controller(this.sdbdbname);
+                userUid = await m81.findOne({
+                    M81CHLD: admin.ADMIF00
+                });
+            } else {
+                let m81 = new M81Controller(this.sdbdbname);
+                userUid = await m81.findOne({
+                    M81UNQ: admin.ADMIF00
+                });
+            }
             let m82 = new M82Controller(this.sdbdbname);
             let cmpNumbers = await m82.findAll(
                 { M82F01: userUid.M81F01 },

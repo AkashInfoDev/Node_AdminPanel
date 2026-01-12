@@ -1,6 +1,6 @@
 const querystring = require('querystring');
 const db = require('../Config/config'); // Your Database class
-const { Op } = require('sequelize'); // Required for LIKE queries
+const { Op, QueryTypes } = require('sequelize'); // Required for LIKE queries
 
 const sequelizeSDB = db.getConnection('A00001SDB');
 const sequelizeRDB = db.getConnection('RDB');
@@ -16,6 +16,9 @@ const TokenService = require('../Services/tokenServices');
 const ADMIController = require('./ADMIController');
 const RELController = require('./RELController');
 const BRCController = require('./BRCController');
+const { generateDatabaseName } = require('../Services/queryService');
+const M81Controller = require('./M81Controller');
+const M82Controller = require('./M82Controller');
 
 const PLSDBBRC = definePLSDBBRC(sequelizeSDB);
 const PLSDBREL = definePLSDBREL(sequelizeSDB);
@@ -74,7 +77,7 @@ class BranchController {
             let response = { data: null, status: 'Success', message: '' };
             let encryptedResponse;
             let action, BRCODE, BRNAME, BRGST, BRSTATE, BRDEF, corpId
-            let decoded;
+            let decoded, BRCCOMP;
             if (this.lbool == false) {
                 action = this.act;
                 BRCODE = this.brc;
@@ -83,6 +86,7 @@ class BranchController {
                 corpId = this.brcr;
                 BRSTATE = this.brst;
                 BRDEF = this.defBrc;
+                BRCCOMP = this.brccomp;
             } else {
                 const parameterString = encryptor.decrypt(req.query.pa);
                 let decodedParam = decodeURIComponent(parameterString);
@@ -92,6 +96,8 @@ class BranchController {
                 BRNAME = pa.BRNAME
                 BRGST = pa.BRGST
                 BRSTATE = pa.BRSTATE
+                BRCCOMP = pa.BRCCOMP
+                console.log("params pa", pa);
 
                 const token = req.headers['authorization']?.split(' ')[1]; // 'Bearer <token>'
 
@@ -103,12 +109,14 @@ class BranchController {
                 }
                 decoded = await TokenService.validateToken(token);
             }
+            console.log("decoded", decoded);
+
             // corpId = decoded.corpId
             console.log(this.brcr);
             let sdbseq;
-            if(this.brcr){
+            if (this.brcr) {
                 sdbseq = (this.brcr).split('-');
-            }else{
+            } else {
                 corpId = decoded.corpId
                 sdbseq = (corpId).split('-');
             }
@@ -162,19 +170,20 @@ class BranchController {
                 });
 
                 let newBranch
-                if (!this.lbool) {
+
+                if (this.lbool == true) {
                     newBranch = await tblbrc.create(newBRCODE, BRNAME, this.brg, BRCORP, BRSTATE, this.defBrc == 'Y' ? 'Y' : 'N', this.brccomp
                     );
                 } else {
-                    newBranch = await tblbrc.create({
-                        BRCODE: newBRCODE,
+                    newBranch = await tblbrc.create(
+                        newBRCODE,
                         BRNAME,
-                        BRGST: BRGST ? BRGST : mainBRC.BRGST ? mainBRC.BRGST : '',
+                        BRGST ? BRGST : mainBRC.BRGST ? mainBRC.BRGST : '',
                         BRCORP,
                         BRSTATE,
-                        BRDEF: this.defBrc == 'Y' ? 'Y' : 'N',
-                        BRCCOMP: this.brccomp
-                    });
+                        this.defBrc == 'Y' ? 'Y' : 'N',
+                        BRCCOMP
+                    );
                 }
                 if (newBranch) {
                     const relMng = await rel.update({
@@ -227,8 +236,41 @@ class BranchController {
                     }
                     BRCORP = corpRow.A01F01;
                 }
+                if (branch.BRCCOMP) {
+                    let cmplist = (branch.BRCCOMP).split(',');
+                    for (const cl of cmplist) {
+                        let existingCmp = (BRCCOMP).split(',');
+                        if (existingCmp.includes(cl))
+                            continue;
+                        let crnum = corpId.split('-')
+                        let SDBdbname = crnum[0] + crnum[1] + crnum[2] + "SDB"
+                        let dbName = generateDatabaseName(corpId, cl);
+                        let dbConn = db.createPool(dbName);
+                        let m82 = new M82Controller(SDBdbname);
+                        let cmpdet = await m82.findOne({ M82F02: parseInt(cl) });
+                        let defYr = cmpdet.M82YRN;
+                        let listOfYr = await dbConn.query('SELECT FIELD01 FROM CMPF01', {
+                            type: QueryTypes.SELECT
+                        });
+                        let connectedRows;
+                        if (listOfYr) {
+                            for (const ly of listOfYr) {
+                                connectedRows = await dbConn.query(`SELECT * FROM YR${ly.FIELD01}T41 WHERE FLDBRC = '${branch.BRCODE}'`, {
+                                    type: QueryTypes.SELECT
+                                });
+                                if (connectedRows.length > 0) {
+                                    response.message = 'This Branch Contains Transaction in ' + cl + 'Company';
+                                    response.status = 'FAIL'
+                                    encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                                    return res.status(200).json({ encryptedResponse });
+                                }
+                            }
+                        }
+                    }
+                }
 
                 let mainBRC = await tblbrc.findOne({
+
                     BRCORP: BRCORP,
                     BRDEF: 'Y'
                 });
@@ -247,11 +289,20 @@ class BranchController {
                 const updatedBRSTATE = stateid.PLSF01 || branch.BRSTATE;
                 branch.BRNAME = updatedBRNAME;
                 branch.BRGST = updatedBRGST;
-                branch.BRCORP = BRCORP;
+                // branch.BRCORP = BRCORP; 
                 branch.BRSTATE = updatedBRSTATE;
                 branch.BRCCOMP = this.brccomp;
+                let updatedBrc = {
+                    BRNAME: BRNAME,
+                    BRGST: BRGST,
+                    BRCORP: BRCORP,
+                    BRSTATE: BRSTATE,
+                    BRCCOMP: BRCCOMP
+                }
 
-                await branch.save();
+                await tblbrc.update(updatedBrc, {
+                    BRCODE: BRCODE
+                });
 
                 response.data = branch
                 encryptedResponse = encryptor.encrypt(JSON.stringify(response));
@@ -271,7 +322,9 @@ class BranchController {
                 }
 
                 const branchRow = await tblbrc.findOne({ BRCODE: BRCODE });
-                if (branchRow.BRCCOMP != '') {
+                console.log("brc cmp", branchRow.BRCCOMP, !branchRow.BRCCOMP);
+
+                if (branchRow.BRCCOMP != null) {
                     response.message = 'Branch is already assigned to Company'
                     response.status = 'FAIL'
                     encryptedResponse = encryptor.encrypt(JSON.stringify(response));

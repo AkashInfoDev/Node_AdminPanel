@@ -172,7 +172,7 @@ class CompanyService {
                         where: { A02F01: A02id }
                     });
                     const modList = await admi.update({
-                        ADMIMOD: planDetail.A02id
+                        ADMIMOD: planDetail.A02F12
                     }, { ADMICORP: nextId }
                     );
                 }
@@ -204,7 +204,7 @@ class CompanyService {
                 }
             } else {
                 if (!saveCmp.result) {
-                    let BRCOntroller = new BranchController(false, 'A', BRcode, '0001-HOME-BRC', brGst, '', saveCmp.nextCorpId, 'Y', '0000');
+                    let BRCOntroller = new BranchController(false, 'A', BRcode, '0001-HOME-BRC', brGst, '', saveCmp.nextCorpId, 'Y', saveCmp.CmpNum); //000
                     let AddHomeBrc = await BRCOntroller.handleAction(req, res, true);
                     return { status: true, CmpNum: saveCmp.CmpNum, cSdata: saveCmp.cSdata, nextCorpId: saveCmp.nextCorpId, SDBdbname }
                 }

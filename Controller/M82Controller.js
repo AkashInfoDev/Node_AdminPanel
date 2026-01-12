@@ -4,6 +4,7 @@ const definePLSDBM82 = require('../Models/SDB/PLSDBM82'); // Model factory
 class M82Controller {
     constructor(dbName) {
         if (dbName) dbName = dbName == 'PLP00001SDB' ? 'A00001SDB' : dbName 
+        console.log(dbName);
         this.connection = db.createPool(dbName);
         this.PLSDBM82 = definePLSDBM82(this.connection);
     }
@@ -99,6 +100,13 @@ class M82Controller {
         } catch (error) {
             console.error('Error in update:', error);
             throw error;
+        }
+    }
+    async destroy(where) {
+        try {
+            return await this.PLSDBM82.destroy(where);
+        } catch (error) {
+            throw new Error(`Failed to destroy record: ${error.message}`);
         }
     }
 }

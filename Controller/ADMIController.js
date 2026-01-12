@@ -6,7 +6,7 @@ class ADMIController {
         this.connection = db.createPool(dbName);
         this.PLSDBADMI = definePLSDBADMI(this.connection);
     }
-    async create(encryptedUserId, firstName, middleName, lastName, hashedPassword, roleId, email, dob, gender, address, phoneNumber, base64Image, BrcList, CmpList, menuList) {
+    async create(encryptedUserId, firstName, middleName, lastName, hashedPassword, roleId, email, dob, gender, address, phoneNumber, base64Image, BrcList, CmpList, menuList, cusRole, corpId) {
         return await this.PLSDBADMI.create({
             ADMIF01: encryptedUserId,
             ADMIF02: firstName,
@@ -15,14 +15,16 @@ class ADMIController {
             ADMIF05: hashedPassword,
             ADMIF06: roleId,
             ADMIF07: email,
-            ADMIF09: (dob.toString()) ? dob.toString() : null,
+            ADMIF09: (dob?.toString()) ? dob.toString() : null,
             ADMIF10: gender,
             ADMIF12: address,
             ADMIF13: phoneNumber,
             ADMIF14: base64Image,
             ADMIBRC: BrcList,
             ADMICOMP: CmpList,
-            ADMIMOD: menuList
+            ADMIMOD: menuList,
+            ADMIROL: cusRole,
+            ADMICORP: corpId
         });
     }
     /**
@@ -97,6 +99,19 @@ class ADMIController {
         } catch (error) {
             console.error('Error in update:', error);
             throw error;
+        }
+    }
+    async destroy(where) {
+        try {
+            const options = {};
+
+            // Filter records
+            if (where && Object.keys(where).length) {
+                options.where = where;
+            }
+            return await this.PLSDBADMI.destroy(options);
+        } catch (error) {
+            throw new Error(`Failed to destroy record: ${error.message}`);
         }
     }
 }

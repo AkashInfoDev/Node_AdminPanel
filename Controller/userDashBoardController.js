@@ -60,7 +60,7 @@ class dashboardController {
             ADMICORP: compDetail.A01F01.trim()
         });
         let brcDetail = await tblbrc.findAll({
-            BRCORP: compDetail.A01F01
+            BRCORP: (compDetail.A01F01).trim()
         });
         let planDetail = await PLRDBA02.findOne({
             where: { A02F01: compDetail.A02F01 }
@@ -69,11 +69,10 @@ class dashboardController {
         for (let user of userDetails) {
             if (user.ADMIF06 != '2') {
                 let cusRole = await crole.findOne({
-                    where: {
                         CROLF02: user.ADMICORP,
                         CROLF00: user.ADMIROL
                     }
-                });
+                );
                 if (cusRole) {
                     user.dataValues.ROLENM = cusRole.CROLF01
                     user.dataValues.CROLF00 = cusRole.CROLF00

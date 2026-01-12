@@ -279,7 +279,8 @@ class AdminController {
             return res.status(200).json({ encryptedResponse: encryptedResponse });
         } catch (error) {
             console.error(error);
-            response = {
+            let response = {
+                status: 'FAIL',
                 message: 'Login failed'
             }
             let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
@@ -304,7 +305,17 @@ class UserController {
         const token = req.headers['authorization']?.split(' ')[1]; // 'Bearer <token>'
 
         let decoded;
-        if (action != 'L' && roleId != '2') {
+        if (action != 'L') {
+            if (!token) {
+                response.message = 'No token provided, authorization denied.'
+                response.status = 'FAIL'
+                const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                return res.status(401).json({ encryptedResponse });
+            } else {
+                decoded = await TokenService.validateToken(token);
+            }
+        }
+        if (roleId && roleId != '2') {
             if (!token) {
                 response.message = 'No token provided, authorization denied.'
                 response.status = 'FAIL'
@@ -445,17 +456,19 @@ class UserController {
 
                 // Handle success or failure of company creation
                 if (!companyResult.status) {
-                    const existingUser = await PLSDBADMI.findAll();
+                    let admi = new ADMIController(companyResult.SDBdbname);
+                    let m81 = new M81Controller(companyResult.SDBdbname);
+                    const existingUser = await admi.findAll();
                     for (let i of existingUser) {
                         const decrypted = encryptor.decrypt(i.ADMIF01);
                         if (decrypted === userId) {
-                            await PLSDBADMI.destroy({
-                                where: { ADMIF01: i.ADMIF01 }
+                            await admi.destroy({
+                                ADMIF01: i.ADMIF01
                             });
                         }
                     }
-                    await PLSDBM81.destroy({
-                        where: { M81F01: GUID }
+                    await m81.destroy({
+                        M81F01: GUID
                     });
                     return res.status(500).json(companyResult); // Make sure the response is returned here
                 } else {
@@ -538,11 +551,18 @@ class UserController {
                     }
                 }
             } else if (roleId == '3') {
-                let corpId = decoded.corpId
+                let corpId = decoded.corpId;
+                let sdbSeq = corpId.split('-');
+                let sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB'
+                let admi = new ADMIController(sdbdbname);
+                let m81 = new M81Controller(sdbdbname);
+                let m82 = new M82Controller(sdbdbname);
+                let cmp = new CMPController(sdbdbname);
+                let rel = new RELController(sdbdbname);
                 let response = { status: 'SUCCESS', message: null };
                 const encryptedUserId = encryptor.encrypt(userId);
 
-                const existing = await PLSDBADMI.findAll();
+                const existing = await admi.findAll();
                 for (let i of existing) {
                     const decrypted = encryptor.decrypt(i.ADMIF01);
                     if (decrypted === userId) {
@@ -557,45 +577,26 @@ class UserController {
                     where: { A01F03: corpId }
                 });
 
-                let superUserDetails = await PLSDBADMI.findOne({
-                    where: {
-                        ADMICORP: userCorp.A01F01,
-                        ADMIF06: [1, 2]
-                    }
+                let superUserDetails = await admi.findOne({
+                    ADMICORP: userCorp.A01F01,
+                    ADMIF06: [1, 2]
                 });
 
                 const hashedPassword = encryptor.encrypt(password);
-                const newUser = await PLSDBADMI.create({
-                    ADMIF01: encryptedUserId,
-                    ADMIF02: firstName,
-                    ADMIF03: middleName,
-                    ADMIF04: lastName,
-                    ADMIF05: hashedPassword,
-                    ADMIF06: roleId,
-                    ADMIF07: email,
-                    ADMIF09: (dob.toString()) ? dob.toString() : null,
-                    ADMIF10: gender,
-                    ADMIF12: address,
-                    ADMIF13: phoneNumber,
-                    ADMIF14: base64Image,
-                    ADMICORP: superUserDetails.ADMICORP,
-                    ADMIROL: cusRole,
-                    ADMIBRC: BrcList,
-                    ADMICOMP: CmpList
-                });
+                const newUser = await admi.create(encryptedUserId, firstName, middleName, lastName, hashedPassword, roleId, email, (dob.toString()) ? dob.toString() : null, gender, address, phoneNumber, base64Image, BrcList, CmpList, '', cusRole, superUserDetails.ADMICORP
+                );
 
                 let superUsrCorpDtl = await PLRDBA01.findOne({
                     where: { A01F01: superUserDetails.ADMICORP }
                 });
 
                 if (newUser) {
-                    const newUser = await PLSDBREL.create({
-                        M00F01: superUserDetails.ADMICORP,
-                        M00F02: encryptedUserId,
-                        M00F03: "",
-                        M00F04: ""
-
-                    });
+                    const newUser = await rel.create(
+                        (superUserDetails.ADMICORP).trim(),
+                        encryptedUserId,
+                        "",
+                        ""
+                    );
                 }
                 let GU = 'U';  // Default value for GU
                 let GUID = '0000000';  // GUID initialization (without prefix initially)
@@ -617,11 +618,11 @@ class UserController {
                     }
 
                     // Fetch all records for M81F05
-                    let grpCodeList = await PLSDBM81.findAll({
+                    let grpCodeList = await m81.findAll({
                         attributes: ['M81F05']
                     });
 
-                    usrCodeList = await PLSDBM81.findAll({
+                    usrCodeList = await m81.findAll({
                         M81F01: {
                             [Op.like]: 'U%'  // This will match strings that start with 'U'
                         }
@@ -629,7 +630,7 @@ class UserController {
 
                     do {
                         // Check if a user with the same GUID exists
-                        usrCodeList = await PLSDBM81.findAll({
+                        usrCodeList = await m81.findAll({
                             where: { M81F01: GUID }
                         });
 
@@ -642,7 +643,7 @@ class UserController {
                             GUID = GU + '0000000';  // Reset GUID to the default value if no user is found
                         }
 
-                        usrCodeList = await PLSDBM81.findAll({
+                        usrCodeList = await m81.findAll({
                             where: { M81F01: GUID }
                         });
 
@@ -665,22 +666,8 @@ class UserController {
                         nextNumber = GU + (maxNumber + 1).toString().padStart(7, '0');  // Pad with zeros to maintain the format
                     }
 
-                    await PLSDBM81.create({
-                        M81F00: GU,
-                        M81F01: GUID,
-                        M81F02: firstName + lastName,
-                        M81F03: userId,
-                        M81F04: password,
-                        M81F05: nextNumber,
-                        M81F06: grpname ? grpname : roleId == '1' ? 'Admin' : roleId == '2' || '3' ? 'User' : 'Employee',
-                        M81F07: phoneNumber,
-                        M81F08: email,
-                        M81IMG: '',
-                        M81RTY: '',
-                        M81ADA: 'A',
-                        M81CHLD: newUser.ADMIF00,
-                        M81UNQ: 'ABCD'
-                    });
+                    await m81.create(GU, GUID, firstName + lastName, userId, password, nextNumber, grpname ? grpname : roleId == '1' ? 'Admin' : roleId == '2' || '3' ? 'User' : 'Employee', phoneNumber, email, '', '', 'A', newUser.ADMIF00, 'ABCD'
+                    );
                 }
                 response.status = 'SUCCESS';
                 const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
@@ -699,7 +686,7 @@ class UserController {
         email, password, isPassword, roleId, address, phoneNumber, base64Image, cusRole, CmpList, BrcList, decoded
     }, res) {
         try {
-            corpId = decoded.corpId.toUpperCase();
+            let corpId = decoded.corpId.toUpperCase();
             let sdbSeq = corpId.split('-');
             let sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB';
             let admi = new ADMIController(sdbdbname);
@@ -723,6 +710,13 @@ class UserController {
                 const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }));
                 return res.status(404).json({ encryptedResponse: encryptedResponse });
             }
+
+            // if (existingUser.ADMIF06 == 2) {
+            //     response.status = 'FAIL';
+            //     response.message = 'Main User ';
+            //     const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }));
+            //     return res.status(404).json({ encryptedResponse: encryptedResponse });
+            // }
 
             let updateData;
             if (isPassword) {
@@ -774,14 +768,14 @@ class UserController {
             await admi.update(updateData, {
                 ADMIF00: existingUser.ADMIF00
             });
-            if (cusRole) {
-                await admi.update(
-                    {
-                        ADMIROL: cusRole
-                    }, {
-                    where: { ADMIF01: encryptedUserId }
-                });
-            }
+            // if (cusRole) {
+            //     await admi.update(
+            //         {
+            //             ADMIROL: cusRole
+            //         }, {
+            //         where: { ADMIF01: encryptedUserId }
+            //     });
+            // }
 
             response.message = 'User updated successfully';
 
@@ -797,13 +791,22 @@ class UserController {
 
     static async loginUser(corpId, userId, password, res) {
         try {
+            let response = { status: 'SUCCESS', message: null };
             corpId = corpId.toUpperCase();
+            let corpexi = await PLRDBA01.findAll({
+                where: { A01F03: corpId }
+            });
+            if (corpexi.length == 0) {
+                response.status = 'FAIL';
+                response.message = 'Invalid Credentials';
+                const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                return res.status(400).json({ encryptedResponse: encryptedResponse });
+            }
             let sdbSeq = corpId.split('-');
             let sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB';
             if (sdbdbname) sdbdbname = sdbdbname == 'PLP00001SDB' ? 'A00001SDB' : sdbdbname
             let admi = new ADMIController(sdbdbname);
             let m81 = new M81Controller(sdbdbname);
-            let response = { status: 'SUCCESS', message: null };
             const encryptedId = encryptor.encrypt(userId);
             let corpRow = null;
             let user = null
@@ -838,7 +841,7 @@ class UserController {
                     M81Row = await m81.findAll({
                         M81CHLD: userM81Unq
                     });
-                }else{
+                } else {
                     M81Row = await m81.findAll({
                         M81UNQ: userM81Unq
                     });
@@ -991,7 +994,7 @@ class UserController {
 
     static async deleteUser(decoded, userId, res) {
 
-        corpId = decoded.corpId.toUpperCase();
+        let corpId = decoded.corpId.toUpperCase();
         let sdbSeq = corpId.split('-');
         let sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB';
         let admi = new ADMIController(sdbdbname);
@@ -1022,7 +1025,7 @@ class UserController {
         }
 
         let deleteUsr = await admi.destroy({
-            where: { ADMIF01: user.ADMIF01 }
+            ADMIF00: user.ADMIF00
         })
 
         if (deleteUsr) {

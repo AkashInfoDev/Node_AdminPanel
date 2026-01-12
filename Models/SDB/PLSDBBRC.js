@@ -21,7 +21,7 @@ module.exports = (sequelize) => {
         },
         BRGST: {
             type: DataTypes.STRING(15),
-            allowNull: false,
+            allowNull: true,
         },
         BRCORP: {
             type: DataTypes.STRING(10),
@@ -37,7 +37,7 @@ module.exports = (sequelize) => {
         },
         BRCCOMP: {
             type: DataTypes.STRING(100),
-            allowNull: false
+            allowNull: true
         }
     }, {
         tableName: 'PLSDBBRC',

@@ -87,6 +87,13 @@ class ROLController {
             throw error;
         }
     }
+    async destroy(where) {
+        try {
+            return await this.PLSDBROLE.destroy(where);
+        } catch (error) {
+            throw new Error(`Failed to destroy record: ${error.message}`);
+        }
+    }
 }
 
 module.exports = ROLController

@@ -78,8 +78,8 @@ class RELController {
                 throw new Error('No conditions provided for update');
             }
 
-            // Perform the update
-            const [affectedCount, affectedRows] = await this.PLSDBBRC.update(values, {
+            // Perform the updatePLSDBREL
+            const [affectedCount, affectedRows] = await this.PLSDBREL.update(values, {
                 where,
                 returning: true // returns updated rows (Postgres, some DBs)
             });
@@ -88,6 +88,13 @@ class RELController {
         } catch (error) {
             console.error('Error in update:', error);
             throw error;
+        }
+    }
+    async destroy(where) {
+        try {
+            return await this.PLSDBREL.destroy(where);
+        } catch (error) {
+            throw new Error(`Failed to destroy record: ${error.message}`);
         }
     }
 }

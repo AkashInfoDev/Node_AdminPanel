@@ -150,7 +150,7 @@ class UsrRole {
                         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         return res.status(404).json({ encryptedResponse });
                     }
-                    await roleToDelete.destroy();
+                    await roleToDelete.destroy({ USRF00: USRF00 });
                     response.message = 'Role deleted successfully!'
                     encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                     return res.status(200).json({ encryptedResponse });

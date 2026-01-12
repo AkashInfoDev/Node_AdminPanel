@@ -28,6 +28,7 @@ const M81Controller = require('./M81Controller');
 const CMPController = require('./CMPController');
 const M82Controller = require('./M82Controller');
 const RELController = require('./RELController');
+const { QueryTypes } = require('sequelize');
 const sequelizeIDB = db.getConnection('IDBAPI');
 const sequelizeA00001SDB = db.getConnection('A00001SDB');
 const sequelizeRDB = db.getConnection('RDB');
@@ -126,6 +127,32 @@ class handleCompany {
                         if (dbCmp) {
                             isComapny = true
                         };
+                    }
+                    if (cAction == 'D') {
+                        let crnum = (decoded.corpId).split('-')
+                        let SDBdbname = crnum[0] + crnum[1] + crnum[2] + "SDB"
+                        let dbName = queryService.generateDatabaseName(decoded.corpId, CmpNo);
+                        let dbConn = db.createPool(dbName);
+                        let m82 = new M82Controller(SDBdbname);
+                        let cmpdet = await m82.findOne({ M82F02: parseInt(CmpNo) });
+                        let defYr = cmpdet.M82YRN;
+                        let listOfYr = await dbConn.query('SELECT FIELD01 FROM CMPF01', {
+                            type: QueryTypes.SELECT
+                        });
+                        let connectedRows;
+                        if (listOfYr) {
+                            for (const ly of listOfYr) {
+                                connectedRows = await dbConn.query(`SELECT * FROM YR${ly.FIELD01}T41`, {
+                                    type: QueryTypes.SELECT
+                                });
+                                if (connectedRows.length > 0) {
+                                    response.message = 'This Company Contains Transaction so it can not be deleted';
+                                    response.status = 'FAIL'
+                                    let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                                    return res.status(200).json({ encryptedResponse });
+                                }
+                            }
+                        }
                     }
                 } else {
                     response = {
@@ -239,6 +266,15 @@ class handleCompany {
                         res.status(200).json({ encryptedResponse })
                         break;
                     case "D":
+                        if (branch.BRCCOMP) {
+                            let cmplist = (branch.BRCCOMP).split(',');
+                            for (const cl of cmplist) {
+                                let existingCmp = (BRCCOMP).split(',');
+                                if (existingCmp.includes(cl))
+                                    continue;
+
+                            }
+                        }
                         let isComapny = false;
                         let updtToDel;
                         let updtToDelM82;
@@ -398,7 +434,7 @@ class handleCompany {
             }
             if (cSData) {
                 // cSData["M00"]._CMPLOGO = req.body.img
-                let cMaster = new CmpMaster(decoded.userId, decoded.corpId, LangType, cAction, JSON.parse(cSData), decoded);
+                let cMaster = new CmpMaster(decoded.userId, decoded.corpId, LangType, cAction, JSON.parse(cSData), decoded, sdbdbname);
                 CmpMaster.oEntDict = JSON.parse(cSData);
                 CmpMaster.cUserID = decoded.userId;
                 if (cAction == "E" && isComapny) {

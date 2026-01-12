@@ -2,7 +2,7 @@ const db = require('../Config/config');
 const definePLSDBBRC = require('../Models/SDB/PLSDBBRC'); // Model factory
 class BRCController {
     constructor(dbName) {
-        if (dbName) dbName = dbName == 'PLP00001SDB' ? 'A00001SDB' : dbName 
+        if (dbName) dbName = dbName == 'PLP00001SDB' ? 'A00001SDB' : dbName
         this.connection = db.createPool(dbName);
         this.PLSDBBRC = definePLSDBBRC(this.connection);
     }
@@ -90,6 +90,14 @@ class BRCController {
         } catch (error) {
             console.error('Error in update:', error);
             throw error;
+        }
+    }
+
+    async destroy(where) {
+        try {
+            return await this.PLSDBBRC.destroy(where);
+        } catch (error) {
+            throw new Error(`Failed to destroy record: ${error.message}`);
         }
     }
 }
