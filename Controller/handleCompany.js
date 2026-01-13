@@ -167,7 +167,14 @@ class handleCompany {
 
                 //M00Table oM00 = new M00Table(oCmp);
                 console.log('CmpMaster class:', CmpMaster); // Log to confirm the class
-                let oM00 = new CmpMaster(cUserID, decoded.corpId, LangType, cAction);
+                let oM00
+                if (cAction == 'E') {
+                    let sdbSeq = (decoded.corpId).split('-');
+                    let sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB';
+                    oM00 = new CmpMaster(cUserID, decoded.corpId, LangType, cAction, {}, decoded, sdbdbname);
+                } else {
+                    oM00 = new CmpMaster(cUserID, decoded.corpId, LangType, cAction);
+                }
                 CmpMaster.oCmp = oCmp;
                 oM00.oYear = oYear;
                 let cWhere = "";
@@ -257,6 +264,9 @@ class handleCompany {
                         //oDic.Add("P_PLCATDT", oTM.GetpopupData(oYear, oUser, "P_PLSTATE", "TFORM0000001"));
 
                         oDic["P_GRPDT"] = await oM00.dtM00Grp(cUserID);
+                        if (cAction == 'E') {
+                            oDic["P_YRDT"] = await oCmp.GetYearJSon();
+                        }
                         response.status = "SUCCESS";
                         response.data = { ...oDic };
                         console.log(response);
@@ -457,7 +467,6 @@ class handleCompany {
                             M82F01: cUserID
                         })
                         if (totCMP.length > admin.ADMICOMP) {
-                            console.log("Not enough companies");
                             response.status = 'Fail'
                             response.message = "Need to Purchase More Companies to Create One";
                             let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
@@ -465,13 +474,8 @@ class handleCompany {
                         }
                     }
                     let saveCmp = await cMaster.SaveCompany(decoded.corpId, '', '', false, '');
-                    console.log(cSData);
                     cSData = JSON.parse(cSData);
                     if (!saveCmp.result) {
-                        // if (req.files[0].originalname) {
-                        //     let uploadFile = new FTPService(decoded, req.files[0].originalname, saveCmp.CmpNum);
-                        //     let upFile = await uploadFile.uploadFile(req);
-                        // }
                         let BRCOntroller = new BranchController(false, 'A', '', `${saveCmp.CmpNum}-HOME-BRC`, cSData["M00"]._16, '', decoded.corpId, 'Y', saveCmp.CmpNum)
                         let AddHomeBrc = await BRCOntroller.handleAction(req, res, true);
                         await rel.create(admin.ADMICORP, admin.ADMIF01, parseInt(saveCmp.CmpNum), '');

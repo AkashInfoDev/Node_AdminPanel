@@ -76,6 +76,33 @@ class M81Controller {
         }
     }
 
+        /**
+     * Update records matching the where clause with the given values
+     * @param {Object} values - Fields to update
+     * @param {Object} where - Conditions to select records
+     * @returns {Promise<Object>} - { affectedCount, affectedRows }
+     */
+    async update(values, where = {}) {
+        try {
+            if (!values || Object.keys(values).length === 0) {
+                throw new Error('No values provided for update');
+            }
+            if (!where || Object.keys(where).length === 0) {
+                throw new Error('No conditions provided for update');
+            }
+
+            // Perform the update
+            const [affectedCount, affectedRows] = await this.PLSDBM81.update(values, {
+                where,
+                returning: true // returns updated rows (Postgres, some DBs)
+            });
+
+            return { affectedCount, affectedRows };
+        } catch (error) {
+            console.error('Error in update:', error);
+            throw error;
+        }
+    }
     async destroy(where) {
         try {
             return await this.PLSDBM81.destroy(where);

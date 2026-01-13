@@ -392,7 +392,7 @@ class BranchController {
                         if (decrypted == userId) {
                             user = i;
                             response = {
-                                message: 'User ID valid'
+                                status: 'SUCCESS'
                             }
                         }
                     }

@@ -1,5 +1,7 @@
+const { QueryTypes } = require('sequelize');
 const db = require('../../../Config/config'); // Your Database class
 const DBHandler = require('../../../DataClass/Class/DbHandler');
+const { MApp } = require('../../commonClass/plusCommon');
 // const { MApp, LangType } = require('../../commonClass/plusCommon');
 const CMMTable = require('../MTableCls/CMMTable');
 const SM82Table = require('../STableCls/SM82Table');
@@ -161,6 +163,20 @@ class Company {
 
         obj.oSysDT = oSysDT;
         return CBODT;
+    }
+
+    async GetYearJSon(cWhr = "")    // To Get Year List 
+    {
+        cWhr = cWhr ? MApp.AndOr("ISNULL(FLDAED,'')!='D'", cWhr, "AND", 3) : '';
+        let cQry = "SELECT FIELD01 AS YearNo, Field02 AS strtDate, FIELD03 AS endDate from CMPF01";
+
+        if (cWhr)
+            cQry += " WHERE " + cWhr;
+        
+        let result = await this.oCon.query(cQry, {
+            type: QueryTypes.SELECT
+        });
+        return result;
     }
 }
 

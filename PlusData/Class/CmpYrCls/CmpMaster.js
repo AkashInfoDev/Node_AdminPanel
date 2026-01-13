@@ -47,7 +47,7 @@ class CmpMaster extends PlusInfo {
         this.existingCorpId = existingCorpId;
         this.cAction = cAction;
         this.oEntDict = oEntDict ? oEntDict : [];  // Instance-level dictionary initialized
-        this.SDBH = new SDBHandler('A00001SDB');
+        this.SDBH = SDBdbName == 'PLP00001SDB' ? new SDBHandler('A00001SDB') : new SDBHandler(SDBdbName);
         this.decoded = decoded;
         this.targDB;
         this.result;

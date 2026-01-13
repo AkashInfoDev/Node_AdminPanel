@@ -339,7 +339,7 @@ class UsrRole {
                         return res.status(400).json({ encryptedResponse });
                     }
                     const roleToDelete = await crole.findOne({
-                        CROLF00,
+                        CROLF00: parseInt(CROLF00),
                         CROLF02: decoded.corpId
                     });
 

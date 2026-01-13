@@ -27,6 +27,7 @@ const RELController = require('./RELController');
 const M81Controller = require('./M81Controller');
 const M82Controller = require('./M82Controller');
 const CMPController = require('./CMPController');
+const queryService = require('../Services/queryService');
 
 // Get Sequelize instance for 'SDB' or your specific DB name
 const sequelizeSDB = db.getConnection('A00001SDB');
@@ -682,9 +683,9 @@ class UserController {
                     }
 
                     // Fetch all records for M81F05
-                    let grpCodeList = await m81.findAll({
-                        attributes: ['M81F05']
-                    });
+                    let grpCodeList = await m81.findAll({}, [],
+                        ['M81F05']
+                    );
 
                     usrCodeList = await m81.findAll({
                         M81F01: {
@@ -695,7 +696,7 @@ class UserController {
                     do {
                         // Check if a user with the same GUID exists
                         usrCodeList = await m81.findAll({
-                            where: { M81F01: GUID }
+                            M81F01: GUID
                         });
 
                         // If a user exists with that GUID, generate a new GUID
@@ -708,7 +709,7 @@ class UserController {
                         }
 
                         usrCodeList = await m81.findAll({
-                            where: { M81F01: GUID }
+                            M81F01: GUID
                         });
 
                     } while (usrCodeList.length > 0);  // Keep checking until GUID is unique
@@ -730,7 +731,7 @@ class UserController {
                         nextNumber = GU + (maxNumber + 1).toString().padStart(7, '0');  // Pad with zeros to maintain the format
                     }
 
-                    await m81.create(GU, GUID, firstName + lastName, userId, password, nextNumber, grpname ? grpname : roleId == '1' ? 'Admin' : roleId == '2' || '3' ? 'User' : 'Employee', phoneNumber, email, '', '', 'A', newUser.ADMIF00, 'ABCD');
+                    await m81.create(GU, GUID, firstName + lastName, userId, password, nextNumber, grpname ? grpname : roleId == '1' ? 'Admin' : roleId == '2' || '3' ? 'User' : 'Employee', phoneNumber, email, '', '', 'A', '', newUser.ADMIF00);
                 }
                 response.status = 'SUCCESS';
                 const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
@@ -1014,7 +1015,7 @@ class UserController {
                     return res.status(400).json({ encryptedResponse: encryptedResponse });
                 }
 
-                let userComp = new AuthenticationService(corpId, uM82Row);
+                let userComp = new AuthenticationService(corpId, uM82Row, sdbdbname);
                 let cmplist = await userComp.authenticateUser();
                 let usrCompList = [];
 
@@ -1065,31 +1066,6 @@ class UserController {
         let user;
         let response = { status: 'SUCCESS', message: null };
 
-        let crnum = (decoded.corpId).split('-')
-        let SDBdbname = crnum[0] + crnum[1] + crnum[2] + "SDB"
-        let dbName = queryService.generateDatabaseName(decoded.corpId, CmpNo);
-        let dbConn = db.createPool(dbName);
-        let m82 = new M82Controller(SDBdbname);
-        let cmpdet = await m82.findOne({ M82F02: parseInt(CmpNo) });
-        let defYr = cmpdet.M82YRN;
-        let listOfYr = await dbConn.query('SELECT FIELD01 FROM CMPF01', {
-            type: QueryTypes.SELECT
-        });
-        let connectedRows;
-        if (listOfYr) {
-            for (const ly of listOfYr) {
-                connectedRows = await dbConn.query(`SELECT * FROM YR${ly.FIELD01}T41`, {
-                    type: QueryTypes.SELECT
-                });
-                if (connectedRows.length > 0) {
-                    response.message = 'This Company Contains Transaction so it can not be deleted';
-                    response.status = 'FAIL'
-                    let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-                    return res.status(200).json({ encryptedResponse });
-                }
-            }
-        }
-
         const existing = await admi.findAll();
         for (let i of existing) {
             const decrypted = encryptor.decrypt(i.ADMIF01);
@@ -1097,6 +1073,71 @@ class UserController {
                 user = i;
             }
         }
+        if (!user) {
+            response.status = 'FAIL';
+            response.message = 'User Does Not Exist';
+            const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+            return res.status(400).json({ encryptedResponse: encryptedResponse });
+        }
+        let usrM81 = await m81.findOne({
+            M81UNQ: user.ADMIF00
+        })
+        let crnum = (decoded.corpId).split('-')
+        let SDBdbname = crnum[0] + crnum[1] + crnum[2] + "SDB";
+        let cmplst = user.ADMICOMP;
+        if (cmplst.includes(',')) {
+            let cmpnumbers = cmplst.split(',')
+            for (const cnum of cmpnumbers) {
+                let CmpNo = cnum;
+                let dbName = queryService.generateDatabaseName(decoded.corpId, CmpNo);
+                let dbConn = db.createPool(dbName);
+                let m82 = new M82Controller(SDBdbname);
+                let cmpdet = await m82.findOne({ M82F02: parseInt(CmpNo) });
+                let defYr = cmpdet.M82YRN;
+                let listOfYr = await dbConn.query('SELECT FIELD01 FROM CMPF01', {
+                    type: QueryTypes.SELECT
+                });
+                let connectedRows;
+                if (listOfYr) {
+                    for (const ly of listOfYr) {
+                        connectedRows = await dbConn.query(`SELECT * FROM YR${ly.FIELD01}T82 WHERE FIELD02 = '${usrM81.M81F01}'`, {
+                            type: QueryTypes.SELECT
+                        });
+                        if (connectedRows.length > 0) {
+                            response.message = 'This Company Contains Transaction so it can not be deleted';
+                            response.status = 'FAIL'
+                            let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                            return res.status(200).json({ encryptedResponse });
+                        }
+                    }
+                }
+            }
+        } else {
+            let CmpNo = cmplst;
+            let dbName = queryService.generateDatabaseName(decoded.corpId, CmpNo);
+            let dbConn = db.createPool(dbName);
+            let m82 = new M82Controller(SDBdbname);
+            let cmpdet = await m82.findOne({ M82F02: parseInt(CmpNo) });
+            let defYr = cmpdet.M82YRN;
+            let listOfYr = await dbConn.query('SELECT FIELD01 FROM CMPF01', {
+                type: QueryTypes.SELECT
+            });
+            let connectedRows;
+            if (listOfYr) {
+                for (const ly of listOfYr) {
+                    connectedRows = await dbConn.query(`SELECT * FROM YR${ly.FIELD01}T82 WHERE FIELD02 = '${usrM81.M81F01}'`, {
+                        type: QueryTypes.SELECT
+                    });
+                    if (connectedRows.length > 0) {
+                        response.message = 'This User Contains Transaction so it can not be deleted';
+                        response.status = 'FAIL'
+                        let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.status(200).json({ encryptedResponse });
+                    }
+                }
+            }
+        }
+
 
         if (user.ADMIF06 == 2) {
             response.status = 'FAIL';
@@ -1105,15 +1146,12 @@ class UserController {
             return res.status(400).json({ encryptedResponse: encryptedResponse });
         }
 
-        if (!user) {
-            response.status = 'FAIL';
-            response.message = 'User Does Not Exist';
-            const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
-            return res.status(400).json({ encryptedResponse: encryptedResponse });
-        }
 
-        let deleteUsr = await admi.destroy({
-            ADMIF00: user.ADMIF00
+
+        let deleteUsr = await m81.update({
+            M81ADA : 'D'
+        },{
+            M81UNQ: user.ADMIF00
         })
 
         if (deleteUsr) {

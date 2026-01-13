@@ -12,6 +12,7 @@ const TokenService = require('../Services/tokenServices');
 const CROLEController = require('./CROLOEController');
 const ADMIController = require('./ADMIController');
 const BRCController = require('./BRCController');
+const M81Controller = require('./M81Controller');
 const sequelizeSDB = db.getConnection('A00001SDB');
 const sequelizeRDB = db.getConnection('RDB');
 
@@ -47,6 +48,7 @@ class dashboardController {
         let tblbrc = new BRCController(sdbdbname);
         let crole = new CROLEController(sdbdbname);
         let admi = new ADMIController(sdbdbname);
+        let m81 = new M81Controller(sdbdbname);
         let corpId = decoded.corpId
         if (!corpId) {
             response.message = 'Corporate Id is required'
@@ -56,9 +58,22 @@ class dashboardController {
         let compDetail = await PLRDBA01.findOne({
             where: { A01F03: corpId }
         });
-        let userDetails = await admi.findAll({
+        let availableUsers = await admi.findAll({
             ADMICORP: compDetail.A01F01.trim()
         });
+        let activeUser = await m81.findAll({
+            M81ADA: 'A'
+        });
+        let userDetails = [];
+        for(const au of activeUser){
+            for(const ud of availableUsers){
+                if(ud.ADMIF00 == au.M81UNQ){
+                    if(au.M81ADA == 'A'){
+                        userDetails.push(ud);
+                    }
+                }
+            }
+        }
         let brcDetail = await tblbrc.findAll({
             BRCORP: (compDetail.A01F01).trim()
         });
