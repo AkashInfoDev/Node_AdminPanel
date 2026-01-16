@@ -65,10 +65,18 @@ class dashboardController {
             M81ADA: 'A'
         });
         let userDetails = [];
-        for(const au of activeUser){
-            for(const ud of availableUsers){
-                if(ud.ADMIF00 == au.M81UNQ){
-                    if(au.M81ADA == 'A'){
+        for (const au of activeUser) {
+            for (const ud of availableUsers) {
+                // if (sdbdbname == 'PLP00001SDB') {
+                //     if (ud.ADMIF00 == au.M81CHLD) {
+                //         if (au.M81ADA == 'A') {
+                //             userDetails.push(ud);
+                //         }
+                //     }
+                // }
+                // else 
+                    if(ud.ADMIF00 == au.M81UNQ){
+                    if (au.M81ADA == 'A') {
                         userDetails.push(ud);
                     }
                 }
@@ -84,9 +92,9 @@ class dashboardController {
         for (let user of userDetails) {
             if (user.ADMIF06 != '2') {
                 let cusRole = await crole.findOne({
-                        CROLF02: user.ADMICORP,
-                        CROLF00: user.ADMIROL
-                    }
+                    CROLF02: user.ADMICORP,
+                    CROLF00: user.ADMIROL
+                }
                 );
                 if (cusRole) {
                     user.dataValues.ROLENM = cusRole.CROLF01

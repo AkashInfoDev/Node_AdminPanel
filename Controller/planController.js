@@ -148,10 +148,8 @@ class UpgradePlan {
                     await admi.update({
                         ADMIBRC: additionalBranch,
                     }, {
-                        where: {
-                            ADMIF00: userInfo.A01F01,
-                            ADMIF06: 2
-                        }
+                        ADMIF00: userInfo.A01F01,
+                        ADMIF06: 2
                     });
                 }
 
@@ -159,10 +157,8 @@ class UpgradePlan {
                     await admi.update({
                         ADMICOMP: additionalCompany,
                     }, {
-                        where: {
-                            ADMIF00: userInfo.A01F01,
-                            ADMIF06: 2
-                        }
+                        ADMIF00: userInfo.A01F01,
+                        ADMIF06: 2
                     });
                 }
 
@@ -170,7 +166,7 @@ class UpgradePlan {
                     await PLRDBA01.update({
                         A01F10: additionalUser
                     }, {
-                        where: { A01F03: corpId }
+                        A01F03: corpId
                     });
                 }
 
@@ -205,7 +201,7 @@ class UpgradePlan {
                     await admi.update({
                         ADMIMOD: newADMIMOD
                     }, {
-                        where: { ADMIF00: user.ADMIF00 }
+                        ADMIF00: user.ADMIF00
                     });
                     const paymentData = UpgradePlan.constructPaymentData(null, paymentMode, A02id, decoded.corpId, user.ADMIF00, description, paymentMethod);
                     await PLRDBPYMT.create(paymentData);
