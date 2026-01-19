@@ -12,10 +12,13 @@ module.exports = (sequelize) => {
             autoIncrement: true,
         },
         RELF01: {
-            type: DataTypes.STRING(10)
+            type: DataTypes.TEXT
         },
         RELF02: {
             type: DataTypes.FLOAT
+        },
+        RELF03: {
+            type: DataTypes.CHAR(1)
         }
     }, {
         tableName: 'PLRDBPLREL',

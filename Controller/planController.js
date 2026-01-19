@@ -194,18 +194,21 @@ class UpgradePlan {
                 }
 
 
-                if (user && moduleId) {
-                    // Ensure A01F01 and moduleId are numbers (optional but recommended)
-                    const newADMIMOD = user.ADMIMOD + ',' + moduleId;
+                if (type == 'M') {
+                    if (user && moduleId) {
+                        // Ensure A01F01 and moduleId are numbers (optional but recommended)
+                        const newADMIMOD = user.ADMIMOD + ',' + moduleId;
 
-                    await admi.update({
-                        ADMIMOD: newADMIMOD
-                    }, {
-                        ADMIF00: user.ADMIF00
-                    });
-                    const paymentData = UpgradePlan.constructPaymentData(null, paymentMode, A02id, decoded.corpId, user.ADMIF00, description, paymentMethod);
-                    await PLRDBPYMT.create(paymentData);
-                    return sendResponse('SUCCESS', 'Module activated for this user');
+                        await admi.update({
+                            ADMIMOD: newADMIMOD
+                        }, {
+                            ADMIF00: user.ADMIF00
+                        });
+                        const paymentData = UpgradePlan.constructPaymentData(null, paymentMode, A02id, decoded.corpId, user.ADMIF00, description, paymentMethod);
+                        await PLRDBPYMT.create(paymentData);
+                        return sendResponse('SUCCESS', 'Module activated for this user');
+                    }
+                } else if (type == 'S') {
                 }
             }
 

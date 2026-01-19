@@ -168,10 +168,10 @@ class handleCompany {
                 //M00Table oM00 = new M00Table(oCmp);
                 console.log('CmpMaster class:', CmpMaster); // Log to confirm the class
                 let oM00
-                if (cAction == 'E') {
+                if (cAction == 'E' || cAction == 'G') {
                     let sdbSeq = (decoded.corpId).split('-');
                     let sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB';
-                    oM00 = new CmpMaster(cUserID, decoded.corpId, LangType, cAction, {}, decoded, sdbdbname);
+                    oM00 = new CmpMaster(cUserID, decoded.corpId, LangType, cAction, [], decoded, sdbdbname);
                 } else {
                     oM00 = new CmpMaster(cUserID, decoded.corpId, LangType, cAction);
                 }

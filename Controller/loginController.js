@@ -983,7 +983,7 @@ class UserController {
                 let userM81Unq = sprUsr.ADMIF00
 
                 let M81Row = await m81.findAll({
-                    M81UNQ: userM81Unq
+                    M81UNQ: userM81Unq.toString()
                 });
 
                 let uM82Row = M81Row.length > 0 ? M81Row[0].M81F01 : null;
@@ -1149,8 +1149,8 @@ class UserController {
 
 
         let deleteUsr = await m81.update({
-            M81ADA : 'D'
-        },{
+            M81ADA: 'D'
+        }, {
             M81UNQ: user.ADMIF00
         })
 
