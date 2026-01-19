@@ -40,7 +40,7 @@ class UpgradePlan {
         const parameterString = encryptor.decrypt(req.query.pa);
         let decodedParam = decodeURIComponent(parameterString);
         let pa = querystring.parse(decodedParam);
-        const { action, transactionId, A02id, additionalUser, additionalBranch, additionalCompany, moduleId, description, paymentMode, paymentMethod } = pa;
+        const { action, transactionId, A02id, additionalUser, additionalBranch, additionalCompany, moduleId, description, paymentMode, paymentMethod, modType } = pa;
 
         let response = { data: null, message: '', status: 'SUCCESS' };
 
@@ -193,22 +193,23 @@ class UpgradePlan {
                     }
                 }
 
+                if (user && moduleId) {
+                    // Ensure A01F01 and moduleId are numbers (optional but recommended)
+                    const newADMIMOD = user.ADMIMOD + ',' + moduleId;
 
-                if (type == 'M') {
-                    if (user && moduleId) {
-                        // Ensure A01F01 and moduleId are numbers (optional but recommended)
-                        const newADMIMOD = user.ADMIMOD + ',' + moduleId;
+                    await admi.update({
+                        ADMIMOD: newADMIMOD
+                    }, {
+                        ADMIF00: user.ADMIF00
+                    });
+                    const paymentData = UpgradePlan.constructPaymentData(null, paymentMode, A02id, decoded.corpId, user.ADMIF00, description, paymentMethod);
+                    await PLRDBPYMT.create(paymentData);
+                    return sendResponse('SUCCESS', 'Module activated for this user');
+                }
+                if (modType == 'M') {
 
-                        await admi.update({
-                            ADMIMOD: newADMIMOD
-                        }, {
-                            ADMIF00: user.ADMIF00
-                        });
-                        const paymentData = UpgradePlan.constructPaymentData(null, paymentMode, A02id, decoded.corpId, user.ADMIF00, description, paymentMethod);
-                        await PLRDBPYMT.create(paymentData);
-                        return sendResponse('SUCCESS', 'Module activated for this user');
-                    }
-                } else if (type == 'S') {
+                } else if (modType == 'S') {
+
                 }
             }
 
