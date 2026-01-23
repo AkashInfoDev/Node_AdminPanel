@@ -44,7 +44,7 @@ class TokenService {
                 sdbdbname = 'A00001SDB';
             } else {
                 let sdbSeq = (decodedToken.corpId).split('-');
-                sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB'
+                sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
             }
             let admi = new ADMIController(sdbdbname);
             const existingAdmin = await admi.findAll(

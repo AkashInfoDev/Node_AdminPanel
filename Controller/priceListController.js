@@ -49,7 +49,7 @@ class PricingPlanController {
         const decoded = await TokenService.validateToken(token);
         const decryptedId = encryptor.decrypt(decoded.userId);
         let sdbseq = (decoded.corpId).split('-');
-        let sdbdbname = sdbseq[0] + sdbseq[1] + sdbseq[2] + 'SDB'
+        let sdbdbname = sdbseq.length == 3 ? sdbseq[0] + sdbseq[1] + sdbseq[2] + 'SDB' : sdbseq[0] + sdbseq[1] + 'SDB';
         let admi = new ADMIController(sdbdbname)
         const existing = await admi.findAll();
             for (let i of existing) {

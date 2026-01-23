@@ -73,6 +73,9 @@ module.exports = (sequelize) => {
             type: DataTypes.STRING(10),
             allowNull: false,
         },
+        M81SID: {
+            type: DataTypes.TEXT,
+        },
     }, {
         tableName: 'PLSDBM81',
         timestamps: false,

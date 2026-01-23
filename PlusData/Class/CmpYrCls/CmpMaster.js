@@ -155,7 +155,7 @@ class CmpMaster extends PlusInfo {
                 // let nextCorpNum = (corpNumbers.length > 0 ? Math.max(...corpNumbers) : 0) + 1;
                 // nextCorpId = 'PL-P-' + nextCorpNum.toString().padStart(5, '0');
                 let nextCorpNum = nextCorpId.split('-')
-                targetDbName = 'A' + nextCorpNum[2].toString().padStart(5, '0') + 'CMP' + this.cmpNum.toString().padStart(4, '0');
+                targetDbName = 'A' + nextCorpNum[1].toString().padStart(5, '0') + 'CMP' + this.cmpNum.toString().padStart(4, '0');
                 this.targDB = targetDbName;
             }
 

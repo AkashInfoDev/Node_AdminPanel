@@ -6,6 +6,7 @@ const db = require('../Config/config'); // Your Database class
 const definePLSDBADMI = require('../Models/SDB/PLSDBADMI'); // Model factory
 const definePLSDBREL = require('../Models/SDB/PLSDBREL'); // Model factory
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01'); // Model factory
+const definePLRDBGAO = require('../Models/RDB/PLRDBGAO'); // Model factory
 const definePLRDBA02 = require('../Models/RDB/PLRDBA02'); // Model factory
 const definePLRDBPYMT = require('../Models/RDB/PLRDBPYMT'); // Model factory
 const definePLSDBM81 = require('../Models/SDB/PLSDBM81');
@@ -17,6 +18,7 @@ const TokenService = require('../Services/tokenServices');
 const CompanyService = require('../Controller/companyController');
 const AuthenticationService = require('../Services/loginServices');
 const ADMIController = require('./ADMIController');
+const M81Controller = require('./M81Controller');
 
 // Get Sequelize instance for 'SDB' or your specific DB name
 const sequelizeSDB = db.getConnection('A00001SDB');
@@ -27,6 +29,7 @@ const PLSDBADMI = definePLSDBADMI(sequelizeSDB);
 const PLSDBREL = definePLSDBREL(sequelizeSDB);
 const PLSDBM81 = definePLSDBM81(sequelizeSDB);
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
+const PLRDBGAO = definePLRDBGAO(sequelizeRDB);
 const PLRDBA02 = definePLRDBA02(sequelizeRDB);
 const PLRDBPYMT = definePLRDBPYMT(sequelizeRDB);
 const PLRDBRPAY = definePLRDBRPAY(sequelizeRDB);
@@ -68,8 +71,9 @@ class UpgradePlan {
             let corpId = decoded.corpId;
             let userId = decoded.userId;
             let sdbSeq = corpId.split('-');
-            let sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB';
+            let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
             let admi = new ADMIController(sdbdbname);
+            let m81 = new M81Controller(sdbdbname)
             if (!action) {
                 return sendResponse('FAIL', 'Invalid action');
             }
@@ -130,9 +134,9 @@ class UpgradePlan {
 
             // Action A - Update Branch, Company, or User Details
             else if (action === 'A') {
-                const { additionalBranch, additionalCompany, userId } = pa;
+                const { additionalBranch, additionalCompany, userId, cmpNum, custBP, custRS, usrFld, usrMstr } = pa;
 
-                if (!transactionId || !additionalBranch || !additionalCompany || !userId) {
+                if (!transactionId) {
                     return sendResponse('FAIL', 'Branch ID, Company ID, and User ID are required for action A');
                 }
 
@@ -145,29 +149,86 @@ class UpgradePlan {
                 }
 
                 if (additionalBranch > 0) {
-                    await admi.update({
-                        ADMIBRC: additionalBranch,
+                    let numOfBrc = await PLRDBA01.findOne({ A01F03: corpId });
+                    let totalBranch = parseInt(numOfBrc.A01BRC) + parseInt(additionalBranch);
+                    await PLRDBA01.update({
+                        A01F10: totalBranch
                     }, {
-                        ADMIF00: userInfo.A01F01,
-                        ADMIF06: 2
+                        A01F03: corpId
                     });
                 }
 
                 if (additionalCompany > 0) {
-                    await admi.update({
-                        ADMICOMP: additionalCompany,
+                    let numOfCmp = await PLRDBA01.findOne({ A01F03: corpId });
+                    let totalCompany = parseInt(numOfCmp.A01CMP) + parseInt(additionalCompany);
+                    await PLRDBA01.update({
+                        A01F10: totalCompany
                     }, {
-                        ADMIF00: userInfo.A01F01,
-                        ADMIF06: 2
+                        A01F03: corpId
                     });
                 }
 
                 if (additionalUser > 0) {
+                    let numOfUsr = await PLRDBA01.findOne({ A01F03: corpId });
+                    let totalUser = parseInt(numOfUsr.A01F10) + parseInt(additionalUser);
                     await PLRDBA01.update({
-                        A01F10: additionalUser
+                        A01F10: totalUser
                     }, {
                         A01F03: corpId
                     });
+                }
+                if (cmpNum) {
+                    let cmpList = cmpNum.includes(',') ? cmpNum.split(',') : [parseInt(cmpNum)];
+                    for (let cmp of cmpList) {
+                        let numOfUsr = await PLRDBGAO.findOne({ GAOF01: corpId, GAOF02: parseInt(cmp) });
+                        if (!numOfUsr) {
+                            await PLRDBGAO.create({
+                                GAOF01: corpId,
+                                GAOF02: parseInt(cmp),
+                                GAOF03: 0,
+                                GAOF04: 0,
+                                GAOF05: 0,
+                                GAOF06: 0,
+                                GAOF07: 0,
+                                GAOF08: 0,
+                                GAOF09: 0,
+                                GAOF10: 0
+                            });
+                            numOfUsr = await PLRDBGAO.findOne({ GAOF01: corpId, GAOF02: parseInt(cmp) });
+                        }
+                        if (custBP > 0) {
+                            let totalUser = parseInt(numOfUsr.GAOF03) + parseInt(custBP);
+                            await PLRDBGAO.update({
+                                GAOF03: totalUser
+                            }, {
+                                GAOF01: corpId
+                            });
+                        }
+                        if (custRS > 0) {
+                            let totalUser = parseInt(numOfUsr.GAOF05) + parseInt(custRS);
+                            await PLRDBGAO.update({
+                                GAOF05: totalUser
+                            }, {
+                                GAOF01: corpId
+                            });
+                        }
+                        if (usrFld > 0) {
+                            let totalUser = parseInt(numOfUsr.GAOF07) + parseInt(usrFld);
+                            await PLRDBGAO.update({
+                                GAOF07: totalUser
+                            }, {
+                                GAOF01: corpId
+                            });
+                        }
+                        if (usrMstr > 0) {
+                            let totalUser = parseInt(numOfUsr.GAOF09) + parseInt(usrMstr);
+                            await PLRDBGAO.update({
+                                GAOF09: totalUser
+                            }, {
+                                GAOF01: corpId
+                            });
+                        }
+                    }
                 }
 
                 const paymentData = UpgradePlan.constructPaymentData(transactionDetail, paymentMode, A02id, corpId, userId, description, paymentMethod);
@@ -178,7 +239,7 @@ class UpgradePlan {
 
             // Action M - Update or Activate Modules
             else if (action === 'M') {
-                const { moduleId, paymentMode } = pa;
+                const { moduleId, paymentMode, setUpId } = pa;
 
                 let user
                 let decryptedUserId = encryptor.decrypt(decoded.userId)
@@ -193,23 +254,44 @@ class UpgradePlan {
                     }
                 }
 
-                if (user && moduleId) {
-                    // Ensure A01F01 and moduleId are numbers (optional but recommended)
-                    const newADMIMOD = user.ADMIMOD + ',' + moduleId;
-
-                    await admi.update({
-                        ADMIMOD: newADMIMOD
-                    }, {
-                        ADMIF00: user.ADMIF00
-                    });
-                    const paymentData = UpgradePlan.constructPaymentData(null, paymentMode, A02id, decoded.corpId, user.ADMIF00, description, paymentMethod);
-                    await PLRDBPYMT.create(paymentData);
-                    return sendResponse('SUCCESS', 'Module activated for this user');
-                }
-                if (modType == 'M') {
-
-                } else if (modType == 'S') {
-
+                if (user) {
+                    if (moduleId) {
+                        // Ensure A01F01 and moduleId are numbers (optional but recommended)
+                        const newADMIMOD = user.ADMIMOD + ',' + moduleId;
+                        await admi.update({
+                            ADMIMOD: newADMIMOD
+                        }, {
+                            ADMIF00: user.ADMIF00
+                        });
+                        if (!setUpId) {
+                            const paymentData = UpgradePlan.constructPaymentData(null, paymentMode, A02id, decoded.corpId, user.ADMIF00, description, paymentMethod);
+                            await PLRDBPYMT.create(paymentData);
+                            return sendResponse('SUCCESS', 'Module activated for this user');
+                        }
+                    }
+                    if (setUpId) {
+                        let m81Usr = await m81.findOne({
+                            M81F01: 'U0000000'
+                        });
+                        if (m81Usr.M81SID != null && m81Usr.M81SID != '') {
+                            let newsetUpId = m81Usr.M81SID + ',' + setUpId;
+                            await m81.update({
+                                M81SID: newsetUpId
+                            });
+                        } else {
+                            await m81.update({
+                                M81SID: setUpId
+                            });
+                        }
+                        if (!moduleId) {
+                            const paymentData = UpgradePlan.constructPaymentData(null, paymentMode, A02id, decoded.corpId, user.ADMIF00, description, paymentMethod);
+                            await PLRDBPYMT.create(paymentData);
+                            return sendResponse('SUCCESS', 'SetUp activated for this user');
+                        }
+                        const paymentData = UpgradePlan.constructPaymentData(null, paymentMode, A02id, decoded.corpId, user.ADMIF00, description, paymentMethod);
+                        await PLRDBPYMT.create(paymentData);
+                        return sendResponse('SUCCESS', 'Module activated for this user');
+                    }
                 }
             }
 

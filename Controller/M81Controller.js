@@ -1,9 +1,10 @@
+const { Op } = require('sequelize');
 const db = require('../Config/config');
 const definePLSDBM81 = require('../Models/SDB/PLSDBM81'); // Model factory
 
 class M81Controller {
     constructor(dbName) {
-        if (dbName) dbName = dbName == 'PLP00001SDB' ? 'A00001SDB' : dbName 
+        if (dbName) dbName = dbName == 'PLP00001SDB' ? 'A00001SDB' : dbName
         this.connection = db.createPool(dbName);
         this.PLSDBM81 = definePLSDBM81(this.connection);
     }
@@ -42,7 +43,7 @@ class M81Controller {
         }
     }
 
-    async create(M81F00, M81F01, M81F02, M81F03, M81F04, M81F05, M81F06, M81F07, M81F08, M81IMG, M81RTY, M81ADA, M81CHLD, M81UNQ) {
+    async create(M81F00, M81F01, M81F02, M81F03, M81F04, M81F05, M81F06, M81F07, M81F08, M81IMG, M81RTY, M81ADA, M81CHLD, M81UNQ, M81SID) {
         let created = await this.PLSDBM81.create({
             M81F00,
             M81F01,
@@ -57,7 +58,8 @@ class M81Controller {
             M81RTY,
             M81ADA,
             M81CHLD,
-            M81UNQ
+            M81UNQ,
+            M81SID
         });
     }
 
@@ -76,19 +78,27 @@ class M81Controller {
         }
     }
 
-        /**
-     * Update records matching the where clause with the given values
-     * @param {Object} values - Fields to update
-     * @param {Object} where - Conditions to select records
-     * @returns {Promise<Object>} - { affectedCount, affectedRows }
-     */
+    /**
+ * Update records matching the where clause with the given values
+ * @param {Object} values - Fields to update
+ * @param {Object} where - Conditions to select records
+ * @returns {Promise<Object>} - { affectedCount, affectedRows }
+ */
     async update(values, where = {}) {
         try {
             if (!values || Object.keys(values).length === 0) {
                 throw new Error('No values provided for update');
             }
             if (!where || Object.keys(where).length === 0) {
-                throw new Error('No conditions provided for update');
+                const [affectedCount, affectedRows] = await this.PLSDBM81.update(values, {
+                    where: {
+                        M81F00: {
+                            [Op.ne]: ''
+                        }
+                    },
+                })
+                return { affectedCount, affectedRows };
+                // throw new Error('No conditions provided for update');
             }
 
             // Perform the update

@@ -325,7 +325,7 @@ class MApp {
     static async GetEmptyCmpNo(dtoken, cBPath = "") // Method To Load Empty Company No for Create new Company no
     {
         let sdbSeq = (dtoken.corpId).split('-');
-        let sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB'
+        let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
         let admi = new ADMIController(sdbdbname);
         let m81 = new M81Controller(sdbdbname);
         let m82 = new M82Controller(sdbdbname);

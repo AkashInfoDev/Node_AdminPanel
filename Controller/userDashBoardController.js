@@ -44,7 +44,7 @@ class dashboardController {
         }
         let decoded = await TokenService.validateToken(token);
         let sdbSeq = (decoded.corpId).split('-');
-        let sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB';
+        let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
         let tblbrc = new BRCController(sdbdbname);
         let crole = new CROLEController(sdbdbname);
         let admi = new ADMIController(sdbdbname);

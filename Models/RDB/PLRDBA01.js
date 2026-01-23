@@ -94,6 +94,12 @@ module.exports = (sequelize) => {
         },
         FTPPATH: {
             type: DataTypes.TEXT,
+        },
+        A01CMP: {
+            type: DataTypes.INTEGER
+        },
+        A01BRC: {
+            type: DataTypes.INTEGER
         }
     }, {
         tableName: 'PLRDBA01',

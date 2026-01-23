@@ -121,7 +121,7 @@ class BranchController {
                 sdbseq = (corpId).split('-');
             }
             // sdbseq = (this.brcr).split('-');
-            let sdbdbname = sdbseq[0] + sdbseq[1] + sdbseq[2] + 'SDB'
+            let sdbdbname = sdbseq.length == 3 ? sdbseq[0] + sdbseq[1] + sdbseq[2] + 'SDB' : sdbseq[0] + sdbseq[1] + 'SDB';
             let admi = new ADMIController(sdbdbname);
             let rel = new RELController(sdbdbname);
             let tblbrc = new BRCController(sdbdbname);

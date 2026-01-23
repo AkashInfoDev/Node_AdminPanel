@@ -65,7 +65,7 @@ class handleCompany {
             decoded = await TokenService.validateToken(token);
         }
         let sdbSeq = (decoded.corpId).split('-');
-        let sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB';
+        let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
         let m82 = new M82Controller(sdbdbname);
         let cmp = new CMPController(sdbdbname);
         let admi = new ADMIController(sdbdbname);
@@ -170,7 +170,7 @@ class handleCompany {
                 let oM00
                 if (cAction == 'E' || cAction == 'G') {
                     let sdbSeq = (decoded.corpId).split('-');
-                    let sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB';
+                    let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
                     oM00 = new CmpMaster(cUserID, decoded.corpId, LangType, cAction, [], decoded, sdbdbname);
                 } else {
                     oM00 = new CmpMaster(cUserID, decoded.corpId, LangType, cAction);
@@ -370,7 +370,7 @@ class handleCompany {
             decoded = await TokenService.validateToken(token);
         }
         let sdbSeq = (decoded.corpId).split('-');
-        let sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB';
+        let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
         let m82 = new M82Controller(sdbdbname);
         let cmp = new CMPController(sdbdbname);
         let admi = new ADMIController(sdbdbname);

@@ -105,16 +105,20 @@ class CompanyService {
             let nextCorpId;
 
             if (lbool) {
+                const corpIds = await PLRDBA01.findAll({
+                attributes: ['A01F03'],
+                where: { A01F03: { [Op.like]: 'EP-%' } }
+            });
                 corpNumbers = corpIds.map(item => parseInt(item.A01F03.slice(5))).filter(Number.isFinite);
                 nextCorpNum = (corpNumbers.length > 0 ? Math.max(...corpNumbers) : 0) + 1;
-                nextCorpId = 'PL-P-' + nextCorpNum.toString().padStart(5, '0');
+                nextCorpId = 'EP-' + nextCorpNum.toString().padStart(5, '0');
                 response.corpId = nextCorpId;
             } else {
 
             }
 
             let crnum = nextCorpId.split('-')
-            let SDBdbname = crnum[0] + crnum[1] + crnum[2] + "SDB";
+            let SDBdbname = crnum.length == 3 ? crnum[0] + crnum[1] + crnum[2] + "SDB" : crnum[0] + crnum[1] + "SDB";
             await dbCloneService.usrSDB(SDBdbname);
             let admi = new ADMIController(SDBdbname);
             const encryptedUserId = encryptor.encrypt(userId);
@@ -179,6 +183,15 @@ class CompanyService {
                 if (A02id) {
                     let planDetail = await PLRDBA02.findOne({
                         where: { A02F01: A02id }
+                    });
+                    await PLRDBA01.update({
+                        A01F10: planDetail.A02F07,
+                        A01CMP: planDetail.A02F08,
+                        A01BRC: planDetail.A02F11
+                    }, {
+                        where: {
+                            A01F01: nextId
+                        }
                     });
                     const modList = await admi.update({
                         ADMIMOD: planDetail.A02F12

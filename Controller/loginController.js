@@ -11,8 +11,9 @@ const definePLRDBA02 = require('../Models/RDB/PLRDBA02'); // Model factory
 const definePLSDBM81 = require('../Models/SDB/PLSDBM81');
 const definePLSDBM82 = require('../Models/SDB/PLSDBM82');
 const definePLSDBCMP = require('../Models/SDB/PLSDBCMP');
+const definePLRDBOTP = require('../Models/RDB/PLRDBOTP');
 const Encryptor = require('../Services/encryptor');
-const { Op, QueryTypes } = require('sequelize');
+const { Op, QueryTypes, Sequelize } = require('sequelize');
 // const PLRDBA01 = require('../Models/RDB/PLRDBA01');
 const TokenService = require('../Services/tokenServices');
 const CompanyService = require('../Controller/companyController');
@@ -28,6 +29,7 @@ const M81Controller = require('./M81Controller');
 const M82Controller = require('./M82Controller');
 const CMPController = require('./CMPController');
 const queryService = require('../Services/queryService');
+const { sendAccountInfoMail, sendResetMail } = require('../Services/mailServices');
 
 // Get Sequelize instance for 'SDB' or your specific DB name
 const sequelizeSDB = db.getConnection('A00001SDB');
@@ -41,6 +43,7 @@ const PLSDBM82 = definePLSDBM82(sequelizeSDB);
 const PLSDBCMP = definePLSDBCMP(sequelizeSDB);
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 const PLRDBA02 = definePLRDBA02(sequelizeRDB);
+const PLRDBOTP = definePLRDBOTP(sequelizeRDB);
 const encryptor = new Encryptor();
 // let response = { data: null, Status: "SUCCESS", message: null }
 
@@ -532,12 +535,23 @@ class UserController {
                         // Prepare the success response
                         const response = {
                             status: 'SUCCESS',
-                            message: 'User registered successfully',
+                            message: 'User registered successfully And Mail Send to Registered MAIL id',
                             userId: encryptor.decrypt(admin.ADMIF01),
                             password: encryptor.decrypt(admin.ADMIF05),
                             corpId: companyResult.nextCorpId,
                             updatedToken: updatedToken
                         };
+
+                        try {
+                            const info = await sendAccountInfoMail({
+                                to: admin.ADMIF07,
+                                corpId: response.corpId,
+                                userId: response.userId,
+                                password1: response.password,
+                            });
+                        } catch (mailErr) {
+                            console.error("❌ MAIL FAILED:", mailErr);
+                        }
 
                         // Encrypt the response
                         const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
@@ -554,7 +568,7 @@ class UserController {
             } else if (roleId == '3') {
                 let corpId = decoded.corpId;
                 let sdbSeq = corpId.split('-');
-                let sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB'
+                let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
                 let admi = new ADMIController(sdbdbname);
                 let m81 = new M81Controller(sdbdbname);
                 let m82 = new M82Controller(sdbdbname);
@@ -752,7 +766,7 @@ class UserController {
         try {
             let corpId = decoded.corpId.toUpperCase();
             let sdbSeq = corpId.split('-');
-            let sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB';
+            let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
             let admi = new ADMIController(sdbdbname);
             let m81 = new M81Controller(sdbdbname);
             let response = { status: 'SUCCESS', message: null };
@@ -867,7 +881,7 @@ class UserController {
                 return res.status(400).json({ encryptedResponse: encryptedResponse });
             }
             let sdbSeq = corpId.split('-');
-            let sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB';
+            let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
             if (sdbdbname) sdbdbname = sdbdbname == 'PLP00001SDB' ? 'A00001SDB' : sdbdbname
             let admi = new ADMIController(sdbdbname);
             let m81 = new M81Controller(sdbdbname);
@@ -897,7 +911,7 @@ class UserController {
                 let userM81Unq = user.ADMIF00
 
                 let corpExist = await PLRDBA01.findAll({
-                    where: { A01F01: corpUnq }
+                    where: { A01F01: corpUnq.trim() }
                 });
 
                 let M81Row
@@ -920,7 +934,7 @@ class UserController {
                     return res.status(400).json({ encryptedResponse: encryptedResponse });
                 } else {
                     for (const corp of corpExist) {
-                        if (corp.A01F03 == corpId) {
+                        if (corp.A01F03.trim() == corpId) {
                             corpRow = corp
                         }
                     }
@@ -1060,7 +1074,7 @@ class UserController {
 
         let corpId = decoded.corpId.toUpperCase();
         let sdbSeq = corpId.split('-');
-        let sdbdbname = sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB';
+        let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
         let admi = new ADMIController(sdbdbname);
         let m81 = new M81Controller(sdbdbname);
         let user;
@@ -1159,6 +1173,335 @@ class UserController {
             response.message = 'User ID Deleted Successfully';
             const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
             return res.status(200).json({ encryptedResponse: encryptedResponse });
+        }
+    }
+
+    static async forgotPasswordByCorp(req, res) {
+        try {
+            let response = { status: 'SUCCESS', message: null };
+
+            let { corpId } = req.body;
+
+            if (!corpId || typeof corpId !== "string") {
+                response.status = 'FAIL';
+                response.message = 'Invalid Corporate ID';
+                const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }));
+                return res.status(400).json({ encryptedResponse });
+            }
+
+            corpId = corpId.toUpperCase();
+
+            const corpRows = await PLRDBA01.findAll({
+                where: { A01F03: corpId }
+            });
+
+            if (corpRows.length === 0) {
+                response.status = 'FAIL';
+                response.message = 'Corporate not found';
+                const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }));
+                return res.status(400).json({ encryptedResponse });
+            }
+
+            const corpUnq = corpRows[0].A01F01;
+
+            const sdbSeq = corpId.split('-');
+            let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
+            const admi = new ADMIController(sdbdbname);
+
+            const admins = await admi.findAll({
+                ADMICORP: corpUnq,
+                ADMIF06: { [Op.in]: [1, 2] }
+            });
+
+            if (!admins || admins.length === 0) {
+                response.status = 'FAIL';
+                response.message = 'No admin found';
+                const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }));
+                return res.status(400).json({ encryptedResponse });
+            }
+
+            for (const admin of admins) {
+                if (!admin.ADMIF07) continue;
+
+                await sendAccountInfoMail({
+                    to: admin.ADMIF07,
+                    corpId,
+                    userName: encryptor.decrypt(admin.ADMIF01),
+                    password: encryptor.decrypt(admin.ADMIF05),
+                });
+            }
+
+            response.message = "Account information sent to your email successfully";
+            const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }));
+            return res.status(200).json({ encryptedResponse });
+
+        } catch (err) {
+            console.error(err);
+            const encryptedResponse = encryptor.encrypt(JSON.stringify({ message: "Forgot password failed" }));
+            return res.status(500).json({ encryptedResponse });
+        }
+    }
+
+    static async sendOtpByCorp(req, res) {
+        const parameterString = encryptor.decrypt(req.body.pa);
+        let decodedParam = decodeURIComponent(parameterString);
+        let pa = JSON.parse(decodedParam);
+        let response = { status: "SUCCESS", message: null };
+        try {
+            // let pa = querystring.parse(decodedParam);
+            let { corpId } = pa;
+
+            if (!corpId) {
+                return res.status(400).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        response: { status: "FAIL", code: "CORP_REQUIRED", message: "corpId is required" }
+                    }))
+                });
+            }
+
+            corpId = corpId.toUpperCase();
+
+            const corp = await PLRDBA01.findOne({ where: { A01F03: corpId } });
+
+            if (!corp) {
+                return res.status(400).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        response: { status: "FAIL", code: "CORP_NOT_FOUND", message: "Corporate not found" }
+                    }))
+                });
+            }
+
+            const corpUnq = corp.A01F01.trim();
+            const sdbSeq = corpId.split('-');
+            let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
+            const admi = new ADMIController(sdbdbname);
+
+            const admins = await admi.findAll({
+                ADMICORP: corpUnq,
+                ADMIF06: { [Op.in]: [1, 2] }
+            });
+
+            if (!admins.length) {
+                return res.status(400).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        response: { status: "FAIL", code: "ADMIN_NOT_FOUND", message: "No admin found" }
+                    }))
+                });
+            }
+
+            const adminEmail = admins[0].ADMIF07;
+
+            const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+            await PLRDBOTP.create({
+                CORP_ID: corpId,
+                EMAIL: adminEmail,
+                OTP_CODE: otp,
+                OTP_EXPIRY: Sequelize.literal(`DATEADD(MINUTE, 10, GETDATE())`),
+                OTP_STATUS: 'PENDING'
+            });
+
+            await sendResetMail({ to: adminEmail, corpId, otp });
+
+            const token = jwt.sign({ corpId }, process.env.JWT_SECRET_KEY, {
+                expiresIn: process.env.JWT_EXPIRATION
+            });
+
+            return res.status(200).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    response: {
+                        status: "SUCCESS",
+                        code: "OTP_SENT",
+                        message: "OTP sent successfully",
+                        token
+                    }
+                }))
+            });
+
+        } catch (err) {
+            console.error("SEND OTP ERROR:", err);
+            return res.status(500).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    response: { status: "FAIL", code: "SERVER_ERROR", message: "OTP sending failed" }
+                }))
+            });
+        }
+    }
+
+    static async verifyOtp(req, res) {
+        const parameterString = encryptor.decrypt(req.body.pa);
+        let decodedParam = decodeURIComponent(parameterString);
+        let pa = JSON.parse(decodedParam);
+        try {
+            const token = req.headers['authorization']?.split(' ')[1];
+
+            if (!token) {
+                return res.status(401).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        response: { status: "FAIL", code: "TOKEN_MISSING", message: "Token required" }
+                    }))
+                });
+            }
+
+            let decoded;
+            try {
+                decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
+            } catch (err) {
+                return res.status(401).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        response: { status: "FAIL", code: "TOKEN_INVALID", message: "Invalid or expired token" }
+                    }))
+                });
+            }
+
+            const corpId = decoded.corpId;
+            const { otp } = pa;
+
+            if (!otp) {
+                return res.status(400).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        response: { status: "FAIL", code: "OTP_REQUIRED", message: "OTP is required" }
+                    }))
+                });
+            }
+
+            const otpRow = await PLRDBOTP.findOne({
+                where: { CORP_ID: corpId, OTP_CODE: otp },
+                order: [['OTPID', 'DESC']]
+            });
+
+            if (!otpRow) {
+                return res.status(400).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        response: { status: "FAIL", code: "OTP_INVALID", message: "Invalid OTP" }
+                    }))
+                });
+            }
+
+            if (otpRow.OTP_STATUS === 'EXPIRED' || new Date(otpRow.OTP_EXPIRY) < new Date()) {
+                return res.status(400).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        response: { status: "FAIL", code: "OTP_EXPIRED", message: "OTP expired" }
+                    }))
+                });
+            }
+
+            if (otpRow.OTP_STATUS === 'VERIFIED') {
+                return res.status(400).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        response: { status: "FAIL", code: "OTP_USED", message: "OTP already used" }
+                    }))
+                });
+            }
+
+            await otpRow.update({ OTP_STATUS: 'VERIFIED' });
+
+            return res.status(200).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    response: {
+                        status: "SUCCESS",
+                        code: "OTP_VERIFIED",
+                        message: "OTP verified successfully"
+                    }
+                }))
+            });
+
+        } catch (err) {
+            console.error("VERIFY OTP ERROR:", err);
+            return res.status(500).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    response: { status: "FAIL", code: "SERVER_ERROR", message: "OTP verification failed" }
+                }))
+            });
+        }
+    }
+
+    static async resetPassword(req, res) {
+        const parameterString = encryptor.decrypt(req.body.pa);
+        let decodedParam = decodeURIComponent(parameterString);
+        let pa = JSON.parse(decodedParam);
+        try {
+            const token = req.headers['authorization']?.split(' ')[1];
+
+            if (!token) {
+                return res.status(401).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        response: { status: "FAIL", code: "TOKEN_MISSING", message: "Token required" }
+                    }))
+                });
+            }
+
+            let decoded;
+            try {
+                decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
+            } catch (err) {
+                return res.status(401).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        response: { status: "FAIL", code: "TOKEN_INVALID", message: "Invalid or expired token" }
+                    }))
+                });
+            }
+
+            // if (decoded.stage !== "OTP_VERIFIED") {
+            //     return res.status(403).json({
+            //         encryptedResponse: encryptor.encrypt(JSON.stringify({
+            //             response: { status: "FAIL", code: "OTP_NOT_VERIFIED", message: "OTP not verified" }
+            //         }))
+            //     });
+            // }
+
+            const corpId = decoded.corpId;
+            const { newPassword } = pa;
+
+            if (!newPassword) {
+                return res.status(400).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        response: { status: "FAIL", code: "PASSWORD_REQUIRED", message: "newPassword is required" }
+                    }))
+                });
+            }
+
+            const otpRow = await PLRDBOTP.findOne({
+                where: { CORP_ID: corpId },
+                order: [['OTPID', 'DESC']]
+            });
+
+            if (!otpRow || otpRow.OTP_STATUS !== 'VERIFIED') {
+                return res.status(400).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        response: { status: "FAIL", code: "OTP_INVALID_STATE", message: "OTP not verified or expired" }
+                    }))
+                });
+            }
+
+            const sdbSeq = corpId.split('-');
+            let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
+            const admi = new ADMIController(sdbdbname);
+
+            await admi.update(
+                { ADMIF05: encryptor.encrypt(newPassword) },
+                { ADMIF06: { [Op.in]: [1, 2] } }
+            );
+
+            await otpRow.update({ OTP_STATUS: 'EXPIRED' });
+
+            return res.status(200).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    response: {
+                        status: "SUCCESS",
+                        code: "PASSWORD_RESET",
+                        message: "Password reset successful"
+                    }
+                }))
+            });
+
+        } catch (err) {
+            console.error("RESET PASSWORD ERROR:", err);
+            return res.status(500).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    response: { status: "FAIL", code: "SERVER_ERROR", message: "Password reset failed" }
+                }))
+            });
         }
     }
 }
