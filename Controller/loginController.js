@@ -1478,9 +1478,9 @@ class UserController {
             let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
             const admi = new ADMIController(sdbdbname);
 
-            await admi.update(
+            let updt = await admi.update(
                 { ADMIF05: encryptor.encrypt(newPassword) },
-                { ADMIF06: { [Op.in]: [1, 2] } }
+                { ADMIF06: { [Op.in]: [2] } }
             );
 
             await otpRow.update({ OTP_STATUS: 'EXPIRED' });
