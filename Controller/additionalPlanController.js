@@ -155,7 +155,7 @@ class CustomModules {
                     let totalSetUps = [];
                     for (const cms of custModSetUp) {
                         if (cms.RELF03 == 'M') {
-                            if (modList.includes(cms.RELF01)) {
+                            if (modList && modList?.includes(cms.RELF01)) {
                                 let row = {
                                     modName: cms.RELF01,
                                     modPrice: cms.RELF02
@@ -164,7 +164,7 @@ class CustomModules {
                             }
                         }
                         if (cms.RELF03 == 'C') {
-                            if (modList.includes(cms.RELF01)) {
+                            if (modList && modList?.includes(cms.RELF01)) {
                                 let row = {
                                     modName: cms.RELF01,
                                     modPrice: cms.RELF02
@@ -175,13 +175,15 @@ class CustomModules {
                         if (cms.RELF03 == 'S') {
                             let setUpList = m81Row.M81SID
                             let setUpId = cms.RELF01.split('-')
-                            setUpList = setUpList.includes(',') ? setUpList.split(',') : [setUpList];
-                            if (setUpList == setUpId[1].trim()) {
-                                let row = {
-                                    setUPName: setUpId[1].trim(),
-                                    setUPPrice: cms.RELF02
+                            if (setUpList) {
+                                setUpList = setUpList.includes(',') ? setUpList.split(',') : [setUpList];
+                                if (setUpList == setUpId[1].trim()) {
+                                    let row = {
+                                        setUPName: setUpId[1].trim(),
+                                        setUPPrice: cms.RELF02
+                                    }
+                                    totalSetUps.push(row);
                                 }
-                                totalSetUps.push(row);
                             }
                         }
                     }

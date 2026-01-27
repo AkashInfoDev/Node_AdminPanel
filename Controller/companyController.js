@@ -83,7 +83,8 @@ class CompanyService {
             // Generate new company ID (A01F01)
             const existingSub = await PLRDBA01.findAll({
                 attributes: ['A01F01'],
-                where: { A01F01: { [Op.like]: 'E%' } }
+                where: { A01F01: { [Op.like]: 'E%' } },
+                order: ['A01F01']
             });
 
             const validIds = existingSub

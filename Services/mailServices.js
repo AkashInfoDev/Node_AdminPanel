@@ -21,7 +21,8 @@ async function sendAccountInfoMail({ to, corpId, userId, password1 }) {
             <div style="max-width:600px; margin:auto; background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 0 10px rgba(0,0,0,0.08);">
 
                 <div style="background:#0d6efd; color:#ffffff; padding:20px; text-align:center;">
-                    <h2 style="margin:0;">E-PLUS CLOUD-ERP</h2>
+                    <img src="E-Plus_Logo.jpg" alt="E-PLUS Logo" style="max-height:50px; vertical-align:middle; margin-right:10px;"/>
+                    <h2 style="margin:0; display:inline;">E-PLUS CLOUD-ERP</h2>
                     <p style="margin:5px 0 0;">Account Registration Successful</p>
                 </div>
 

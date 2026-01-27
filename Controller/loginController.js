@@ -1477,8 +1477,15 @@ class UserController {
             const sdbSeq = corpId.split('-');
             let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
             const admi = new ADMIController(sdbdbname);
+            const m81 = new M81Controller(sdbdbname);
+            
+            let admiRow = await admi.findOne({ADMIF06: 2});
 
-            let updt = await admi.update(
+            await m81.update(
+                { M81F04: newPassword },
+                { M81UNQ: admiRow.ADMIF00.toString() }
+            );
+            await admi.update(
                 { ADMIF05: encryptor.encrypt(newPassword) },
                 { ADMIF06: { [Op.in]: [2] } }
             );

@@ -8,6 +8,10 @@ const definePLSDBM81 = require('../Models/SDB/PLSDBM81');
 const defineCRONLOGS = require('../Models/SDB/CRONLOGS');
 const definePLSDBADMI = require('../Models/SDB/PLSDBADMI');
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01');
+const ADMIController = require('../Controller/ADMIController');
+const M81Controller = require('../Controller/M81Controller');
+const CMPController = require('../Controller/CMPController');
+const M82Controller = require('../Controller/M82Controller');
 const sequelizeA00001SDB = db.createPool('A00001SDB');
 const sequelizeRDB = db.createPool('RDB');
 const sequelizeMASTER = db.createPool('MASTER');
@@ -57,24 +61,29 @@ class cronJob {
                                     A01F03: log.CRONF02
                                 }
                             });
-                            let ADMI = await PLSDBADMI.findOne({
-                                where: {
-                                    ADMICORP: A01.A01F01,
-                                    ADMIF06: '2'
-                                }
+                            let sdbSeq = (log.CRONF02).split('-');
+                            let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
+                            let admi = new ADMIController(sdbdbname);
+                            let m81 = new M81Controller(sdbdbname);
+                            let cmp = new CMPController(sdbdbname);
+                            let m82 = new M82Controller(sdbdbname);
+
+                            let ADMI = await admi.findOne({
+                                ADMICORP: A01.A01F01,
+                                ADMIF06: 2
                             });
-                            let M81 = await PLSDBM81.findOne({
-                                where: { M81CHLD: ADMI.ADMIF00 }
+                            let M81 = await m81.findOne({
+                                M81CHLD: ADMI.ADMIF00
                             });
                             const databaseName = generateDatabaseName(log.CRONF02, log.CRONF03);
 
                             // Step 5: Delete related rows from PLSDBCMP and PLSDBM82
-                            await PLSDBCMP.destroy({
-                                where: { CMPF01: log.CRONF03, CMPF11: M81.M81F01 }
+                            await cmp.destroy({
+                                CMPF01: log.CRONF03, CMPF11: M81.M81F01
                             });
 
-                            await PLSDBM82.destroy({
-                                where: { M82F01: M81.M81F01, M82F02: log.CRONF03 }
+                            await m82.destroy({
+                                M82F01: M81.M81F01, M82F02: log.CRONF03
                             });
 
                             // Step 6: Delete the database itself
