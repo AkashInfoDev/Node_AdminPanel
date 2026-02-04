@@ -1,12 +1,12 @@
 const db = require('../Config/config');
-const definePLSDBM82 = require('../Models/SDB/PLSDBM82'); // Model factory
+const definePLSDBM82 = require('../Models/SDB/PLSDBM83'); // Model factory
 
 class M82Controller {
     constructor(dbName) {
         if (dbName) dbName = dbName == 'PLP00001SDB' ? 'A00001SDB' : dbName 
         console.log(dbName);
         this.connection = db.createPool(dbName);
-        this.PLSDBM82 = definePLSDBM82(this.connection);
+        this.PLSDBM83 = definePLSDBM82(this.connection);
     }
 
     /**
@@ -35,7 +35,7 @@ class M82Controller {
                 options.attributes = attributes;
             }
 
-            const results = await this.PLSDBM82.findAll(options);
+            const results = await this.PLSDBM83.findAll(options);
             return results;
         } catch (error) {
             console.error('Error in findAll:', error);
@@ -44,7 +44,7 @@ class M82Controller {
     }
 
     async create(M82F01, M82F02, M82F11, M82F12, M82F13, M82F14, M82F21, M82F22, M82F23, M82CMP, M82YRN, M82ADA) {
-        let created = await this.PLSDBM82.create({
+        let created = await this.PLSDBM83.create({
            M82F01,
            M82F02,
            M82F11,
@@ -67,7 +67,7 @@ class M82Controller {
             if (orderby && orderby.length) options.order = orderby;
             if (attributes && attributes.length) options.attributes = attributes;
 
-            const result = await this.PLSDBM82.findOne(options);
+            const result = await this.PLSDBM83.findOne(options);
             return result;
         } catch (error) {
             console.error('Error in findOne:', error);
@@ -91,7 +91,7 @@ class M82Controller {
             }
 
             // Perform the update
-            const [affectedCount, affectedRows] = await this.PLSDBM82.update(values, {
+            const [affectedCount, affectedRows] = await this.PLSDBM83.update(values, {
                 where,
                 returning: true // returns updated rows (Postgres, some DBs)
             });
@@ -104,7 +104,7 @@ class M82Controller {
     }
     async destroy(where) {
         try {
-            return await this.PLSDBM82.destroy(where);
+            return await this.PLSDBM83.destroy(where);
         } catch (error) {
             throw new Error(`Failed to destroy record: ${error.message}`);
         }

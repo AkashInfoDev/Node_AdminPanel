@@ -276,13 +276,12 @@ class handleCompany {
                         res.status(200).json({ encryptedResponse })
                         break;
                     case "D":
-                        if (branch.BRCCOMP) {
+                        if (branch?.BRCCOMP) {
                             let cmplist = (branch.BRCCOMP).split(',');
                             for (const cl of cmplist) {
                                 let existingCmp = (BRCCOMP).split(',');
                                 if (existingCmp.includes(cl))
                                     continue;
-
                             }
                         }
                         let isComapny = false;

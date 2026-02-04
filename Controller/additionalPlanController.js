@@ -131,13 +131,13 @@ class CustomModules {
                         }
                         if (arow.A02F01 == 4) {
                             brcDetail = {
-                                totalCmp: a01Row.A01BRC,
+                                totalBrc: a01Row.A01BRC,
                                 totalPrice: parseInt(a01Row.A01BRC) * arow.A02F05
                             }
                         }
                         if (arow.A02F01 == 3) {
                             usrDetail = {
-                                totalCmp: a01Row.A01F10,
+                                totalUsr: a01Row.A01F10,
                                 totalPrice: parseInt(a01Row.A01F10) * arow.A02F05
                             }
                         }
@@ -157,7 +157,7 @@ class CustomModules {
                         if (cms.RELF03 == 'M') {
                             if (modList && modList?.includes(cms.RELF01)) {
                                 let row = {
-                                    modName: cms.RELF01,
+                                    modId: cms.RELF01,
                                     modPrice: cms.RELF02
                                 }
                                 totalModule.push(row);
@@ -166,7 +166,7 @@ class CustomModules {
                         if (cms.RELF03 == 'C') {
                             if (modList && modList?.includes(cms.RELF01)) {
                                 let row = {
-                                    modName: cms.RELF01,
+                                    modId: cms.RELF01,
                                     modPrice: cms.RELF02
                                 }
                                 totalModule.push(row);
@@ -177,12 +177,14 @@ class CustomModules {
                             let setUpId = cms.RELF01.split('-')
                             if (setUpList) {
                                 setUpList = setUpList.includes(',') ? setUpList.split(',') : [setUpList];
-                                if (setUpList == setUpId[1].trim()) {
-                                    let row = {
-                                        setUPName: setUpId[1].trim(),
-                                        setUPPrice: cms.RELF02
+                                for (const sId of setUpList) {
+                                    if (sId == setUpId[1].trim()) {
+                                        let row = {
+                                            setUPId: setUpId[1].trim(),
+                                            setUPPrice: cms.RELF02
+                                        }
+                                        totalSetUps.push(row);
                                     }
-                                    totalSetUps.push(row);
                                 }
                             }
                         }
