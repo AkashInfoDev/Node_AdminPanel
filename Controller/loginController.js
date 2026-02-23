@@ -1336,10 +1336,10 @@ class UserController {
                 let usrCompList = [];
 
                 if (user.ADMIROL != 2) {
-                    let assgncmpArray = user.ADMICOMP; // Assuming ADMICOMP is already an array or it's a string that's split elsewhere
+                    let assgncmpArray = (user.ADMICOMP).split(','); // Assuming ADMICOMP is already an array or it's a string that's split elsewhere
 
                     for (const cmp of cmplist.CompList) {
-                        if (assgncmpArray.includes(cmp.cmpNo)) {
+                        if (assgncmpArray.includes(String(cmp.cmpNo))) {
                             usrCompList.push(cmp); // Push the whole cmp object into the list
                         }
                     }
@@ -1530,7 +1530,7 @@ class UserController {
         let crnum = (decoded.corpId).split('-')
         let SDBdbname = crnum[0] + crnum[1] + crnum[2] + "SDB";
         let cmplst = user.ADMICOMP;
-        if (cmplst.includes(',')) {
+        if (cmplst) {
             let cmpnumbers = cmplst.split(',')
             for (const cnum of cmpnumbers) {
                 let CmpNo = cnum;
@@ -1554,30 +1554,6 @@ class UserController {
                             let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                             return res.status(200).json({ encryptedResponse });
                         }
-                    }
-                }
-            }
-        } else {
-            let CmpNo = cmplst;
-            let dbName = queryService.generateDatabaseName(decoded.corpId, CmpNo);
-            let dbConn = db.createPool(dbName);
-            let m82 = new M82Controller(SDBdbname);
-            let cmpdet = await m82.findOne({ M82F02: parseInt(CmpNo) });
-            let defYr = cmpdet.M82YRN;
-            let listOfYr = await dbConn.query('SELECT FIELD01 FROM CMPF01', {
-                type: QueryTypes.SELECT
-            });
-            let connectedRows;
-            if (listOfYr) {
-                for (const ly of listOfYr) {
-                    connectedRows = await dbConn.query(`SELECT * FROM YR${ly.FIELD01}T82 WHERE FIELD02 = '${usrM81.M81F01}'`, {
-                        type: QueryTypes.SELECT
-                    });
-                    if (connectedRows.length > 0) {
-                        response.message = 'This User Contains Transaction so it can not be deleted';
-                        response.status = 'FAIL'
-                        let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-                        return res.status(200).json({ encryptedResponse });
                     }
                 }
             }
