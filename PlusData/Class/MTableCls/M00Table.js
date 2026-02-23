@@ -35,10 +35,7 @@ class M00Table extends PlusTable {
             cCode = this.oCmp.cCmpNo;
             lAddNew = false;
         }
-
-        let oEntD = await Promise.resolve(super.GetDictionary(cCode, cWhere, lAddNew, lFull));
-        console.log(oEntD);
-        
+        let oEntD = await Promise.resolve(super.GetDictionary(cCode, cWhere, lAddNew, lFull));        
         return this.oEntD["M00"];
     }
 

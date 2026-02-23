@@ -1,20 +1,10 @@
-const db = require('../../Config/config'); // Your Database class
 const path = require('path');
 const fs = require('fs');
-const { Op } = require('sequelize');
-
-const sequelizeSDB = db.getConnection('A00001SDB');
-const definePLSDBM81 = require('../../Models/SDB/PLSDBM81');
-const definePLSDBM82 = require('../../Models/SDB/PLSDBM82');
-const definePLSDBADMI = require('../../Models/SDB/PLSDBADMI');
 const Company = require('../Class/CmpYrCls/Company');
 const Encryptor = require('../../Services/encryptor');
 const ADMIController = require('../../Controller/ADMIController');
 const M81Controller = require('../../Controller/M81Controller');
 const M82Controller = require('../../Controller/M82Controller');
-const PLSDBM82 = definePLSDBM82(sequelizeSDB);
-const PLSDBM81 = definePLSDBM81(sequelizeSDB);
-const PLSDBADMI = definePLSDBADMI(sequelizeSDB);
 const encryptor = new Encryptor();
 
 class MApp {

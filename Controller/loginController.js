@@ -1,16 +1,13 @@
 const querystring = require('querystring');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
+const axios = require('axios');
 
 const db = require('../Config/config'); // Your Database class
 const definePLSDBADMI = require('../Models/SDB/PLSDBADMI'); // Model factory
 // const definePLSDBADMI = require('../Models/SDB/PLSDBADMI'); // Model factory
-const definePLSDBREL = require('../Models/SDB/PLSDBREL'); // Model factory
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01'); // Model factory
 const definePLRDBA02 = require('../Models/RDB/PLRDBA02'); // Model factory
-const definePLSDBM81 = require('../Models/SDB/PLSDBM81');
-const definePLSDBM82 = require('../Models/SDB/PLSDBM82');
-const definePLSDBCMP = require('../Models/SDB/PLSDBCMP');
 const definePLRDBOTP = require('../Models/RDB/PLRDBOTP');
 const Encryptor = require('../Services/encryptor');
 const { Op, QueryTypes, Sequelize } = require('sequelize');
@@ -29,7 +26,9 @@ const M81Controller = require('./M81Controller');
 const M82Controller = require('./M82Controller');
 const CMPController = require('./CMPController');
 const queryService = require('../Services/queryService');
-const { sendAccountInfoMail, sendResetMail } = require('../Services/mailServices');
+const { sendAccountInfoMail, sendResetMail, sendLogOutMail } = require('../Services/mailServices');
+const M83Controller = require('./M83Controller');
+const { response } = require('express');
 
 // Get Sequelize instance for 'SDB' or your specific DB name
 const sequelizeSDB = db.getConnection('A00001SDB');
@@ -37,10 +36,6 @@ const sequelizeRDB = db.getConnection('RDB');
 
 // Initialize model using the Sequelize instance
 const PLSDBADMI = definePLSDBADMI(sequelizeSDB);
-const PLSDBREL = definePLSDBREL(sequelizeSDB);
-const PLSDBM81 = definePLSDBM81(sequelizeSDB);
-const PLSDBM82 = definePLSDBM82(sequelizeSDB);
-const PLSDBCMP = definePLSDBCMP(sequelizeSDB);
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 const PLRDBA02 = definePLRDBA02(sequelizeRDB);
 const PLRDBOTP = definePLRDBOTP(sequelizeRDB);
@@ -299,9 +294,10 @@ class UserController {
         const parameterString = encryptor.decrypt(req.query.pa);
         let decodedParam = decodeURIComponent(parameterString);
         let pa = querystring.parse(decodedParam);
+        let response = { data: null, status: "SUCCESS", message: '' };
 
         pa.isPassword = pa.isPassword === "true";
-        let { action, corpId, userId, firstName, middleName, lastName, dob, gender, email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, isPassword, cusRole, CmpList, BrcList
+        let { action, corpId, userId, firstName, middleName, lastName, dob, gender, email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, isPassword, cusRole, CmpList, BrcList, cAction
             // , companyName, softSubType, softType, dbVersion, webVer, noOfUser, regDate, subStrtDate, subEndDate, cancelDate, subDomainDelDate, cnclRes, SBDdbType, srverIP, serverUserName, serverPassword, A02id 
         } = pa;
 
@@ -309,14 +305,20 @@ class UserController {
         const token = req.headers['authorization']?.split(' ')[1]; // 'Bearer <token>'
 
         let decoded;
-        if (action != 'L') {
+        if (action != 'L' && action != 'O') {
             if (!token) {
                 response.message = 'No token provided, authorization denied.'
                 response.status = 'FAIL'
                 const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                 return res.status(401).json({ encryptedResponse });
             } else {
-                decoded = await TokenService.validateToken(token);
+                decoded = await TokenService.validateToken(token, false, true);
+                if (!decoded) {
+                    response.message = 'Token is Expired'
+                    response.status = 'FAIL'
+                    const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                    return res.status(401).json({ encryptedResponse });
+                }
             }
         }
         if (roleId && roleId != '2') {
@@ -343,9 +345,13 @@ class UserController {
                     email, password, isPassword, roleId, address, phoneNumber, base64Image, cusRole, CmpList, BrcList, decoded
                 }, res);
             } else if (action === 'L') {
-                return UserController.loginUser(corpId, userId, password, res);
+                return UserController.loginUser(corpId, userId, password, res, req);
+            } else if (action === 'U') {
+                return UserController.userInfo(decoded, res, req);
             } else if (action === 'D') {
                 return UserController.deleteUser(decoded, userId, res);
+            } else if (action === 'O') {
+                return UserController.logoutUser(userId, corpId, res, cAction, req);
             }
 
             return res.status(400).json({ message: 'Invalid action parameter' });
@@ -390,7 +396,6 @@ class UserController {
                 let nextNumber = 0;
 
                 const companyResult = await CompanyService.createCompany(req, res, true);
-
                 if (!this.existingCorpId) {
                     if (GUaction == 'G') {
                         GU = 'G';  // Change prefix to 'G'
@@ -524,7 +529,18 @@ class UserController {
                                 { ADMIF00: existingUser.ADMIF00 }
                             );
                         }
-
+                        await PLRDBGAO.create({
+                            GAOF01: companyResult.corpId,
+                            GAOF02: parseInt(companyResult.CmpNum),
+                            GAOF03: 2, // Customized Bill Print(Formate Wise) Free
+                            GAOF04: 0,
+                            GAOF05: 5, // Customized Report Setup(Report Wise) Free
+                            GAOF06: 0,
+                            GAOF07: 50, // User Field(Limit Wise) Free
+                            GAOF08: 0,
+                            GAOF09: 5, // User Master(Limit Wise) Free
+                            GAOF10: 0
+                        });
                         // Create a new JWT token
                         const updatedToken = jwt.sign(
                             { userId: admin.ADMIF01, corpId: companyResult.corpId },
@@ -818,6 +834,11 @@ class UserController {
                     ADMIBRC: BrcList,
                     ADMICOMP: CmpList
                 };
+                await m81.update({
+                    M81F04: password
+                }, {
+                    M81UNQ: existingUser.ADMIF00
+                })
             } else {
                 updateData = {
                     ADMIF02: firstName || existingUser.ADMIF02, // First Name
@@ -867,7 +888,7 @@ class UserController {
         }
     }
 
-    static async loginUser(corpId, userId, password, res) {
+    static async loginUser(corpId, userId, password, res, req) {
         try {
             let response = { status: 'SUCCESS', message: null };
             corpId = corpId.toUpperCase();
@@ -885,6 +906,7 @@ class UserController {
             if (sdbdbname) sdbdbname = sdbdbname == 'PLP00001SDB' ? 'A00001SDB' : sdbdbname
             let admi = new ADMIController(sdbdbname);
             let m81 = new M81Controller(sdbdbname);
+            let m83 = new M83Controller(sdbdbname);
             const encryptedId = encryptor.encrypt(userId);
             let corpRow = null;
             let user = null
@@ -905,6 +927,38 @@ class UserController {
                 const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                 return res.status(400).json({ encryptedResponse: encryptedResponse });
             }
+
+            let loginExist = await m83.findAll();
+            for (let i of loginExist) {
+                if (userId == i.M83F01) {
+                    let token = i.M83F07
+                    let tokenLife = jwt.decode(token);
+                    if (tokenLife) {
+                        // Check if token has expired manually
+                        const currentTime = Math.floor(Date.now() / 1000); // Current time in seconds
+                        const isExpired = tokenLife.exp && tokenLife.exp < currentTime;
+
+                        if (isExpired) {
+                            await m83.destroy({
+                                where: { M83F01: userId }
+                            });
+                        } else {
+                            response.status = 'FAIL';
+                            response.message = 'User already Logged in';
+                            response.data = user;
+                            let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                            return res.status(200).json({ encryptedResponse: encryptedResponse });
+                        }
+                    } else {
+                        console.log("Invalid token.");
+                    }
+                }
+            }
+            // if (loginExist.length > 0) {
+            //     for (const row of loginExist) {
+
+            //     }
+            // }
 
             if (user.ADMIF06 == 2) {
                 let corpUnq = user.ADMICORP
@@ -954,12 +1008,258 @@ class UserController {
                     return res.status(400).json({ encryptedResponse: encryptedResponse });
                 }
 
+                // let userComp = new AuthenticationService(corpId, uM82Row, sdbdbname);
+                // let cmplist = await userComp.authenticateUser();
+
+
+
+                const token = jwt.sign({ userId: user.ADMIF01, roleId: user.ADMIF06, password: user.ADMIF05, corpId: corpId }, process.env.JWT_SECRET_KEY, { expiresIn: process.env.JWT_EXPIRATION });
+
+                // response.data = {
+                //     CustID: corpId,
+                //     CustName: user.ADMIF02 + ' ' + user.ADMIF04,
+                //     SubSDate: corpRow.A01F12,
+                //     SubEDate: corpRow.A01F13,
+                //     SoftVer: corpRow.A01F07,
+                //     UserId: M81Row.M81F01,
+                //     userNm: encryptor.decrypt(user.ADMIF01),
+                //     DefCmp: cmplist.DefComp.cmpNo,
+                //     cmpList: cmplist.CompList
+                // };
+                let currentTime = new Date();
+                let newLogin = await m83.create(userId, formatDate(currentTime), '', '', '', token);
+                response.message = 'Login successful';
+                response.token = token;
+                response.status = 'SUCCESS'
+                const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                return res.status(200).json({ encryptedResponse: encryptedResponse });
+
+            } else if (user.ADMIF06 == 3) {
+                let corpUnq = user.ADMICORP
+
+                let corpExist = await PLRDBA01.findAll({
+                    where: { A01F01: corpUnq }
+                });
+                // let sprUsr;
+                // for (let i of existing) {
+                //     const decrypted = encryptor.decrypt(i.ADMIF01)
+                //     if (i.ADMICORP == user.ADMICORP && i.ADMIF06 == 2) {
+                //         sprUsr = i;
+                //         response = {
+                //             message: 'User ID valid'
+                //         }
+                //     }
+                // }
+                // let userM81Unq = sprUsr.ADMIF00
+
+                // let M81Row = await m81.findAll({
+                //     M81UNQ: userM81Unq.toString()
+                // });
+
+                // let uM82Row = M81Row.length > 0 ? M81Row[0].M81F01 : null;
+
+                if (!corpExist) {
+                    response.status = 'FAIL';
+                    response.message = 'Invalid Credentials';
+                    const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                    return res.status(400).json({ encryptedResponse: encryptedResponse });
+                } else {
+                    for (const corp of corpExist) {
+                        if (corp.A01F03 == corpId) {
+                            corpRow = corp
+                        }
+                    }
+                    if (!corpRow) {
+                        response.status = 'FAIL';
+                        response.message = 'Invalid Credentials';
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                        return res.status(400).json({ encryptedResponse: encryptedResponse });
+                    }
+                }
+                let pwd = encryptor.decrypt(user.ADMIF05);
+                const isPasswordValid = pwd == password;
+                if (!isPasswordValid) {
+                    response.status = 'FAIL';
+                    response.message = 'Invalid Credentials';
+                    let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                    return res.status(400).json({ encryptedResponse: encryptedResponse });
+                }
+
+                // let userComp = new AuthenticationService(corpId, uM82Row, sdbdbname);
+                // let cmplist = await userComp.authenticateUser();
+                // let usrCompList = [];
+
+                // if (user.ADMIROL != 2) {
+                //     let assgncmpArray = user.ADMICOMP; // Assuming ADMICOMP is already an array or it's a string that's split elsewhere
+
+                //     for (const cmp of cmplist.CompList) {
+                //         if (assgncmpArray.includes(cmp.cmpNo)) {
+                //             usrCompList.push(cmp); // Push the whole cmp object into the list
+                //         }
+                //     }
+                // }
+
+                // let modData = await admi.findOne({ ADMIF06: 2 }, [], ['ADMIMOD']);
+
+                const token = jwt.sign({ userId: user.ADMIF01, roleId: user.ADMIF06, password: user.ADMIF05, corpId: corpId }, process.env.JWT_SECRET_KEY, { expiresIn: process.env.JWT_EXPIRATION });
+
+                let currentTime = new Date();
+                let newLogin = await m83.create(userId, formatDate(currentTime), '', '', '', token);
+
+                // response.data = {
+                //     CustID: corpId,
+                //     CustName: user.ADMIF02 + ' ' + user.ADMIF04,
+                //     SubSDate: corpRow.A01F12,
+                //     SubEDate: corpRow.A01F13,
+                //     SoftVer: corpRow.A01F07,
+                //     UserId: M81Row.M81F01,
+                //     userNm: encryptor.decrypt(user.ADMIF01),
+                //     DefCmp: cmplist.DefComp.cmpNo,
+                //     cmpList: usrCompList,
+                //     userDetails: user,
+                //     modData: modData
+                // };
+                response.message = 'Login successful';
+                response.token = token;
+                response.status = 'SUCCESS'
+                const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                return res.status(200).json({ encryptedResponse: encryptedResponse });
+            }
+        } catch (error) {
+            console.error(error);
+            const encryptedResponse = encryptor.encrypt(JSON.stringify({ message: 'Login failed' }));
+            return res.status(500).json({ encryptedResponse: encryptedResponse });
+        }
+    }
+
+    static async userInfo(decoded, res, req) {
+        try {
+            let response = { status: 'SUCCESS', message: null };
+            let corpId = decoded.corpId;
+            let userId = decoded.userId;
+            let password = decoded.password;
+            corpId = corpId.toUpperCase();
+            let corpexi = await PLRDBA01.findAll({
+                where: { A01F03: corpId }
+            });
+            if (corpexi.length == 0) {
+                response.status = 'FAIL';
+                response.message = 'Invalid Credentials';
+                const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                return res.status(400).json({ encryptedResponse: encryptedResponse });
+            }
+            let sdbSeq = corpId.split('-');
+            let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
+            if (sdbdbname) sdbdbname = sdbdbname == 'PLP00001SDB' ? 'A00001SDB' : sdbdbname
+            let admi = new ADMIController(sdbdbname);
+            let m81 = new M81Controller(sdbdbname);
+            let m83 = new M83Controller(sdbdbname);
+            const encryptedId = encryptor.decrypt(userId);
+            let corpRow = null;
+            let user = null
+            const existing = await admi.findAll();
+            for (let i of existing) {
+                const decrypted = encryptor.decrypt(i.ADMIF01)
+                if (decrypted == encryptedId) {
+                    user = i;
+                    response = {
+                        message: 'User ID valid'
+                    }
+                }
+            }
+
+            // if (!user) {
+            //     response.status = 'FAIL';
+            //     response.message = 'Invalid Credentials';
+            //     const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+            //     return res.status(400).json({ encryptedResponse: encryptedResponse });
+            // }
+
+            // let loginExist = await m83.findAll();
+            // for (let i of loginExist) {
+            //     if (userId == i.M83F01) {
+            //         let token = i.M83F07
+            //         let tokenLife = jwt.decode(token);
+            //         if (tokenLife) {
+            //             // Check if token has expired manually
+            //             const currentTime = Math.floor(Date.now() / 1000); // Current time in seconds
+            //             const isExpired = tokenLife.exp && tokenLife.exp < currentTime;
+
+            //             if (isExpired) {
+            //                 await m83.destroy({
+            //                     where: { M83F01: userId }
+            //                 });
+            //             } else {
+            //                 response.status = 'FAIL';
+            //                 response.message = 'User already Logged in'
+            //                 let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+            //                 return res.status(200).json({ encryptedResponse: encryptedResponse });
+            //             }
+            //         } else {
+            //             console.log("Invalid token.");
+            //         }
+            //     }
+            // }
+            // if (loginExist.length > 0) {
+            //     for (const row of loginExist) {
+
+            //     }
+            // }
+
+            if (user.ADMIF06 == 2) {
+                let corpUnq = user.ADMICORP
+                let userM81Unq = user.ADMIF00
+
+                let corpExist = await PLRDBA01.findAll({
+                    where: { A01F01: corpUnq.trim() }
+                });
+
+                let M81Row
+                if (corpUnq == 1) {
+                    M81Row = await m81.findAll({
+                        M81CHLD: userM81Unq
+                    });
+                } else {
+                    M81Row = await m81.findAll({
+                        M81UNQ: userM81Unq
+                    });
+                }
+
+                let uM82Row = M81Row.length > 0 ? M81Row[0].M81F01 : null;
+
+                if (!corpExist) {
+                    response.status = 'FAIL';
+                    response.message = 'Invalid Credentials';
+                    const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                    return res.status(400).json({ encryptedResponse: encryptedResponse });
+                } else {
+                    for (const corp of corpExist) {
+                        if (corp.A01F03.trim() == corpId) {
+                            corpRow = corp
+                        }
+                    }
+                    if (!corpRow) {
+                        response.status = 'FAIL';
+                        response.message = 'Invalid Credentials';
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                        return res.status(400).json({ encryptedResponse: encryptedResponse });
+                    }
+                }
+                // let pwd = encryptor.decrypt(user.ADMIF05);
+                // const isPasswordValid = pwd == password;
+                // if (!isPasswordValid) {
+                //     response.status = 'FAIL';
+                //     response.message = 'Invalid Credentials';
+                //     let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                //     return res.status(400).json({ encryptedResponse: encryptedResponse });
+                // }
+
                 let userComp = new AuthenticationService(corpId, uM82Row, sdbdbname);
                 let cmplist = await userComp.authenticateUser();
 
 
 
-                const token = jwt.sign({ userId: user.ADMIF01, roleId: user.ADMIF06, password: user.ADMIF05, corpId: corpId }, process.env.JWT_SECRET_KEY, { expiresIn: process.env.JWT_EXPIRATION });
+                // const token = jwt.sign({ userId: user.ADMIF01, roleId: user.ADMIF06, password: user.ADMIF05, corpId: corpId }, process.env.JWT_SECRET_KEY, { expiresIn: process.env.JWT_EXPIRATION });
 
                 response.data = {
                     CustID: corpId,
@@ -972,8 +1272,10 @@ class UserController {
                     DefCmp: cmplist.DefComp.cmpNo,
                     cmpList: cmplist.CompList
                 };
+                // let currentTime = new Date();
+                // let newLogin = await m83.create(userId, formatDate(currentTime), '', '', '', token);
                 response.message = 'Login successful';
-                response.token = token;
+                // response.token = token;
                 response.status = 'SUCCESS'
                 const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                 return res.status(200).json({ encryptedResponse: encryptedResponse });
@@ -1020,14 +1322,14 @@ class UserController {
                         return res.status(400).json({ encryptedResponse: encryptedResponse });
                     }
                 }
-                let pwd = encryptor.decrypt(user.ADMIF05);
-                const isPasswordValid = pwd == password;
-                if (!isPasswordValid) {
-                    response.status = 'FAIL';
-                    response.message = 'Invalid Credentials';
-                    let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
-                    return res.status(400).json({ encryptedResponse: encryptedResponse });
-                }
+                // let pwd = encryptor.decrypt(user.ADMIF05);
+                // const isPasswordValid = pwd == password;
+                // if (!isPasswordValid) {
+                //     response.status = 'FAIL';
+                //     response.message = 'Invalid Credentials';
+                //     let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                //     return res.status(400).json({ encryptedResponse: encryptedResponse });
+                // }
 
                 let userComp = new AuthenticationService(corpId, uM82Row, sdbdbname);
                 let cmplist = await userComp.authenticateUser();
@@ -1043,8 +1345,12 @@ class UserController {
                     }
                 }
 
+                let modData = await admi.findOne({ ADMIF06: 2 }, [], ['ADMIMOD']);
 
-                const token = jwt.sign({ userId: user.ADMIF01, roleId: user.ADMIF06, password: user.ADMIF05, corpId: corpId }, process.env.JWT_SECRET_KEY, { expiresIn: process.env.JWT_EXPIRATION });
+                // const token = jwt.sign({ userId: user.ADMIF01, roleId: user.ADMIF06, password: user.ADMIF05, corpId: corpId }, process.env.JWT_SECRET_KEY, { expiresIn: process.env.JWT_EXPIRATION });
+
+                // let currentTime = new Date();
+                // let newLogin = await m83.create(userId, formatDate(currentTime), '', '', '', token);
 
                 response.data = {
                     CustID: corpId,
@@ -1055,11 +1361,136 @@ class UserController {
                     UserId: M81Row.M81F01,
                     userNm: encryptor.decrypt(user.ADMIF01),
                     DefCmp: cmplist.DefComp.cmpNo,
-                    cmpList: usrCompList
+                    cmpList: usrCompList,
+                    userDetails: user,
+                    modData: modData
                 };
                 response.message = 'Login successful';
-                response.token = token;
+                // response.token = token;
                 response.status = 'SUCCESS'
+                const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                return res.status(200).json({ encryptedResponse: encryptedResponse });
+            }
+        } catch (error) {
+            console.error(error);
+            const encryptedResponse = encryptor.encrypt(JSON.stringify({ message: 'Login failed' }));
+            return res.status(500).json({ encryptedResponse: encryptedResponse });
+        }
+    }
+
+    static async logoutUser(userId, corpId, res, cAction, req) {
+        try {
+            let response = { status: 'SUCCESS', message: null };
+            corpId = corpId.toUpperCase();
+            let corpexi = await PLRDBA01.findAll({
+                where: { A01F03: corpId }
+            });
+            if (corpexi.length == 0) {
+                response.status = 'FAIL';
+                response.message = 'Invalid Credentials';
+                const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                return res.status(400).json({ encryptedResponse: encryptedResponse });
+            }
+            let sdbSeq = corpId.split('-');
+            let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
+            if (sdbdbname) sdbdbname = sdbdbname == 'PLP00001SDB' ? 'A00001SDB' : sdbdbname
+            let admi = new ADMIController(sdbdbname);
+            let m81 = new M81Controller(sdbdbname);
+            let m83 = new M83Controller(sdbdbname);
+            let corpRow = null;
+            let user = null
+            const existing = await admi.findAll();
+            // const decryptedUser = encryptor.decrypt(decoded.userId);
+            for (let i of existing) {
+                const decrypted = encryptor.decrypt(i.ADMIF01);
+                if (decrypted == userId) {
+                    user = i;
+                    response = {
+                        message: 'User ID valid'
+                    }
+                }
+            }
+
+            if (!user) {
+                response.status = 'FAIL';
+                response.message = 'Invalid Credentials';
+                const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                return res.status(400).json({ encryptedResponse: encryptedResponse });
+            }
+
+            if (cAction) {
+                if (cAction == 'L') {
+                    let decPass = encryptor.decrypt(user.ADMIF05)
+                    let paObj = { "CorpID": `${corpId}`, "cUser": `${userId}`, "cPass": `${decPass}`, "lForce": false }
+                    let encodedUrl = encodeURIComponent(JSON.stringify(paObj));
+                    let encUrl = encryptor.encrypt(encodedUrl);
+                    let logOutReq = await axios.get(`https://kishanlive.in/eplus/api/User/LogoutNotify/?pa=${encUrl}`);
+                    if (logOutReq) {
+                        let resp = encryptor.decrypt(logOutReq.data);
+                        resp = JSON.parse(resp);
+                        if (resp.status == 'SUCCESS') {
+                            response.message = 'Logout request sent Successfully, Please try again in few seconds';
+                            response.status = 'SUCCESS';
+                            const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                            return res.status(200).json({ encryptedResponse: encryptedResponse });
+                        } else {
+                            response.message = 'Logout request Error occured.';
+                            response.status = 'FAIL';
+                            const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                            return res.status(200).json({ encryptedResponse: encryptedResponse });
+                        }
+                    } else {
+                        response.message = 'Error occured in Logout request';
+                        response.status = 'FAIL';
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                        return res.status(200).json({ encryptedResponse: encryptedResponse });
+                    }
+                } else if (cAction == 'F') {
+                    let decPass = encryptor.decrypt(user.ADMIF05)
+                    let paObj = { "CorpID": `${corpId}`, "cUser": `${userId}`, "cPass": `${decPass}`, "lForce": true }
+                    let encodedUrl = encodeURIComponent(JSON.stringify(paObj))
+                    let encUrl = encryptor.encrypt(encodedUrl);
+                    let logOutReq = await axios.get(`https://kishanlive.in/eplus/api/User/LogoutNotify/?pa=${encUrl}`);
+                    if (logOutReq) {
+                        let resp = encryptor.decrypt(logOutReq.data);
+                        resp = JSON.parse(resp);
+                        if (resp.status == 'SUCCESS') {
+                            response.message = 'Logout request sent Successfully';
+                            response.status = 'SUCCESS';
+                            const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                            return res.status(200).json({ encryptedResponse: encryptedResponse });
+                        } else {
+                            response.message = 'Logout request Error occured.';
+                            response.status = 'FAIL';
+                            const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                            return res.status(200).json({ encryptedResponse: encryptedResponse });
+                        }
+                    } else {
+                        response.message = 'Error occured in Logout request';
+                        response.status = 'FAIL';
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                        return res.status(200).json({ encryptedResponse: encryptedResponse });
+                    }
+                }
+            }
+
+            let loginExist = await m83.findAll();
+            let lLog = null;
+            for (let i of loginExist) {
+                if (userId == i.M83F01) {
+                    lLog = await m83.destroy({
+                        M83F01: userId
+                    });
+                }
+            }
+            if (lLog != null) {
+                response.message = 'Logout Successful';
+                response.status = 'SUCCESS';
+                const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                return res.status(200).json({ encryptedResponse: encryptedResponse });
+            } else {
+                response.message = 'User is not logged in';
+                response.status = 'FAIL';
                 const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                 return res.status(200).json({ encryptedResponse: encryptedResponse });
             }
@@ -1152,15 +1583,12 @@ class UserController {
             }
         }
 
-
         if (user.ADMIF06 == 2) {
             response.status = 'FAIL';
             response.message = 'Admin User Can Not be Deleted';
             const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
             return res.status(400).json({ encryptedResponse: encryptedResponse });
         }
-
-
 
         let deleteUsr = await m81.update({
             M81ADA: 'D'
@@ -1249,7 +1677,7 @@ class UserController {
         let response = { status: "SUCCESS", message: null };
         try {
             // let pa = querystring.parse(decodedParam);
-            let { corpId } = pa;
+            let { corpId, descType } = pa;
 
             if (!corpId) {
                 return res.status(400).json({
@@ -1293,17 +1721,37 @@ class UserController {
 
             const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-            await PLRDBOTP.create({
-                CORP_ID: corpId,
-                EMAIL: adminEmail,
-                OTP_CODE: otp,
-                OTP_EXPIRY: Sequelize.literal(`DATEADD(MINUTE, 10, GETDATE())`),
-                OTP_STATUS: 'PENDING'
-            });
+            if (descType == 'F') {
+                await PLRDBOTP.create({
+                    CORP_ID: corpId,
+                    EMAIL: adminEmail,
+                    OTP_CODE: otp,
+                    OTP_EXPIRY: Sequelize.literal(`DATEADD(MINUTE, 10, GETDATE())`),
+                    OTP_STATUS: 'PENDING',
+                    OTP_DESC: 'FP'
+                });
+                await sendResetMail({ to: adminEmail, corpId, otp });
+            } else if (descType == 'L') {
+                await PLRDBOTP.create({
+                    CORP_ID: corpId,
+                    EMAIL: adminEmail,
+                    OTP_CODE: otp,
+                    OTP_EXPIRY: Sequelize.literal(`DATEADD(MINUTE, 10, GETDATE())`),
+                    OTP_STATUS: 'PENDING',
+                    OTP_DESC: 'LO'
+                });
+                await sendLogOutMail({ to: adminEmail, corpId, otp });
+            } else {
+                return res.status(400).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        response: { status: "FAIL", message: "Invalid Desc Type" }
+                    }))
+                })
+            }
 
-            await sendResetMail({ to: adminEmail, corpId, otp });
-
-            const token = jwt.sign({ corpId }, process.env.JWT_SECRET_KEY, {
+            let userId = encryptor.decrypt(admins[0].ADMIF01);
+            let password = encryptor.decrypt(admins[0].ADMIF05);
+            const token = jwt.sign({ corpId, userId, password }, process.env.JWT_SECRET_KEY, {
                 expiresIn: process.env.JWT_EXPIRATION
             });
 
@@ -1394,17 +1842,49 @@ class UserController {
                 });
             }
 
-            await otpRow.update({ OTP_STATUS: 'VERIFIED' });
-
-            return res.status(200).json({
-                encryptedResponse: encryptor.encrypt(JSON.stringify({
-                    response: {
-                        status: "SUCCESS",
-                        code: "OTP_VERIFIED",
-                        message: "OTP verified successfully"
+            if (otpRow.OTP_DESC == 'LO') {
+                let sdbSeq = corpId.split('-');
+                let sdbdbname = sdbSeq.length == 3 ? `${sdbSeq[0]}${sdbSeq[1]}${sdbSeq[2]}SDB` : `${sdbSeq[0]}${sdbSeq[1]}SDB`;
+                let m83 = new M83Controller(sdbdbname);
+                await m83.destroy({
+                    M83F01: decoded.userId
+                });
+                let paObj = { "CorpID": `${decoded.corpId}`, "cUser": `${decoded.userId}`, "cPass": `${decoded.password}`, "lForce": true }
+                let encodedUrl = encodeURIComponent(JSON.stringify(paObj))
+                let encUrl = encryptor.encrypt(encodedUrl);
+                let logOutReq = await axios.get(`https://kishanlive.in/eplus/api/User/LogoutNotify/?pa=${encUrl}`);
+                if (logOutReq) {
+                    let resp = encryptor.decrypt(logOutReq.data);
+                    resp = JSON.parse(resp);
+                    if (resp.status != 'SUCCESS') {
+                        response.message = 'Logout request Error occured.';
+                        response.status = 'FAIL';
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                        return res.status(200).json({ encryptedResponse: encryptedResponse });
                     }
-                }))
-            });
+                }
+                await otpRow.update({ OTP_STATUS: 'VERIFIED' });
+                return res.status(200).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        response: {
+                            status: "SUCCESS",
+                            code: "OTP_VERIFIED",
+                            message: "OTP for LOGOUT verified successfully"
+                        }
+                    }))
+                });
+            } else {
+                await otpRow.update({ OTP_STATUS: 'VERIFIED' });
+                return res.status(200).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        response: {
+                            status: "SUCCESS",
+                            code: "OTP_VERIFIED",
+                            message: "OTP for FORGET PASSWORD verified successfully"
+                        }
+                    }))
+                });
+            }
 
         } catch (err) {
             console.error("VERIFY OTP ERROR:", err);
@@ -1478,8 +1958,8 @@ class UserController {
             let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
             const admi = new ADMIController(sdbdbname);
             const m81 = new M81Controller(sdbdbname);
-            
-            let admiRow = await admi.findOne({ADMIF06: 2});
+
+            let admiRow = await admi.findOne({ ADMIF06: 2 });
 
             await m81.update(
                 { M81F04: newPassword },

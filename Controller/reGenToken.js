@@ -1,6 +1,7 @@
 const Encryptor = require("../Services/encryptor");
 const TokenService = require("../Services/tokenServices");
 const jwt = require('jsonwebtoken'); // Make sure you have the jwt package installed.
+const M83Controller = require("./M83Controller");
 
 const encryptor = new Encryptor();
 
@@ -43,6 +44,15 @@ class reGenToken {
                     status: 'SUCCESS',
                     newToken: newToken
                 };
+                let corpId = decoded.corpId.toUpperCase();
+                let sdbSeq = corpId.split('-');
+                let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
+                let m83 = new M83Controller(sdbdbname);
+                let uID = encryptor.decrypt(decoded.userId)
+                await m83.update(
+                    { M83F07: newToken },
+                    { M83F01: uID }
+                );
                 const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                 return res.status(200).json({ encryptedResponse });
             }

@@ -1,11 +1,6 @@
-const querystring = require('querystring');
 const db = require('../Config/config'); // Your Database class
-const definePLSDBADMI = require('../Models/SDB/PLSDBADMI'); // Model factory
 // const definePLSDBADMI = require('../Models/SDB/PLSDBADMI'); // Model factory
-const definePLSDBM81 = require('../Models/SDB/PLSDBM81'); // Model factory
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01'); // Model factory
-const definePLSDBBRC = require('../Models/SDB/PLSDBBRC');
-const definePLSDBCROLE = require('../Models/SDB/PLSDBCROLE');
 const definePLRDBA02 = require('../Models/RDB/PLRDBA02');
 const Encryptor = require('../Services/encryptor');
 const TokenService = require('../Services/tokenServices');
@@ -13,14 +8,9 @@ const CROLEController = require('./CROLOEController');
 const ADMIController = require('./ADMIController');
 const BRCController = require('./BRCController');
 const M81Controller = require('./M81Controller');
-const sequelizeSDB = db.getConnection('A00001SDB');
 const sequelizeRDB = db.getConnection('RDB');
 
 // Initialize model using the Sequelize instance
-const PLSDBADMI = definePLSDBADMI(sequelizeSDB);
-const PLSDBM81 = definePLSDBM81(sequelizeSDB);
-const PLSDBCROLE = definePLSDBCROLE(sequelizeSDB);
-const PLSDBBRC = definePLSDBBRC(sequelizeSDB);
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 const PLRDBA02 = definePLRDBA02(sequelizeRDB);
 const encryptor = new Encryptor();

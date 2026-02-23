@@ -41,13 +41,8 @@ class FTPService {
                 secure: false,                   // Set to `true` if using FTPS
             });
 
-            // List files in the FTP server's current directory
-            console.log(await client.list());
-
             // Download a file from the FTP server
             await client.downloadTo(this.fileNM, `/html/eplus/${this.decoded.corpId}/${this.cmpNo}/images/${this.fileNM}`);
-
-            console.log("File downloaded successfully!");
 
         } catch (error) {
             console.error("Error accessing FTP server:", error);
@@ -94,8 +89,6 @@ class FTPService {
             // Upload the file directly from the stream to the FTP server
             await ftpClient.uploadFrom(bufferStream, FinalImage);
 
-            console.log("File uploaded successfully!");
-
             // After upload, set permissions using SSH
             await this.setPermissions(FinalImage, remoteDir, imageFolder, cmpFolder, corpFolder, ftpClient);
 
@@ -126,50 +119,11 @@ class FTPService {
             currentDir += `/${dir}`;
             try {
                 await ftpClient.ensureDir(currentDir);
-                console.log(`Directory ${currentDir} exists or was created.`);
             } catch (error) {
                 console.error(`Failed to create directory ${currentDir}:`, error.message);
             }
         }
     }
-
-    // async setPermissions(FinalImage, remoteDir, imageFolder, cmpFolder, corpFolder, ftpClient) {
-    //     // const sshClient = new Client();
-    //     const FTPdetail = await this.getFTPDetails();
-
-    //     // return new Promise((resolve, reject) => {
-    //     //     sshClient.on('ready', async () => {
-    //             try {
-    //                 // Set permissions for the directory and file
-    //                 const chmodCommands = [
-    //                     // `SITE chmod 775 ${remoteDir}`,
-    //                     `SITE chmod 775 ${corpFolder}`
-    //                     `SITE chmod 775 ${cmpFolder}`,
-    //                     `SITE chmod 775 ${imageFolder}`,
-    //                     `SITE chmod 775 ${FinalImage}`,
-    //                 ];
-
-    //                 // Execute chmod commands sequentially
-    //                 for (const command of chmodCommands) {
-    //                     await this.executeSSHCommand(sshClient, command, ftpClient);
-    //                     console.log(`Permissions set to 775 for ${command.split(' ')[2]}!`);
-    //                 }
-
-    //                 resolve();
-    //             } catch (err) {
-    //                 console.error('Error setting permissions:', err);
-    //                 reject(err);
-    //             }
-    //     //     }).connect({
-    //     //         host: FTPdetail.FTPURL, // Using the same host as FTP URL (make sure SSH is enabled)
-    //     //         username: FTPdetail.FTPUID, // Use the FTP user for SSH (if they are the same)
-    //     //         password: FTPdetail.FTPPWD, // Use the FTP password for SSH (if they are the same)
-    //     //         port: 22, // Default SSH port
-    //     //     });
-    //     // });
-    // }
-
-    // Function to execute SSH commands and return a promise
 
     async setPermissions(FinalImage, remoteDir, imageFolder, cmpFolder, corpFolder, ftpClient) {
         return new Promise((resolve, reject) => {
@@ -200,26 +154,6 @@ class FTPService {
 
 
         const commandResult = await ftpClient.ftp.send(`${command}`);
-        // console.log("Command successful:", commandResult)
-        // return new Promise((resolve, reject) => {
-        // sshClient.exec(command, (err, stream) => {
-        //     if (err) {
-        //         console.error(`SSH command failed: ${command}`);
-        //         reject(err);
-        //         return;
-        //     }
-        //     stream.on('close', (code, signal) => {
-        //         console.log("CODE: ", code);
-        //         resolve();
-        //     });
-        //     stream.on('data', (data) => {
-        //         console.log('SSH output:', data.toString());
-        //     });
-        //     stream.on('stderr', (data) => {
-        //         console.error('SSH error:', data.toString());
-        //     });
-        // });
-        // });
         return true;
     }
 }

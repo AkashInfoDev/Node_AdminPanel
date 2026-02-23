@@ -7,7 +7,6 @@ class BRCController {
         this.PLSDBBRC = definePLSDBBRC(this.connection);
     }
     async create(BRCODE, BRNAME, BRGST, BRCORP, BRSTATE, BRDEF, BRCCOMP) {
-        console.log(BRCODE, BRGST, BRCORP, BRSTATE, BRDEF, BRCCOMP);
         return await this.PLSDBBRC.create({
             BRCODE,
             BRNAME,

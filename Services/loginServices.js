@@ -4,8 +4,6 @@ const definePLSDBCMP = require('../Models/SDB/PLSDBCMP');
 const M82Controller = require('../Controller/M82Controller');
 const CMPController = require('../Controller/CMPController');
 const sequelizeSDB = db.getConnection('A00001SDB');
-const PLSDBM82 = definePLSDBM82(sequelizeSDB);
-const PLSDBCMP = definePLSDBCMP(sequelizeSDB);
 
 class AuthenticationService {
   constructor(corporateID, userUnq, sdbdbname) {
@@ -22,7 +20,7 @@ class AuthenticationService {
         {
           M82F01: this.uniqId,
           M82ADA: 'A'
-        },[],
+        }, [],
         ['M82F01', 'M82F02', 'M82CMP'],
       )
       let defaultCompany = null;
@@ -37,31 +35,47 @@ class AuthenticationService {
           isDefault: record.M82CMP === 'Y'
         }));
 
+        const resultCMP = await cmp.findAll(
+          {}, [],
+          ['CMPF01', 'CMPF02', 'CMPF04'],
+        )
         for (const userData of userDataList) {
           const { GId, isDefault } = userData;
 
           try {
-            const resultCMP = await cmp.findAll(
-              { CMPF01: GId },[],
-              ['CMPF01', 'CMPF02', 'CMPF04'],
-            )
+
             if (resultCMP.length > 0) {
-              const groupDetails = resultCMP[0];
+              for (const CmpRow of resultCMP) {
+                const groupDetails = CmpRow;
+                if (CmpRow.CMPF01 == GId) {
+                  if (CompList.length > 0) {
+                    const found = CompList.find(obj => obj.cmpNo === GId);
+                    if (found) {
+                      continue;
+                    } else {
+                      CompList.push({
+                        cmpNo: groupDetails.CMPF01,
+                        cmpName: groupDetails.CMPF02,
+                        cmpGrp: groupDetails.CMPF04
+                      });
+                    }
+                  } else {
+                    CompList.push({
+                      cmpNo: groupDetails.CMPF01,
+                      cmpName: groupDetails.CMPF02,
+                      cmpGrp: groupDetails.CMPF04
+                    });
+                  }
 
-              if (isDefault && !defaultCompany) {
-                defaultCompany = {
-                  cmpNo: groupDetails.CMPF01,
-                  cmpName: groupDetails.CMPF02,
-                  cmpGrp: groupDetails.CMPF04
-                };
+                  if (isDefault && !defaultCompany) {
+                    defaultCompany = {
+                      cmpNo: groupDetails.CMPF01,
+                      cmpName: groupDetails.CMPF02,
+                      cmpGrp: groupDetails.CMPF04
+                    };
+                  }
+                }
               }
-
-              CompList.push({
-                cmpNo: groupDetails.CMPF01,
-                cmpName: groupDetails.CMPF02,
-                cmpGrp: groupDetails.CMPF04
-              });
-
             } else {
               console.error(`No details found for Group ID: ${GId}`);
             }
@@ -80,6 +94,14 @@ class AuthenticationService {
     } catch (err) {
       console.error(err);
       return { success: false, message: 'Internal server error' };
+    }
+  }
+
+  async loginCollision() {
+    try {
+
+    } catch (error) {
+
     }
   }
 }

@@ -35,6 +35,10 @@ module.exports = (sequelize) => {
         OTP_STATUS: {
             type: DataTypes.STRING(20),   // ✅ varchar(20)
             allowNull: false
+        },
+        OTP_DESC: {
+            type: DataTypes.STRING(10),
+            allowNull: false
         }
 
     }, {

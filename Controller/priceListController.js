@@ -1,18 +1,15 @@
-const { Op, fn, col, where } = require('sequelize');
+const { fn, col, where } = require('sequelize');
 const querystring = require('querystring');
 const Encryptor = require('../Services/encryptor');
 const db = require('../Config/config'); // Your Database class
 const TokenService = require('../Services/tokenServices');
 
 const definePLRDBA02 = require('../Models/RDB/PLRDBA02'); // Model factory
-const definePLSDBADMI = require('../Models/SDB/PLSDBADMI'); // Model factory
 const ADMIController = require('./ADMIController');
 
 const sequelizeRDB = db.getConnection('RDB');
-const sequelizeSDB = db.getConnection('A00001SDB');
 
 const PLRDBA02 = definePLRDBA02(sequelizeRDB);
-const PLSDBADMI = definePLSDBADMI(sequelizeSDB);
 
 const encryptor = new Encryptor();
 

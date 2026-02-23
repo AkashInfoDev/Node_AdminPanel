@@ -81,9 +81,6 @@ class customServices {
     let seconds = String(date.getSeconds()).padStart(2, '0');
     let milliseconds = String(date.getMilliseconds()).padStart(3, '0');
     
-    // Return the formatted string
-    console.log(`${year}-${month}-${day} ${hours}:${minutes}:${seconds}`);
-    
     return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
   }
 }

@@ -1,12 +1,11 @@
 const db = require('../Config/config');
-const definePLSDBM82 = require('../Models/SDB/PLSDBM83'); // Model factory
+const definePLSDBM83 = require('../Models/SDB/PLSDBM83'); // Model factory
 
-class M82Controller {
+class M83Controller {
     constructor(dbName) {
-        if (dbName) dbName = dbName == 'PLP00001SDB' ? 'A00001SDB' : dbName 
-        console.log(dbName);
+        if (dbName) dbName = dbName == 'PLP00001SDB' ? 'A00001SDB' : dbName
         this.connection = db.createPool(dbName);
-        this.PLSDBM83 = definePLSDBM82(this.connection);
+        this.PLSDBM83 = definePLSDBM83(this.connection);
     }
 
     /**
@@ -43,20 +42,14 @@ class M82Controller {
         }
     }
 
-    async create(M82F01, M82F02, M82F11, M82F12, M82F13, M82F14, M82F21, M82F22, M82F23, M82CMP, M82YRN, M82ADA) {
+    async create(M83F01, M83F02, M83F03, M83F04, M83F06, M83F07) {
         let created = await this.PLSDBM83.create({
-           M82F01,
-           M82F02,
-           M82F11,
-           M82F12,
-           M82F13,
-           M82F14,
-           M82F21,
-           M82F22,
-           M82F23,
-           M82CMP,
-           M82YRN,
-           M82ADA
+            M83F01: M83F01,
+            // M83F02: M83F02,
+            // M83F03: M83F03,
+            M83F04: M83F04,
+            M83F06: M83F06,
+            M83F07: M83F07
         });
     }
 
@@ -104,14 +97,14 @@ class M82Controller {
     }
     async destroy(where) {
         try {
-            return await this.PLSDBM83.destroy(where);
+            return await this.PLSDBM83.destroy({where});
         } catch (error) {
             throw new Error(`Failed to destroy record: ${error.message}`);
         }
     }
 }
 
-module.exports = M82Controller;
+module.exports = M83Controller;
 
 // const data = await controller.findAll(
 //     { status: 'active' },                  // where

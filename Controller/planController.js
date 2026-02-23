@@ -1,39 +1,27 @@
 const querystring = require('querystring');
-const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const db = require('../Config/config'); // Your Database class
-const definePLSDBADMI = require('../Models/SDB/PLSDBADMI'); // Model factory
-const definePLSDBREL = require('../Models/SDB/PLSDBREL'); // Model factory
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01'); // Model factory
 const definePLRDBGAO = require('../Models/RDB/PLRDBGAO'); // Model factory
 const definePLRDBA02 = require('../Models/RDB/PLRDBA02'); // Model factory
 const definePLRDBPYMT = require('../Models/RDB/PLRDBPYMT'); // Model factory
-const definePLSDBM81 = require('../Models/SDB/PLSDBM81');
 const definePLRDBRPAY = require('../Models/RDB/PLRDBRPAY');
-const definePLSDBUBC = require('../Models/RDB/PLSDBUBC');
 const Encryptor = require('../Services/encryptor');
 const { Op } = require('sequelize');
 const TokenService = require('../Services/tokenServices');
-const CompanyService = require('../Controller/companyController');
-const AuthenticationService = require('../Services/loginServices');
 const ADMIController = require('./ADMIController');
 const M81Controller = require('./M81Controller');
 
 // Get Sequelize instance for 'SDB' or your specific DB name
-const sequelizeSDB = db.getConnection('A00001SDB');
 const sequelizeRDB = db.getConnection('RDB');
 
 // Initialize model using the Sequelize instance
-const PLSDBADMI = definePLSDBADMI(sequelizeSDB);
-const PLSDBREL = definePLSDBREL(sequelizeSDB);
-const PLSDBM81 = definePLSDBM81(sequelizeSDB);
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 const PLRDBGAO = definePLRDBGAO(sequelizeRDB);
 const PLRDBA02 = definePLRDBA02(sequelizeRDB);
 const PLRDBPYMT = definePLRDBPYMT(sequelizeRDB);
 const PLRDBRPAY = definePLRDBRPAY(sequelizeRDB);
-const PLSDBUBC = definePLSDBUBC(sequelizeRDB);
 const encryptor = new Encryptor();
 
 class UpgradePlan {
@@ -185,13 +173,13 @@ class UpgradePlan {
                             await PLRDBGAO.create({
                                 GAOF01: corpId,
                                 GAOF02: parseInt(cmp),
-                                GAOF03: 0,
+                                GAOF03: 2, //Customized Bill Print(Formate Wise) Free
                                 GAOF04: 0,
-                                GAOF05: 0,
+                                GAOF05: 5, // Customized Report Setup(Report Wise) Free
                                 GAOF06: 0,
-                                GAOF07: 0,
+                                GAOF07: 50, // User Field(Limit Wise) Free
                                 GAOF08: 0,
-                                GAOF09: 0,
+                                GAOF09: 5, // User Master(Limit Wise) Free
                                 GAOF10: 0
                             });
                             numOfUsr = await PLRDBGAO.findOne({ GAOF01: corpId, GAOF02: parseInt(cmp) });
@@ -233,13 +221,20 @@ class UpgradePlan {
 
                 const paymentData = UpgradePlan.constructPaymentData(transactionDetail, paymentMode, A02id, corpId, userId, description, paymentMethod);
                 await PLRDBPYMT.create(paymentData);
-
                 return sendResponse('SUCCESS', 'Branch and company updated successfully');
             }
 
             // Action M - Update or Activate Modules
             else if (action === 'M') {
                 const { moduleId, paymentMode, setUpId } = pa;
+
+                const transactionDetail = await PLRDBRPAY.findOne({
+                    where: { RPAYF01: transactionId }
+                });
+
+                if (!transactionDetail && paymentMode === 'ONLINE') {
+                    return sendResponse('FAIL', 'Transaction not found');
+                }
 
                 let user
                 let decryptedUserId = encryptor.decrypt(decoded.userId)
@@ -331,10 +326,8 @@ class UpgradePlan {
                     transaction.dataValues.PYMTPNM = matchingPlan ? matchingPlan.A02F02 : null;
                     finalTransaction.push(transaction.dataValues);
                 }
-
                 return sendResponse('SUCCESS', 'Transactions fetched successfully', finalTransaction);
             }
-
             // Invalid action
             else {
                 return sendResponse('FAIL', 'Invalid action type');
@@ -356,7 +349,6 @@ class UpgradePlan {
         let transactionId = ''
         const now = new Date();
         if (paymentMode == 'OFFLINE') {
-
             // Format the date as YYYYMMDD_HHMMSS
             const date = now.toISOString().replace(/[-:T.]/g, '').slice(0, 15); // Format as YYYYMMDD_HHMMSS
             transactionId = 'TXN_' + date;

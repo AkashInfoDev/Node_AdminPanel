@@ -2,11 +2,7 @@ const cron = require('node-cron');
 const { Op, QueryTypes } = require('sequelize');
 const db = require('../Config/config');
 const { generateDatabaseName } = require('./queryService');
-const definePLSDBCMP = require('../Models/SDB/PLSDBCMP');
-const definePLSDBM82 = require('../Models/SDB/PLSDBM82');
-const definePLSDBM81 = require('../Models/SDB/PLSDBM81');
 const defineCRONLOGS = require('../Models/SDB/CRONLOGS');
-const definePLSDBADMI = require('../Models/SDB/PLSDBADMI');
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01');
 const ADMIController = require('../Controller/ADMIController');
 const M81Controller = require('../Controller/M81Controller');
@@ -15,11 +11,7 @@ const M82Controller = require('../Controller/M82Controller');
 const sequelizeA00001SDB = db.createPool('A00001SDB');
 const sequelizeRDB = db.createPool('RDB');
 const sequelizeMASTER = db.createPool('MASTER');
-const PLSDBCMP = definePLSDBCMP(sequelizeA00001SDB);
-const PLSDBM82 = definePLSDBM82(sequelizeA00001SDB);
-const PLSDBM81 = definePLSDBM81(sequelizeA00001SDB);
 const CRONLOGS = defineCRONLOGS(sequelizeA00001SDB);
-const PLSDBADMI = definePLSDBADMI(sequelizeA00001SDB);
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 
 class cronJob {
@@ -97,8 +89,6 @@ class cronJob {
                         }
                     }
                 }
-                console.log('Cron job completed successfully.');
-
             } catch (error) {
                 console.error('Error executing cron job:', error);
             }

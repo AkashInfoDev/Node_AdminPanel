@@ -1,9 +1,6 @@
 const querystring = require('querystring');
 const { Op } = require('sequelize');
 const db = require('../Config/config'); // Your Database class
-const definePLSDBUSROLE = require('../Models/SDB/PLSDBUSROLE');
-const definePLSDBCROLE = require('../Models/SDB/PLSDBCROLE');
-const definePLSDBADMI = require('../Models/SDB/PLSDBADMI');
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01');
 const definePLSYS01 = require('../Models/IDB/PLSYS01');
 const Encryptor = require('../Services/encryptor');
@@ -13,13 +10,9 @@ const USROLEController = require('./USROLEController');
 const CROLEController = require('./CROLOEController');
 const ADMIController = require('./ADMIController');
 
-const sequelizeSDB = db.getConnection('A00001SDB');
 const sequelizeIDB = db.getConnection('IDBAPI');
 const sequelizeRDB = db.getConnection('RDB');
 const PLSYS01 = definePLSYS01(sequelizeIDB);
-const PLSDBUSROLE = definePLSDBUSROLE(sequelizeSDB);
-const PLSDBCROLE = definePLSDBCROLE(sequelizeSDB);
-const PLSDBADMI = definePLSDBADMI(sequelizeSDB);
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 
 const encryptor = new Encryptor();
@@ -52,7 +45,6 @@ class UsrRole {
             encryptedResponse = encryptor.encrypt(JSON.stringify(response));
             return res.status(400).json({ encryptedResponse });
         }
-
 
         let existingrole = await usrole.findAll({}, [],
             ['USRF00', 'USRF01']
@@ -101,10 +93,10 @@ class UsrRole {
                         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         return res.status(201).json({ encryptedResponse });
                     }
-                    response.message = 'Role added successfully!'
-                    response.data = newRole
-                    encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-                    return res.status(201).json({ encryptedResponse });
+                    // response.message = 'Role added successfully!'
+                    // response.data = newRole
+                    // encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                    // return res.status(201).json({ encryptedResponse });
 
                 case 'E':
                     // Edit an existing role record
@@ -163,7 +155,7 @@ class UsrRole {
                     let menus
                     let menuIdsArray = menuIds.split(','); // This splits the string into an array
                     let menuRows = await PLSYS01.findAll({
-                        attributes: ['S01F02', 'S01F03', 'S01F04E'],
+                        attributes: ['S01F02', 'S01F03', 'S01F04E', 'S01F27'],
                         where: {
                             S01F02: {
                                 [Op.in]: menuIdsArray // Using the `Op.in` to check if S01F02 is in the array of menuIds
@@ -181,46 +173,6 @@ class UsrRole {
 
                         menus = MenuController.addPermissionsToLeafMenus(menuTree);
                         menus = MenuController.assignPermissionsToMenus(menus, allRoles);
-                        // menus = menus.map(item => {
-
-                        //     // Check if any children exist
-                        //     if (item.children && item.children.length > 0) {
-
-                        //         item.children = item.children.map(child => {
-
-                        //             // Log if the role exists in allRoles.USRF02, USRF03, etc.
-
-                        //             if(child.S01F02 == '1242'){
-                        //                 console.log('');
-                        //             }
-                        //             if (allRoles.USRF02.includes(child.S01F02)) {
-                        //                 child.l_Add = 1;
-                        //             }
-                        //             if (allRoles.USRF03.includes(child.S01F02)) {
-                        //                 child.l_Edit = 1;
-                        //             }
-                        //             if (allRoles.USRF04.includes(child.S01F02)) {
-                        //                 child.l_Delete = 1;
-                        //             }
-                        //             if (allRoles.USRF05.includes(child.S01F02)) {
-                        //                 child.l_View = 1;
-                        //             }
-                        //             if (allRoles.USRF06.includes(child.S01F02)) {
-                        //                 child.l_Print = 1;
-                        //             }
-                        //             if (allRoles.USRF07.includes(child.S01F02)) {
-                        //                 child.l_UserField = 1;
-                        //             }
-
-                        //             return child; // Return updated child
-                        //         });
-                        //     }
-
-                        //     return item; // Return updated item
-                        // });
-
-
-                        // menus = menuTree; // The updated menu tree with permissions
                     }
                     response.message = 'All roles fetched.'
                     response.data = menus

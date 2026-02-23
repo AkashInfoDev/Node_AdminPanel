@@ -54,12 +54,6 @@ class MenuController {
       // Now, process the permissions for each child in the item
       if (item.children && item.children.length > 0) {
         item.children = item.children.map(child => {
-          // Check if the role exists in allRoles and assign permissions accordingly
-          
-          // Log if the role exists in the specific roles (example '1242')
-          if (child.S01F02 === '0588') {
-            console.log('Specific role match: 1242');
-          }
           
           // Assign permissions based on the role (assuming child.S01F02 is the role ID)
           if (allRoles.USRF02.includes(child.S01F02)) {
@@ -90,9 +84,8 @@ class MenuController {
     });
   
     return menuTree; // Return the menu tree with updated permissions
-  }
+  } 
   
-
   // Static method to remove '&' from menu names
   static removeAmpersand(menuName) {
     return menuName.replace(/&/g, ''); // Removes all '&' characters
@@ -147,7 +140,7 @@ class MenuController {
       };
       // Fetch menu data from database
       const menus = await PLSYS01.findAll({
-        attributes: ['S01F02', 'S01F03', 'S01F04E'], // Select relevant columns
+        attributes: ['S01F02', 'S01F03', 'S01F04E', 'S01F27'], // Select relevant columns
         order: [['S01F03', 'ASC']], // Order by parent-child relationship
       });
 
@@ -180,8 +173,6 @@ class MenuController {
     }
   }
 }
-
-
 
 /**
  * Processes menu items in batches and inserts them into the target database

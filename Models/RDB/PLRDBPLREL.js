@@ -19,6 +19,9 @@ module.exports = (sequelize) => {
         },
         RELF03: {
             type: DataTypes.CHAR(1)
+        },
+        RELF04: {
+            type: DataTypes.TEXT
         }
     }, {
         tableName: 'PLRDBPLREL',

@@ -6,24 +6,13 @@ const Define = require("../../commonClass/define");
 const { MApp, LangType } = require("../../commonClass/plusCommon");
 const PlusInfo = require("../AppCls/PlusInfo");
 const db = require('../../../Config/config'); // Your Database class
-const sequelizeSDB = db.getConnection('A00001SDB');
 const sequelizeRDB = db.getConnection('RDB');
 const sequelizeIDB = db.getConnection('IDBAPI');
 const sequelizeMaster = db.getConnection('master');
-const definePLSDBADMI = require('../../../Models/SDB/PLSDBADMI');
-const definePLSDBM81 = require('../../../Models/SDB/PLSDBM81');
-const definePLSDBM82 = require('../../../Models/SDB/PLSDBM82');
 const definePLRDBA01 = require('../../../Models/RDB/PLRDBA01'); // Model factory
 const definePLSYS13 = require('../../../Models/IDB/PLSYS13'); // Model factory
-const definePLSYSF02 = require('../../../Models/IDB/PLSYSF02'); // Model factory
-const PLSDBM82 = definePLSDBM82(sequelizeSDB);
-const PLSDBM81 = definePLSDBM81(sequelizeSDB);
-const PLSDBADMI = definePLSDBADMI(sequelizeSDB);
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 const PLSYS13 = definePLSYS13(sequelizeIDB);
-const PLSYSF02 = definePLSYSF02(sequelizeIDB);
-const SCMPTable = require("../STable/SCMPTable");
-const SM82Table = require("../STableCls/SM82Table");
 const { Sequelize, QueryTypes, Op } = require("sequelize");
 const SDBHandler = require("../STableCls/SDBHandler");
 const M00Table = require("../MTableCls/M00Table");
@@ -59,7 +48,6 @@ class CmpMaster extends PlusInfo {
         let Mp = new MApp();
 
         // Set default values for the fields in oEntDict dictionary
-        console.log(this.oEntDict);
         this.oEntDict["M00"].FIELD10 = MApp._evlSTU(this.oEntDict["M00"]?.FIELD10, "");               // Short Name
         this.oEntDict["M00"].M00V01 = MApp._evlSTU(this.oEntDict["M00"]?.M00V01, Define.CDBVer);     // Company Database Version 1,2, 3 etc
         this.oEntDict["M00"].M00V02 = MApp._evlSTU(this.oEntDict["M00"]?.M00V02, Define.CodeVer);    // Company Code Version 1,2,3 etc
@@ -148,14 +136,14 @@ class CmpMaster extends PlusInfo {
             if (this.decoded) {
                 let cNum = this.decoded.corpId.split('-');
                 nextCorpId = this.decoded.corpId;
-                targetDbName = 'A' + cNum[2].toString().padStart(5, '0') + 'CMP' + this.cmpNum.toString().padStart(4, '0');
+                cNum.length == 3 ? targetDbName = 'A' + cNum[2].toString().padStart(5, '0') + 'CMP' + this.cmpNum.toString().padStart(4, '0') : targetDbName = 'A' + cNum[1].toString().padStart(5, '0') + 'CMP' + this.cmpNum.toString().padStart(4, '0');
                 this.targDB = targetDbName;
             } else {
                 // let corpNumbers = corpids.map(item => parseInt(item.A01F03.slice(5))).filter(Number.isFinite);
                 // let nextCorpNum = (corpNumbers.length > 0 ? Math.max(...corpNumbers) : 0) + 1;
                 // nextCorpId = 'PL-P-' + nextCorpNum.toString().padStart(5, '0');
                 let nextCorpNum = nextCorpId.split('-')
-                targetDbName = 'A' + nextCorpNum[1].toString().padStart(5, '0') + 'CMP' + this.cmpNum.toString().padStart(4, '0');
+                nextCorpNum.length == 3 ? targetDbName = 'A' + nextCorpNum[2].toString().padStart(5, '0') + 'CMP' + this.cmpNum.toString().padStart(4, '0') : targetDbName = 'A' + nextCorpNum[1].toString().padStart(5, '0') + 'CMP' + this.cmpNum.toString().padStart(4, '0');
                 this.targDB = targetDbName;
             }
 
@@ -175,7 +163,6 @@ class CmpMaster extends PlusInfo {
                     );
 
                     if (this.result.length > 0) {
-                        // console.log(result);
                         const regex = /(\d{4})$/;
                         const match = targetDbName.match(regex);
                         this.cmpNum = parseInt(this.cmpNum) + 1;
@@ -231,7 +218,6 @@ class CmpMaster extends PlusInfo {
                 });
                 newDb = db.getConnection(targetDbName);
             }
-            console.log(this.oEntDict);
 
             if (newDb) {
                 await newDb.query(`
@@ -304,13 +290,9 @@ class CmpMaster extends PlusInfo {
             where: { S13F01: 'M00' }
         });
         for (let nI of DT) {
-            // Log the value of S13F02 for debugging
-            console.log('Processing S13F02:', nI.S13F02);
-
             // Ensure 'M00' exists in oEntDict before assigning to it
             if (this.oEntDict.length == 0) {
                 this.oEntDict["M00"] = {};  // Initialize M00 if it doesn't exist
-                console.log("Initialized M00 in oEntDict");
             }
 
             // Validate and clean the S13F02 value
@@ -324,28 +306,14 @@ class CmpMaster extends PlusInfo {
 
             const key = rawValue.toUpperCase();
 
-            // Log the key being generated for better debugging
-            console.log('Generated Key:', key);
-
             // Check if the key already exists in M00 to prevent overwriting
             if (this.oEntDict["M00"][key] !== undefined) {
                 console.warn('Key already exists in M00:', key);
             } else {
                 // Add or update the key in oEntDict["M00"]
                 this.oEntDict["M00"][key] = "";
-                console.log('Added Key:', key, 'to oEntDict["M00"]');
             }
         }
-
-        // Optionally, log the final object to see the results
-        console.log('Final oEntDict["M00"]:', this.oEntDict["M00"]);
-
-
-        // Optionally log the final object for debugging
-        console.log('Final oEntDict["M00"]:', this.oEntDict["M00"]);
-
-
-
         // Year Date Range Primary
         if (this.cAction == "G" || this.cAction == "A") {
             let SYr = new Date().getFullYear() - (((new Date().getMonth() + 1) < 4) ? 1 : 0);

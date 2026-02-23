@@ -90,13 +90,7 @@ class CustomModules {
                     let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
                     let admi = new ADMIController(sdbdbname);
                     let m81 = new M81Controller(sdbdbname);
-                    const allRecords = await PLRDBPLREL.findAll({
-                        where: {
-                            RELF00: {
-                                [Op.ne]: 12
-                            }
-                        }
-                    });
+                    const allRecords = await PLRDBPLREL.findAll();
                     let allSetUpIds = await m81.findOne({
                         M81F01: 'U0000000'
                     });

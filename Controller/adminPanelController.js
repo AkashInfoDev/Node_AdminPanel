@@ -3,10 +3,6 @@ const Encryptor = require("../Services/encryptor");
 const definePLSDBADMI = require('../Models/SDB/PLSDBADMI'); // Model factory
 const { Op } = require("sequelize");
 const db = require('../Config/config'); // Your Database class
-
-const sequelizeSDB = db.getConnection('A00001SDB');
-
-const PLSDBADMI = definePLSDBADMI(sequelizeSDB);
 const encryptor = new Encryptor();
 
 class AdminPanel {

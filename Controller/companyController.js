@@ -3,8 +3,6 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const db = require('../Config/config'); // Your Database class
-const definePLSDBADMI = require('../Models/SDB/PLSDBADMI'); // Model factory
-const definePLSDBREL = require('../Models/SDB/PLSDBREL'); // Model factory
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01'); // Model factory
 const definePLRDBA02 = require('../Models/RDB/PLRDBA02'); // Model factory
 const Encryptor = require('../Services/encryptor');
@@ -22,13 +20,10 @@ const M81Controller = require('./M81Controller');
 const { formatDate } = require('../Services/customServices');
 
 // Get Sequelize instance for 'SDB' or your specific DB name
-const sequelizeSDB = db.getConnection('A00001SDB');
 const sequelizeRDB = db.getConnection('RDB');
 const sequelizeMASTER = db.getConnection('master');
 
 // Initialize model using the Sequelize instance
-const PLSDBADMI = definePLSDBADMI(sequelizeSDB);
-const PLSDBREL = definePLSDBREL(sequelizeSDB);
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 const PLRDBA02 = definePLRDBA02(sequelizeRDB);
 const encryptor = new Encryptor();
@@ -195,7 +190,9 @@ class CompanyService {
                         }
                     });
                     const modList = await admi.update({
-                        ADMIMOD: planDetail.A02F12
+                        ADMIMOD: planDetail.A02F12,
+                        ADMICOMP: planDetail.A02F08,
+                        ADMIBRC: planDetail.A02F11
                     }, { ADMICORP: nextId }
                     );
                 }
@@ -216,7 +213,6 @@ class CompanyService {
             // CmpMaster.oEntDict = JSON.parse(cSData);
             CmpMaster.cAction = 'A';
             CmpMaster.cUserID = userId;
-            // console.log(typeof(CmpMaster.oEntDict));
 
             let BRcode;
             let brGst = GSTNumber ? GSTNumber : '';

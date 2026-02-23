@@ -1,14 +1,11 @@
 const jwt = require('jsonwebtoken');
-const db = require('../Config/config'); // Your Database class
-const definePLSDBADMI = require('../Models/SDB/PLSDBADMI'); // Model factory
 const Encryptor = require('./encryptor'); // Assuming this is for decrypting adminId
 const ADMIController = require('../Controller/ADMIController');
-const sequelizeSDB = db.getConnection('A00001SDB');
-const PLSDBADMI = definePLSDBADMI(sequelizeSDB);
+
 
 class TokenService {
     // Method to validate the token
-    static async validateToken(token, isCron) {
+    static async validateToken(token, isCron, returnRes) {
 
         const encryptor = new Encryptor();
 
@@ -24,7 +21,8 @@ class TokenService {
                 return false;
             }
             // Throw an error if the token is invalid or expired
-            throw new Error('Invalid or expired token');
+            return returnRes = false;
+            // throw new Error('Invalid or expired token');
         }
 
         // Decrypt adminId if necessary (only if encrypted in the token)

@@ -13,7 +13,7 @@ const definePLSDBADMI = require('../Models/SDB/PLSDBADMI');
 const definePLSDBCMP = require('../Models/SDB/PLSDBCMP');
 const definePLSDBM81 = require('../Models/SDB/PLSDBM81');
 const definePLSDBM82 = require('../Models/SDB/PLSDBM82');
-const definePLSDBREL = require('../Models/SDB/PLSDBREL');
+const definePLRDBGAO = require('../Models/RDB/PLRDBGAO');
 const defineCRONLOGS = require('../Models/SDB/CRONLOGS');
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01');
 const Year = require('../PlusData/Class/CmpYrCls/Year');
@@ -28,18 +28,14 @@ const M81Controller = require('./M81Controller');
 const CMPController = require('./CMPController');
 const M82Controller = require('./M82Controller');
 const RELController = require('./RELController');
-const { QueryTypes } = require('sequelize');
+const { QueryTypes, Op } = require('sequelize');
+const BRCController = require('./BRCController');
 const sequelizeIDB = db.getConnection('IDBAPI');
 const sequelizeA00001SDB = db.getConnection('A00001SDB');
 const sequelizeRDB = db.getConnection('RDB');
-const PLSYSF02 = definePLSYSF02(sequelizeIDB);
-const PLSDBADMI = definePLSDBADMI(sequelizeA00001SDB);
-const PLSDBCMP = definePLSDBCMP(sequelizeA00001SDB);
-const PLSDBM81 = definePLSDBM81(sequelizeA00001SDB);
-const PLSDBM82 = definePLSDBM82(sequelizeA00001SDB);
 const CRONLOGS = defineCRONLOGS(sequelizeA00001SDB);
-const PLSDBREL = definePLSDBREL(sequelizeA00001SDB);
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
+const PLRDBGAO = definePLRDBGAO(sequelizeRDB);
 
 class handleCompany {
     constructor({ year, oCmp, oEntDict, dbName, databaseName }) {
@@ -70,8 +66,8 @@ class handleCompany {
         let cmp = new CMPController(sdbdbname);
         let admi = new ADMIController(sdbdbname);
         let m81 = new M81Controller(sdbdbname);
+        let brc = new BRCController(sdbdbname);
         try {
-            console.log(typeof pa);
             let cAction = pa.action
             let CmpNo = pa.CmpNo
             let cErr = "";
@@ -130,7 +126,7 @@ class handleCompany {
                     }
                     if (cAction == 'D') {
                         let crnum = (decoded.corpId).split('-')
-                        let SDBdbname = crnum[0] + crnum[1] + crnum[2] + "SDB"
+                        let SDBdbname = crnum.length == 3 ? crnum[0] + crnum[1] + crnum[2] + 'SDB' : crnum[0] + crnum[1] + 'SDB';
                         let dbName = queryService.generateDatabaseName(decoded.corpId, CmpNo);
                         let dbConn = db.createPool(dbName);
                         let m82 = new M82Controller(SDBdbname);
@@ -166,7 +162,6 @@ class handleCompany {
 
 
                 //M00Table oM00 = new M00Table(oCmp);
-                console.log('CmpMaster class:', CmpMaster); // Log to confirm the class
                 let oM00
                 if (cAction == 'E' || cAction == 'G') {
                     let sdbSeq = (decoded.corpId).split('-');
@@ -199,7 +194,6 @@ class handleCompany {
                                 type: sequelizeIDB.QueryTypes.SELECT
                             });
                             // dynamicDB.close().then(() => {
-                            //     console.log('SQL Server pool closed');
                             // }).catch((err) => {
                             //     console.error('Error closing SQL Server pool:', err);
                             // });
@@ -215,10 +209,8 @@ class handleCompany {
                                 endDate = yrRow[0].FIELD03
                             }
                             // DSDATE, DEDATE, _ADDRESS_1, _ADDRESS_2, _ADDRESS_3, _CITY, _PINCODE, _PHONE1, _PHONE2, _MOBILE1, _MOBILE2, _FAX1, _FAX2, _EMAIL, _WEB, _STATE, _COUNTRY, _STCD, _RPTHD1, _RPTHD2, _RPTFT1, _RPTFT2, _CMPLOGO, _PHONE3, _SYNCID, _BSYNCID, _01, _02, _03, _05, _06, _07, _08, _16, _17, _09, _10, _11, _12, _13, _14, _15
-                            console.log(cmpRow);
                             if (oM00.oEntDict.length == 0) {
                                 oM00.oEntDict["M00"] = {};  // Initialize M00 if it doesn't exist
-                                console.log("Initialized M00 in oEntDict");
                             }
                             oM00.oEntDict["M00"] = cmpRow[0];
                             oM00.oEntDict["M00"].DSDATE = startDate; //MApp.DTOS(startDate, true);    // Financial year start date
@@ -229,8 +221,6 @@ class handleCompany {
                             })
                             let formattedCmpNo = CmpNo.toString().padStart(4, '0');
                             oDic["M00"]._CMPLOGO = `${path.FTPPATH}${decoded.corpId}/${formattedCmpNo}/images/${oDic["M00"]._CMPLOGO}`;
-                            console.log(oDic["M00"]._CMPLOGO);
-
                         }
                         //M00 Entry
 
@@ -267,19 +257,42 @@ class handleCompany {
                         if (cAction == 'E') {
                             oDic["P_YRDT"] = await oCmp.GetYearJSon();
                         }
+                        if (cAction == 'E') {
+                            let brcList = await brc.findAll({
+                                BRCCOMP: {
+                                    [Op.or]: [
+                                        { [Op.like]: `%,${CmpNo},%` },  // Number 0 in the middle
+                                        { [Op.like]: `${CmpNo},%` },     // Number 0 at the start
+                                        { [Op.like]: `%,${CmpNo}` },     // Number 0 at the end
+                                        { [Op.eq]: `${CmpNo}` }          // Exact match '0'
+                                    ]
+                                }
+                            }, [], ['BRCODE']);
+                            let FLDBRC = []
+                            if (brcList.length > 1) {
+                                for (const bl of brcList) {
+                                    FLDBRC.push(bl.BRCODE.toString());
+                                }
+                            } else {
+                                FLDBRC.push(brcList[0]?.BRCODE)
+                            }
+                            oDic["P_BRC"] = FLDBRC;
+                        }
+                        oDic.FLDBRC = '';
                         response.status = "SUCCESS";
                         response.data = { ...oDic };
-                        console.log(response);
-                        console.log(JSON.stringify(response));
 
                         let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         res.status(200).json({ encryptedResponse })
                         break;
                     case "D":
+                        let branch = await brc.findOne({
+                            BRCCOMP: CmpNo
+                        })
                         if (branch?.BRCCOMP) {
                             let cmplist = (branch.BRCCOMP).split(',');
                             for (const cl of cmplist) {
-                                let existingCmp = (BRCCOMP).split(',');
+                                let existingCmp = (branch.BRCCOMP).split(',');
                                 if (existingCmp.includes(cl))
                                     continue;
                             }
@@ -375,8 +388,8 @@ class handleCompany {
         let admi = new ADMIController(sdbdbname);
         let m81 = new M81Controller(sdbdbname);
         let rel = new RELController(sdbdbname);
+        let brc = new BRCController(sdbdbname);
         try {
-            console.log(typeof pa);
             let cAction = pa.action
             let CmpNo = pa.CmpNo
             let cSData = pa.cSData
@@ -444,17 +457,121 @@ class handleCompany {
             if (cSData) {
                 // cSData["M00"]._CMPLOGO = req.body.img
                 let cMaster = new CmpMaster(decoded.userId, decoded.corpId, LangType, cAction, JSON.parse(cSData), decoded, sdbdbname);
-                CmpMaster.oEntDict = JSON.parse(cSData);
+                let jsonData = JSON.parse(cSData);
+                CmpMaster.oEntDict = jsonData
                 CmpMaster.cUserID = decoded.userId;
                 if (cAction == "E" && isComapny) {
                     CmpMaster.newDatabase = qS;
                     let saveCmp = await cMaster.SaveCompany(decoded.corpId, '', '', false, '', true);
                     if (!saveCmp.result) {
                         if (req.files[0]?.originalname) {
-                            console.log('File Size from API:', req.files);  // Check the file size right after upload
                             let uploadFile = new FTPService(decoded, req.files[0].originalname, saveCmp.CmpNum);
                             let upFile = await uploadFile.uploadFile(req);
                         }
+                        let findAllBrc = await brc.findAll({
+                            BRCCOMP: {
+                                [Op.or]: [
+                                    { [Op.like]: `%,${CmpNo},%` },  // Number 0 in the middle
+                                    { [Op.like]: `${CmpNo},%` },     // Number 0 at the start
+                                    { [Op.like]: `%,${CmpNo}` },     // Number 0 at the end
+                                    { [Op.eq]: `${CmpNo}` }          // Exact match '0'
+                                ]
+                            }
+                        }, [], ['BRCODE']);
+                        if (jsonData.FLDBRC) {
+                            console.log(jsonData.FLDBRC);
+                            let brcIdList = jsonData.FLDBRC.split(',').map(id => id.trim());
+
+                            // Extract only BRCODE values from DB result
+                            let dbBrcCodes = findAllBrc.map(item => item.BRCODE.toString());
+
+                            // Check if ANY db code exists in brcIdList
+                            let missingCodes = dbBrcCodes.filter(code => !brcIdList.includes(code))
+
+                            if (missingCodes.length > 0) {
+                                let dbName = queryService.generateDatabaseName(decoded.corpId, parseInt(saveCmp.CmpNum));
+                                let dbConn = db.createPool(dbName);
+                                let listOfYr = await dbConn.query('SELECT FIELD01 FROM CMPF01', {
+                                    type: QueryTypes.SELECT
+                                });
+                                let connectedRows;
+                                if (listOfYr) {
+                                    for (const ly of listOfYr) {
+                                        connectedRows = await dbConn.query(`SELECT * 
+                                            FROM YR${ly.FIELD01}T41 
+                                            WHERE FLDBRC IN (:codes)`,
+                                            {
+                                                replacements: { codes: missingCodes },
+                                                type: QueryTypes.SELECT
+                                            });
+                                        if (connectedRows.length > 0) {
+                                            response.message = 'This branch cannot be removed because it contains associated transactions.';
+                                            response.status = 'FAIL'
+                                            let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                                            return res.status(200).json({ encryptedResponse });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if ((jsonData.FLDBRC)) {
+                            let findAllBrc = await brc.findAll({
+                                BRCCOMP: {
+                                    [Op.or]: [
+                                        { [Op.like]: `%,${CmpNo},%` },  // Number 0 in the middle
+                                        { [Op.like]: `${CmpNo},%` },     // Number 0 at the start
+                                        { [Op.like]: `%,${CmpNo}` },     // Number 0 at the end
+                                        { [Op.eq]: `${CmpNo}` }          // Exact match '0'
+                                    ]
+                                }
+                            }, [], ['BRCODE']);
+                            let brcIdList = (jsonData.FLDBRC).split(',').map(id => id.trim());
+
+                            // Extract only BRCODE values from DB result
+                            let dbBrcCodes = findAllBrc.map(item => item.BRCODE.toString());
+
+                            // Check if ANY db code exists in brcIdList
+                            let missingCodes = dbBrcCodes.filter(code => !brcIdList.includes(code))
+
+                            for (const br of missingCodes) {
+                                let existingBrc = await brc.findOne({
+                                    BRCODE: br
+                                }, [], ['BRCCOMP']);
+
+                                let brListarray = (existingBrc.BRCCOMP).split(',');
+                                let newCmpLst = []; // Use an array to collect values
+
+                                for (const bry of brListarray) {
+                                    if (parseInt(bry) !== parseInt(saveCmp.CmpNum)) {
+                                        newCmpLst.push(bry); // Push to array instead of concatenating directly
+                                    }
+                                }
+
+                                // Join the array into a string, using a comma as separator
+                                newCmpLst = newCmpLst.join(',');
+                                await brc.update({
+                                    BRCCOMP: newCmpLst
+                                }, {
+                                    BRCODE: br
+                                })
+                            }
+                        }
+                        // else {
+                        //     let brcIdList = jsonData.FLDBRC
+                        //     let existingBrc = await brc.findOne({
+                        //         BRCODE: brcIdList
+                        //     });
+                        //     let newCmpLst = (existingBrc.BRCCOMP.includes(',') && !existingBrc.BRCCOMP.includes(CmpNo.toString()))
+                        //         ? `${existingBrc.BRCCOMP},${CmpNo}`
+                        //         : existingBrc.BRCCOMP.includes(CmpNo.toString())
+                        //             ? existingBrc.BRCCOMP
+                        //             : CmpNo.toString();
+                        //     await brc.update({
+                        //         BRCCOMP: newCmpLst
+                        //     }, {
+                        //         BRCODE: brcIdList
+                        //     })
+                        // }
                         response.status = 'SUCCESS';
                         response.message = '';
                         let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
@@ -463,9 +580,15 @@ class handleCompany {
                 } else if (cAction == "A") {
                     if (decoded.corpId != 'PL-P-00001') {
                         let totCMP = await m82.findAll({
-                            M82F01: cUserID
-                        })
-                        if (totCMP.length > admin.ADMICOMP) {
+                            M82ADA: 'A'
+                        });
+                        let purchasedCmp = await PLRDBA01.findOne({
+                            where: {
+                                A01F03: decoded.corpId
+                            }
+                        });
+
+                        if (purchasedCmp.A01CMP <= totCMP.length) {
                             response.status = 'Fail'
                             response.message = "Need to Purchase More Companies to Create One";
                             let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
@@ -475,13 +598,60 @@ class handleCompany {
                     let saveCmp = await cMaster.SaveCompany(decoded.corpId, '', '', false, '');
                     cSData = JSON.parse(cSData);
                     if (!saveCmp.result) {
-                        let BRCOntroller = new BranchController(false, 'A', '', `${saveCmp.CmpNum}-HOME-BRC`, cSData["M00"]._16, '', decoded.corpId, 'Y', saveCmp.CmpNum)
-                        let AddHomeBrc = await BRCOntroller.handleAction(req, res, true);
+                        // let BRCOntroller = new BranchController(false, 'A', '', `${saveCmp.CmpNum}-HOME-BRC`, cSData["M00"]._16, '', decoded.corpId, 'Y', saveCmp.CmpNum)
+                        // let AddHomeBrc = await BRCOntroller.handleAction(req, res, true);
+                        let cnum = parseInt(saveCmp.CmpNum);
+                        if ((cSData.FLDBRC).includes(',')) {
+                            let brcIdList = (cSData.FLDBRC).split(',');
+                            for (const br of brcIdList) {
+                                let existingBrc = await brc.findOne({
+                                    BRCODE: br
+                                });
+                                let newCmpLst = (existingBrc.BRCCOMP.includes(',') && !existingBrc.BRCCOMP.includes(cnum.toString()))
+                                    ? `${existingBrc.BRCCOMP},${cnum}`
+                                    : existingBrc.BRCCOMP.includes(cnum.toString())
+                                        ? existingBrc.BRCCOMP
+                                        : cnum.toString();
+
+                                await brc.update({
+                                    BRCCOMP: newCmpLst
+                                }, {
+                                    BRCODE: br
+                                })
+                            }
+                        } else {
+                            let brcIdList = cSData.FLDBRC
+                            let existingBrc = await brc.findOne({
+                                BRCODE: brcIdList
+                            });
+                            let newCmpLst = (existingBrc.BRCCOMP.includes(',') && !existingBrc.BRCCOMP.includes(cnum.toString()))
+                                ? `${existingBrc.BRCCOMP},${cnum}`
+                                : existingBrc.BRCCOMP.includes(cnum.toString())
+                                    ? existingBrc.BRCCOMP
+                                    : cnum.toString();
+                            await brc.update({
+                                BRCCOMP: newCmpLst
+                            }, {
+                                BRCODE: brcIdList
+                            })
+                        }
                         await rel.create(admin.ADMICORP, admin.ADMIF01, parseInt(saveCmp.CmpNum), '');
                         await m82.create(cUserID, parseInt(saveCmp.CmpNum), '', '', '', '', '', '', '', 'N', (new Date().getFullYear() % 100).toString(), 'A'
                         );
                         await cmp.create(parseInt(saveCmp.CmpNum), cSData['M00'].FIELD02, 'SQL', cSData['M00'].FIELD11, cUserID, formatDate(new Date()), '94.176.235.105', 'aipharma_aakash', 'Aipharma@360', 'DATA', null
                         );
+                        await PLRDBGAO.create({
+                            GAOF01: decoded.corpId,
+                            GAOF02: parseInt(saveCmp.CmpNum),
+                            GAOF03: 2, //Customized Bill Print(Formate Wise) Free
+                            GAOF04: 0,
+                            GAOF05: 5, // Customized Report Setup(Report Wise) Free
+                            GAOF06: 0,
+                            GAOF07: 50, // User Field(Limit Wise) Free
+                            GAOF08: 0,
+                            GAOF09: 5, // User Master(Limit Wise) Free
+                            GAOF10: 0
+                        });
                         response.status = 'SUCCESS';
                         response.message = '';
                         let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
@@ -497,7 +667,7 @@ class handleCompany {
                 console.error("No company details provided");
             }
         } catch (error) {
-            console.log(error);
+            console.error(error);
         }
     }
 }

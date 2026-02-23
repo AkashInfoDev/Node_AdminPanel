@@ -46,7 +46,6 @@ class DbCloneService {
     try {
       // Note: NO transaction wrapping here!
       await sequelize.query(sql);
-      // console.log(`Database cloned from '${sourceDB}' to '${targetDB}' successfully.`);
     } catch (error) {
       await sequelize.query(`DROP DATABASE ${targetDB}`, { type: QueryTypes.RAW })
       console.error('Error executing CloneDatabase stored procedure:', error);

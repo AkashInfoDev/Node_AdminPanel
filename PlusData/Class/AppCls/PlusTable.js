@@ -346,7 +346,6 @@ class PlusTable extends PlusInfo {
 
     async SaveValidation(lS13F63Valid = false, oEntDict) {
         if (oEntDict == null) {
-            console.log("oEntDict Not Passed or Loaded");
             return false; // Optionally return false if oEntDict is not passed
         }
 

@@ -19,7 +19,6 @@ async function writeToFile(req, res) {
     }
 
     let data = payload.payment.entity;
-    console.log('Data from Payload:', data);
 
     // Insert data into the database - handle potential DB insert error
     try {
@@ -27,7 +26,6 @@ async function writeToFile(req, res) {
         RPAYF01: data.id,
         RPAYF02: JSON.stringify(payload),
       });
-      console.log('Data inserted into database successfully.');
     } catch (dbError) {
       console.error('Error inserting data into database:', dbError);
       return res.status(500).json({ error: 'Failed to insert data into database' });

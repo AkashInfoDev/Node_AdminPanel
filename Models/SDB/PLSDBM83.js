@@ -7,13 +7,13 @@ const { DataTypes, Sequelize } = require('sequelize');
 module.exports = (sequelize) => {
     return sequelize.define('PLSDBM83', {
         M83F01: {
-            type: DataTypes.STRING(8),
+            type: DataTypes.TEXT,
             primaryKey: true,  // Assuming M81F00 is the primary key
             allowNull: false,  // It should not be null if it is the primary key
         },
         M83F02: {
             type: DataTypes.DATE,
-            allowNull: false,
+            allowNull: true,
         },
         M83F03: {
             type: DataTypes.DATE,
@@ -30,7 +30,7 @@ module.exports = (sequelize) => {
             defaultValue: '',  // Updated default value to an empty string (adjust as needed)
         },
         M83F07: {
-            type: DataTypes.STRING(20),
+            type: DataTypes.TEXT,
             allowNull: false,
             defaultValue: '',  // Updated default value to an empty string (adjust as needed)
         }

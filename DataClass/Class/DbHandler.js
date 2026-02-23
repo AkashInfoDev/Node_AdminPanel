@@ -256,9 +256,7 @@ class DBHandler {
                         SbV = SbV.slice(0, -1);
                     }
                     const insertQuery = `INSERT INTO ${cTblNm} (${SbF}) VALUES (${SbV})`;
-                    console.log(insertQuery);
                     let result = await this.sequelizeDynamic.query(insertQuery);
-                    console.log(result);
                 }
             }
             catch (Ex) {
@@ -282,42 +280,6 @@ class DBHandler {
 * @param {object} obj - Must include transactionMap and cBeginID.
 * @returns {Promise<boolean>} - true if successful, false on error.
 */
-    // async deleteRow(tableName, whereClause = "", transaction) {
-    //     let success = true;
-
-    //     try {
-    //         // Check if transaction exists and is valid
-    //         if (!transaction || !transaction.sequelize || !transaction.connection) {
-    //             throw new Error("Invalid transaction object.");
-    //         }
-
-    //         // Early return if the whereClause is just '()' (no condition)
-    //         if (whereClause === "()") {
-    //             return true;
-    //         }
-
-    //         // Build the DELETE query safely (ensure `whereClause` is safe)
-    //         const deleteQuery = `DELETE FROM ${tableName} WHERE ${whereClause}`;
-    //         console.log("DELETE Query:", deleteQuery);
-
-    //         // Execute the delete query with the provided transaction
-    //         const [result] = await transaction.sequelize.query(deleteQuery, {
-    //             transaction: transaction, // Pass the transaction here
-    //         });
-
-    //         // Check if any rows were affected
-    //         if (result?.affectedRows === 0) {
-    //             console.warn(`No rows deleted from ${tableName}. Condition: ${whereClause}`);
-    //         }
-
-    //     } catch (error) {
-    //         console.error("deleteRow Error:", error);
-    //         success = false;
-    //     }
-
-    //     return success;
-    // }
-
     async deleteRow(tableName, whereClause = "", transaction) {
         let success = true;
 
@@ -399,7 +361,6 @@ class DBHandler {
                 cQuery = "SELECT '1' AS TFLD FROM " + cTblNm + (!cWhere ? "" : " Where " + cWhere);
             }
             else { cQuery = "SELECT '1' AS TFLD FROM " + cTblNm; }
-            console.log(cQuery);
             let drs = this.sequelizeDynamic = db.getConnection(this.databasename);
             let DTable = await this.sequelizeDynamic.query(
                 cQuery,

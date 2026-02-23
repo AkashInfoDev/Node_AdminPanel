@@ -1,25 +1,16 @@
 // CompanyService.js
-const querystring = require('querystring');
-const { Sequelize, QueryTypes } = require('sequelize');
-const TokenService = require('../Services/tokenServices');
+const { QueryTypes } = require('sequelize');
 const Encryptor = require('../Services/encryptor');
 
 const encryptor = new Encryptor();
 // const { evlStr, evlSTU, dtSeekFld } = require('./utils');
 const F02Table = require('../PlusData/Class/MTableCls/F02Table'); // You need to implement similar functionality
 const db = require('../Config/config'); // Your Database class
-const { MApp, LangType } = require('../PlusData/commonClass/plusCommon');
+const { MApp } = require('../PlusData/commonClass/plusCommon');
 const definePLSYSF02 = require('../Models/IDB/PLSYSF02');
-const definePLSDBADMI = require('../Models/SDB/PLSDBADMI');
-const definePLSDBM81 = require('../Models/SDB/PLSDBM81');
-const Year = require('../PlusData/Class/CmpYrCls/Year');
-const Company = require('../PlusData/Class/CmpYrCls/Company');
 const sequelizeIDB = db.getConnection('IDBAPI');
-const sequelizeA00001SDB = db.getConnection('A00001SDB');
 
 const PLSYSF02 = definePLSYSF02(sequelizeIDB);
-const PLSDBADMI = definePLSDBADMI(sequelizeA00001SDB);
-const PLSDBM81 = definePLSDBM81(sequelizeA00001SDB);
 
 class CompanyService {
   constructor({ year, oCmp, oEntDict, dbName, databaseName }) {
@@ -73,15 +64,9 @@ class CompanyService {
             filterStr = `FIELD01=${field01}`;
             fieldToFetch = 'FIELD07';
           }
-
-          console.log(dtCF02);
-          console.log(filterStr);
-          console.log(fieldToFetch);
           
           cVal = MApp.DTSeekFld(dtCF02, filterStr, fieldToFetch);
         }
-
-        console.log(this.oEntDict["M00"][cKey], "  ", cVal);
         this.oEntDict["M00"][cKey] = cVal;
       }
     } else {

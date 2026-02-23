@@ -2,13 +2,9 @@ const querystring = require('querystring');
 const db = require('../Config/config'); // Your Database class
 const { Op, QueryTypes } = require('sequelize'); // Required for LIKE queries
 
-const sequelizeSDB = db.getConnection('A00001SDB');
 const sequelizeRDB = db.getConnection('RDB');
 const sequelizeIDB = db.getConnection('IDBAPI');
 
-const definePLSDBBRC = require('../Models/SDB/PLSDBBRC'); // Model factory
-const definePLSDBREL = require('../Models/SDB/PLSDBBRC'); // Model factory
-const definePLSDBADMI = require('../Models/SDB/PLSDBADMI'); // Model factory
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01'); // Model factory
 const definePLSTATE = require('../Models/IDB/PLSTATE'); // Model factory
 const Encryptor = require('../Services/encryptor');
@@ -17,12 +13,7 @@ const ADMIController = require('./ADMIController');
 const RELController = require('./RELController');
 const BRCController = require('./BRCController');
 const { generateDatabaseName } = require('../Services/queryService');
-const M81Controller = require('./M81Controller');
 const M82Controller = require('./M82Controller');
-
-const PLSDBBRC = definePLSDBBRC(sequelizeSDB);
-const PLSDBREL = definePLSDBREL(sequelizeSDB);
-const PLSDBADMI = definePLSDBADMI(sequelizeSDB);
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 const PLSTATE = definePLSTATE(sequelizeIDB);
 
@@ -97,7 +88,6 @@ class BranchController {
                 BRGST = pa.BRGST
                 BRSTATE = pa.BRSTATE
                 BRCCOMP = pa.BRCCOMP
-                console.log("params pa", pa);
 
                 const token = req.headers['authorization']?.split(' ')[1]; // 'Bearer <token>'
 
@@ -109,10 +99,8 @@ class BranchController {
                 }
                 decoded = await TokenService.validateToken(token);
             }
-            console.log("decoded", decoded);
 
             // corpId = decoded.corpId
-            console.log(this.brcr);
             let sdbseq;
             if (this.brcr) {
                 sdbseq = (this.brcr).split('-');
@@ -278,7 +266,6 @@ class BranchController {
                 const updatedBRNAME = BRNAME || branch.BRNAME;
                 const updatedBRGST = BRGST ? BRGST : mainBRC.BRGST;
                 let statecode = updatedBRGST.split('').slice(0, 2).join('');
-                console.log(statecode);
                 let stateid = await PLSTATE.findOne({
                     where: {
                         PLSF01: {
@@ -286,7 +273,7 @@ class BranchController {
                         }
                     }
                 });
-                const updatedBRSTATE = stateid.PLSF01 || branch.BRSTATE;
+                const updatedBRSTATE = stateid?.PLSF01 || branch.BRSTATE;
                 branch.BRNAME = updatedBRNAME;
                 branch.BRGST = updatedBRGST;
                 // branch.BRCORP = BRCORP; 
@@ -322,7 +309,6 @@ class BranchController {
                 }
 
                 const branchRow = await tblbrc.findOne({ BRCODE: BRCODE });
-                console.log("brc cmp", branchRow.BRCCOMP, !branchRow.BRCCOMP);
 
                 if (branchRow.BRCCOMP != null) {
                     response.message = 'Branch is already assigned to Company'
