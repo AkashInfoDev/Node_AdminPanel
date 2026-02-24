@@ -1065,7 +1065,7 @@ class UserController {
                     return res.status(400).json({ encryptedResponse: encryptedResponse });
                 } else {
                     for (const corp of corpExist) {
-                        if (corp.A01F03 == corpId) {
+                        if ((corp.A01F03).trim() == corpId) {
                             corpRow = corp
                         }
                     }
@@ -1311,7 +1311,7 @@ class UserController {
                     return res.status(400).json({ encryptedResponse: encryptedResponse });
                 } else {
                     for (const corp of corpExist) {
-                        if (corp.A01F03 == corpId) {
+                        if ((corp.A01F03).trim() == corpId) {
                             corpRow = corp
                         }
                     }
