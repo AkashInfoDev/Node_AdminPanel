@@ -940,7 +940,7 @@ class UserController {
 
                         if (isExpired) {
                             await m83.destroy({
-                                where: { M83F01: userId }
+                                M83F01: userId
                             });
                         } else {
                             response.status = 'FAIL';
