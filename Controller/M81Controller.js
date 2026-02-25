@@ -115,7 +115,7 @@ class M81Controller {
     }
     async destroy(where) {
         try {
-            return await this.PLSDBM81.destroy(where);
+            return await this.PLSDBM81.destroy({where});
         } catch (error) {
             throw new Error(`Failed to destroy record: ${error.message}`);
         }

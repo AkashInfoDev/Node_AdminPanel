@@ -532,7 +532,7 @@ class UserController {
                             );
                         }
                         await PLRDBGAO.create({
-                            GAOF01: companyResult.corpId,
+                            GAOF01: companyResult.nextCorpId,
                             GAOF02: parseInt(companyResult.CmpNum),
                             GAOF03: 2, // Customized Bill Print(Formate Wise) Free
                             GAOF04: 0,
