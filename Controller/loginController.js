@@ -9,6 +9,7 @@ const definePLSDBADMI = require('../Models/SDB/PLSDBADMI'); // Model factory
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01'); // Model factory
 const definePLRDBA02 = require('../Models/RDB/PLRDBA02'); // Model factory
 const definePLRDBOTP = require('../Models/RDB/PLRDBOTP');
+const definePLRDBGAO = require('../Models/RDB/PLRDBGAO');
 const Encryptor = require('../Services/encryptor');
 const { Op, QueryTypes, Sequelize } = require('sequelize');
 // const PLRDBA01 = require('../Models/RDB/PLRDBA01');
@@ -39,6 +40,7 @@ const PLSDBADMI = definePLSDBADMI(sequelizeSDB);
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 const PLRDBA02 = definePLRDBA02(sequelizeRDB);
 const PLRDBOTP = definePLRDBOTP(sequelizeRDB);
+const PLRDBGAO = definePLRDBGAO(sequelizeRDB);
 const encryptor = new Encryptor();
 // let response = { data: null, Status: "SUCCESS", message: null }
 
@@ -697,7 +699,7 @@ class UserController {
                         nextNumber = GU + (maxNumber + 1).toString().padStart(7, '0');  // Pad with zeros to maintain the format
                     }
 
-                    await m81.create(GU, GUID, firstName + lastName, userId, password, nextNumber, grpname ? grpname : roleId == '1' ? 'Admin' : roleId == '2' || '3' ? 'User' : 'Employee', phoneNumber, email, '', '', 'A', newUser.ADMIF00, 'ABCD');
+                    await m81.create(GU, GUID, firstName + lastName, userId, password, nextNumber, grpname ? grpname : roleId == '1' ? 'Admin' : roleId == '2' || '3' ? 'User' : 'Employee', phoneNumber, email, '', '', 'A', newUser.ADMIF00, 'ABCD', usrCodeList[0].M81SID);
                 } else {
                     if (GUaction == 'G') {
                         GU = 'G';  // Change prefix to 'G'
@@ -1270,7 +1272,8 @@ class UserController {
                     UserId: M81Row.M81F01,
                     userNm: encryptor.decrypt(user.ADMIF01),
                     DefCmp: cmplist.DefComp.cmpNo,
-                    cmpList: cmplist.CompList
+                    cmpList: cmplist.CompList,
+                    purchasedSetUpIds: M81Row[0].M81SID
                 };
                 // let currentTime = new Date();
                 // let newLogin = await m83.create(userId, formatDate(currentTime), '', '', '', token);
@@ -1363,7 +1366,8 @@ class UserController {
                     DefCmp: cmplist.DefComp.cmpNo,
                     cmpList: usrCompList,
                     userDetails: user,
-                    modData: modData
+                    modData: modData,
+                    purchasedSetUpIds: M81Row[0].M81SID
                 };
                 response.message = 'Login successful';
                 // response.token = token;
@@ -1454,6 +1458,9 @@ class UserController {
                     if (logOutReq) {
                         let resp = encryptor.decrypt(logOutReq.data);
                         resp = JSON.parse(resp);
+                        await m83.destroy({
+                            M83F01: userId
+                        });
                         if (resp.status == 'SUCCESS') {
                             response.message = 'Logout request sent Successfully';
                             response.status = 'SUCCESS';

@@ -201,12 +201,14 @@ class handleCompany {
                                 for (let yr of yrRow) {
                                     if (yr.FIELD01 == M82.M82YRN) {
                                         startDate = yr.FIELD02;
-                                        endDate = yr.FIELD03
+                                        endDate = yr.FIELD03;
+                                        oYear = (yr.FIELD01).toString();
                                     }
                                 }
                             } else {
                                 startDate = yrRow[0].FIELD02;
-                                endDate = yrRow[0].FIELD03
+                                endDate = yrRow[0].FIELD03;
+                                oYear = (yrRow[0].FIELD01).toString();
                             }
                             // DSDATE, DEDATE, _ADDRESS_1, _ADDRESS_2, _ADDRESS_3, _CITY, _PINCODE, _PHONE1, _PHONE2, _MOBILE1, _MOBILE2, _FAX1, _FAX2, _EMAIL, _WEB, _STATE, _COUNTRY, _STCD, _RPTHD1, _RPTHD2, _RPTFT1, _RPTFT2, _CMPLOGO, _PHONE3, _SYNCID, _BSYNCID, _01, _02, _03, _05, _06, _07, _08, _16, _17, _09, _10, _11, _12, _13, _14, _15
                             if (oM00.oEntDict.length == 0) {
@@ -215,7 +217,7 @@ class handleCompany {
                             oM00.oEntDict["M00"] = cmpRow[0];
                             oM00.oEntDict["M00"].DSDATE = startDate; //MApp.DTOS(startDate, true);    // Financial year start date
                             oM00.oEntDict["M00"].DEDATE = endDate; //MApp.DTOS(endDate, true);   // Financial year end date
-                            oDic = await oM00.GetDictionary(decoded, qS, oUser.lCode);
+                            oDic = await oM00.GetDictionary(decoded, qS, oUser.lCode, '', oYear);
                             let path = await PLRDBA01.findOne({
                                 A01F03: decoded.corpId
                             })
@@ -269,12 +271,14 @@ class handleCompany {
                                 }
                             }, [], ['BRCODE']);
                             let FLDBRC = []
-                            if (brcList.length > 1) {
-                                for (const bl of brcList) {
-                                    FLDBRC.push(bl.BRCODE.toString());
+                            if (brcList.length != 0) {
+                                if (brcList.length > 1) {
+                                    for (const bl of brcList) {
+                                        FLDBRC.push(bl.BRCODE.toString());
+                                    }
+                                } else {
+                                    FLDBRC.push(brcList[0]?.BRCODE)
                                 }
-                            } else {
-                                FLDBRC.push(brcList[0]?.BRCODE)
                             }
                             oDic["P_BRC"] = FLDBRC;
                         }

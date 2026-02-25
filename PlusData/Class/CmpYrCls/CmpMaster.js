@@ -284,7 +284,7 @@ class CmpMaster extends PlusInfo {
         return true;
     }
 
-    async GetDictionary(decoded, dbName, LType, cmpnm) {
+    async GetDictionary(decoded, dbName, LType, cmpnm, oYr) {
         // Fill oEntDict directly for the instance
         let DT = await PLSYS13.findAll({
             where: { S13F01: 'M00' }
@@ -321,7 +321,8 @@ class CmpMaster extends PlusInfo {
             this.oEntDict["M00"].FIELD01 = cmpnm ? cmpnm : await MApp.GetEmptyCmpNo(decoded); // Company No
             this.oEntDict["M00"].DSDATE = MApp.DTOS(new Date(SYr, 3, 1), true);    // Financial year start date
             this.oEntDict["M00"].DEDATE = MApp.DTOS(new Date(EYr, 2, 31), true);   // Financial year end date
-        } else {
+        } else if(this.cAction == 'E'){
+            this.oYear = oYr
             // this.oEntDict["M00"].DSDATE = MApp.DTOS(M82, true);    // Financial year start date
             // this.oEntDict["M00"].DEDATE = MApp.DTOS(M92, true);   // Financial year end date
         }
