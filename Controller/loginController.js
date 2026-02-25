@@ -923,6 +923,16 @@ class UserController {
                 }
             }
 
+            let isActive = await m81.findOne({ M81UNQ: user.ADMIF00 });
+            if (isActive) {
+                if (isActive.M81ADA == 'D') {
+                    response.status = 'FAIL';
+                    response.message = 'User Does not Exist';
+                    const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                    return res.status(400).json({ encryptedResponse: encryptedResponse });
+                }
+            }
+
             if (!user) {
                 response.status = 'FAIL';
                 response.message = 'Invalid Credentials';
@@ -1535,7 +1545,7 @@ class UserController {
             M81UNQ: user.ADMIF00
         })
         let crnum = (decoded.corpId).split('-')
-        let SDBdbname = crnum[0] + crnum[1] + crnum[2] + "SDB";
+        let SDBdbname = crnum.length == 3 ? crnum[0] + crnum[1] + crnum[2] + 'SDB' : crnum[0] + crnum[1] + 'SDB';
         let cmplst = user.ADMICOMP;
         if (cmplst) {
             let cmpnumbers = cmplst.split(',')
