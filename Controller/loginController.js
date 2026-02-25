@@ -1338,7 +1338,7 @@ class UserController {
                 let cmplist = await userComp.authenticateUser();
                 let usrCompList = [];
 
-                if (user.ADMIROL != 2) {
+                if (user.ADMIF06 != 2) {
                     let assgncmpArray = (user.ADMICOMP).split(','); // Assuming ADMICOMP is already an array or it's a string that's split elsewhere
 
                     for (const cmp of cmplist.CompList) {
