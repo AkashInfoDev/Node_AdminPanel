@@ -372,16 +372,16 @@ class UserController {
                 let response = { status: 'SUCCESS', message: null };
                 const encryptedUserId = encryptor.encrypt(userId);
 
-                const existing = await PLSDBADMI.findAll();
-                for (let i of existing) {
-                    const decrypted = encryptor.decrypt(i.ADMIF01);
-                    if (decrypted === userId) {
-                        response.status = 'FAIL';
-                        response.message = 'User ID is already registered';
-                        const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
-                        return res.status(400).json({ encryptedResponse: encryptedResponse });
-                    }
-                }
+                // const existing = await PLSDBADMI.findAll();
+                // for (let i of existing) {
+                //     const decrypted = encryptor.decrypt(i.ADMIF01);
+                //     if (decrypted === userId) {
+                //         response.status = 'FAIL';
+                //         response.message = 'User ID is already registered';
+                //         const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                //         return res.status(400).json({ encryptedResponse: encryptedResponse });
+                //     }
+                // }
 
                 // const hashedPassword = encryptor.encrypt(password);
                 // let SDBdbname = 'A' + corpNum + "SDB"
