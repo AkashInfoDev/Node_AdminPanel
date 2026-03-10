@@ -46,7 +46,11 @@ module.exports = (sequelize) => {
         },
         A02F13: {
             type: DataTypes.INTEGER
-        }
+        },
+        A02F14: {
+            type: DataTypes.DECIMAL(18, 2),
+            allowNull: true
+        },
     }, {
         tableName: 'PLRDBA02',
         timestamps: false,

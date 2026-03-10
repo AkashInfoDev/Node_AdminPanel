@@ -5,11 +5,16 @@ const db = require('../Config/config'); // Your Database class
 const TokenService = require('../Services/tokenServices');
 
 const definePLRDBA02 = require('../Models/RDB/PLRDBA02'); // Model factory
+const defineAMC_Transaction = require('../Models/AiAdmin/AMC_Transaction'); // Model factory
+const defineAMC_TransactionHistory = require('../Models/AiAdmin/AMC_TransactionHistory'); // Model factory
 const ADMIController = require('./ADMIController');
 
 const sequelizeRDB = db.getConnection('RDB');
+let sequelizeAIERP = db.createPoolEway('aiadmin_aierp_1');
 
 const PLRDBA02 = definePLRDBA02(sequelizeRDB);
+const AMC_Transaction = defineAMC_Transaction(sequelizeAIERP);
+const AMC_TransactionHistory = defineAMC_TransactionHistory(sequelizeAIERP);
 
 const encryptor = new Encryptor();
 
@@ -49,15 +54,15 @@ class PricingPlanController {
         let sdbdbname = sdbseq.length == 3 ? sdbseq[0] + sdbseq[1] + sdbseq[2] + 'SDB' : sdbseq[0] + sdbseq[1] + 'SDB';
         let admi = new ADMIController(sdbdbname)
         const existing = await admi.findAll();
-            for (let i of existing) {
-                const decrypted = encryptor.decrypt(i.ADMIF01);
-                if (decrypted === decryptedId) {
-                    // response.status = 'FAIL';
-                    // response.message = 'User ID is already registered';
-                    // const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-                    // return res.status(400).json({ encryptedResponse: encryptedResponse });
-                }
+        for (let i of existing) {
+            const decrypted = encryptor.decrypt(i.ADMIF01);
+            if (decrypted === decryptedId) {
+                // response.status = 'FAIL';
+                // response.message = 'User ID is already registered';
+                // const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                // return res.status(400).json({ encryptedResponse: encryptedResponse });
             }
+        }
 
         // if (!user) {
         //     response.message = 'Unauthorized: User not found or inactive'
@@ -189,10 +194,20 @@ class PricingPlanController {
                     const getAllList = await PLRDBA02.findAll({
                         where: { A02F09: '1' }
                     });
+                    console.log(AMC_Transaction);
+                    let amc_Available = await AMC_Transaction.findOne({
+                        where: {
+                            AMC_custid: decoded.corpId
+                        }
+                    });
+                    let lAMC = false;
+                    if (amc_Available) {
+                        lAMC = true;
+                    }
 
                     if (getAllList) {
                         response.message = 'All Price List';
-                        response.data = getAllList
+                        response.data = { getAllList, lAMC }
                         const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         return res.json({ encryptedResponse });
                     } else {
@@ -201,8 +216,38 @@ class PricingPlanController {
                         return res.status(404).json({ encryptedResponse });
                     }
 
+                case 'F':
+                    let {
+                        Amc_date, Cust_Id, Amc_Start_date, Amc_End_date, Amc_Type, Amc_Amt, Payment_Type, Remarks, AMC_custid, AMC_CorporateId, AMC_UserID, AMC_URN, AMC_EntryDate, AMC_ModifiedDate, AMC_EntryBY, AMC_ReceivedBy, einv_cid, einv_secret, einvcr, einvused, cuser, cpass, apass, auser, apitype } = pa;
+                    const NewAMC = await AMC_Transaction.create({
+                        Amc_date,
+                        Cust_Id: null,
+                        Amc_Start_date,
+                        Amc_End_date,
+                        Amc_Type,
+                        Amc_Amt,
+                        Payment_Type,
+                        Remarks,
+                        AMC_custid,
+                        AMC_CorporateId,
+                        AMC_UserID,
+                        AMC_URN,
+                        AMC_EntryDate,
+                        AMC_ModifiedDate,
+                        AMC_EntryBY,
+                        AMC_ReceivedBy,
+                        einv_cid,
+                        einv_secret,
+                        einvcr,
+                        einvused,
+                        cuser,
+                        cpass,
+                        apass,
+                        auser,
+                        apitype: apitype ? 'A' : 'C'
+                    });
                 default:
-                    response.message = 'Invalid or missing action. Use A, E, D, or G.'
+                    response.message = 'Invalid or missing action. Use A, E, D, G or F.'
                     encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                     return res.status(400).json({ encryptedResponse });
             }
@@ -212,5 +257,4 @@ class PricingPlanController {
         }
     }
 }
-
 module.exports = PricingPlanController;

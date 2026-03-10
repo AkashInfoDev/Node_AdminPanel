@@ -37,8 +37,9 @@ class CompanyService {
       let dtCF02 = [];
 
       if (this.oCmp) {
-        //let defYrno = await this.oCmp.oCon.query(`SELECT * FROM CMPCMM WHERE FIELD01 = '_CMPYEAR'`, { type: QueryTypes.SELECT });
-        const f02Table = new F02Table('YR' + this.year, this.databaseName, langtpe);
+        let defYrno = await this.oCmp.oCon.query(`SELECT * FROM CMPCMM WHERE FIELD01 = '_CMPYEAR'`, { type: QueryTypes.SELECT });
+        let defYr = defYrno ? defYrno[0].FIELD02 : new Date().getFullYear();
+        const f02Table = new F02Table('YR' + defYr, this.databaseName, langtpe);
         let table = f02Table.cTable
         dtCF02 = await this.oCmp.oCon.query(`SELECT * FROM ${table}`, { type: QueryTypes.SELECT });
         // dtCF02 = await f02Table.getList(); // Should return array of objects
@@ -64,7 +65,7 @@ class CompanyService {
             filterStr = `FIELD01=${field01}`;
             fieldToFetch = 'FIELD07';
           }
-          
+
           cVal = MApp.DTSeekFld(dtCF02, filterStr, fieldToFetch);
         }
         this.oEntDict["M00"][cKey] = cVal;
@@ -85,9 +86,10 @@ class CompanyService {
       this.oEntDict['M00']._STCD = stcdRow.length ? MApp._evlStr(stcdRow[0].PLSF06) : '';
       this.oEntDict['M00']._SYNCID = this.oEntDict['M00'].FIELD07 || '';
       this.oEntDict['M00']._BSYNCID = this.oEntDict['M00'].FIELD08 || '';
-
+      // let defYrno = await this.oCmp.oCon.query(`SELECT * FROM CMPCMM WHERE FIELD01 = '_CMPYEAR'`, { type: QueryTypes.SELECT });
+      // let defYr = defYrno ? defYrno[0].FIELD02 : new Date().getFullYear();
       const f02Table = new F02Table('YR' + new Date().getFullYear() % 100, this.databaseName, langtpe);
-      await f02Table.getDictionary('', '', true, true);
+      let dtCF02 = await f02Table.getDictionary('', '', true, true);
 
       for (const row of dtF02) {
         const cKey = MApp._evlSTU(row.F02F04);
@@ -96,8 +98,11 @@ class CompanyService {
         const cID = MApp._evlSTU(row.F02F01);
         const dict = {
           FIELD01: cID,
+          FIELD02: '',
           FIELD07: '',
-          FIELD13: ''
+          FIELD13: '',
+          FLDAED: '',
+          FLDBRC: ''
         };
 
         if (cID === 'SCMPA021') {

@@ -235,7 +235,7 @@ class DBHandler {
                     let valueStr;
 
                     if (value === undefined || value === null || value === "") {
-                        valueStr = "NULL";
+                        valueStr = "' '";
                     } else if (typeof value === "string") {
                         // Escape single quotes in SQL strings
                         valueStr = `'${value.replace(/'/g, "''")}'`;

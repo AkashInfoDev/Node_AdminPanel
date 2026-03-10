@@ -69,6 +69,68 @@ class Database {
 
         return this.connections[dbName];
     }
+    // Creates a Sequelize pool for a specific database
+    createPoolEway(dbName) {
+        // If a connection already exists for the database, return it
+        if (this.connections[dbName]) {
+            return this.connections[dbName];
+        }
+
+        // // Define the config based on environment variables and the specific db
+        // const dbConfig = {
+        //     [dbName]: {
+        //         username: process.env.DB_USER,
+        //         password: process.env.DB_PASSWORD,
+        //         host: process.env.DB_SERVER,
+        //         dialect: 'mssql',
+        //         dialectOptions: {
+        //             options: {
+        //                 encrypt: false,
+        //                 instanceName: 'sqlexpress',
+        //                 trustServerCertificate: true
+        //             }
+        //         },
+        //         logging: process.env.LOG_LEVEL === 'info' ? console.log : false
+        //     }
+        // };
+
+        const dbConfig = {
+            [dbName]: {
+                username: process.env.EDB_USER,
+                password: process.env.EDB_PASSWORD,
+                host: process.env.EDB_SERVER,
+                // port:1433,
+                dialect: 'mssql',
+                dialectOptions: {
+                    options: {
+                        encrypt: false,
+                        requestTimeOut: 30000,
+                        enableArithAbort: true,
+                        // instanceName: 'sqlexpress',
+                        trustServerCertificate: true
+                    }
+                },
+                pool:{
+                    max: 5,
+                    min: 0,
+                    acquire: 30000,
+                    idle: 10000
+                },
+                logging: process.env.LOG_LEVEL === 'info' ? console.log : false
+            }
+        };
+
+
+        // Create a new Sequelize instance for the provided database
+        this.connections[dbName] = new Sequelize(
+            dbName,  // Database name from environment
+            dbConfig[dbName].username,
+            dbConfig[dbName].password,
+            dbConfig[dbName]
+        );
+
+        return this.connections[dbName];
+    }
 
     // Test connection for a specific database
     async testConnection(dbName) {

@@ -119,20 +119,20 @@ class CustomModules {
                         }
                         if (arow.A02F01 == 5) {
                             cmpDetail = {
-                                totalCmp: a01Row.A01CMP,
-                                totalPrice: parseInt(a01Row.A01CMP) * arow.A02F05
+                                totalCmp: a01Row.A01CMP - 1,
+                                totalPrice: (parseInt(a01Row.A01CMP) - 1) * arow.A02F05
                             }
                         }
                         if (arow.A02F01 == 4) {
                             brcDetail = {
-                                totalBrc: a01Row.A01BRC,
-                                totalPrice: parseInt(a01Row.A01BRC) * arow.A02F05
+                                totalBrc: a01Row.A01BRC - 1,
+                                totalPrice: (parseInt(a01Row.A01BRC) - 1) * arow.A02F05
                             }
                         }
                         if (arow.A02F01 == 3) {
                             usrDetail = {
-                                totalUsr: a01Row.A01F10,
-                                totalPrice: parseInt(a01Row.A01F10) * arow.A02F05
+                                totalUsr: a01Row.A01F10 - 1,
+                                totalPrice: (parseInt(a01Row.A01F10) - 1) * arow.A02F05
                             }
                         }
                     }

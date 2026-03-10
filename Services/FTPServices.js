@@ -151,8 +151,6 @@ class FTPService {
     }
 
     async executeSSHCommand(command, ftpClient) {
-
-
         const commandResult = await ftpClient.ftp.send(`${command}`);
         return true;
     }

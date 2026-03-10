@@ -2,7 +2,7 @@ const db = require('../Config/config');
 const definePLSDBADMI = require('../Models/SDB/PLSDBADMI'); // Model factory
 class ADMIController {
     constructor(dbName) {
-        if (dbName) dbName = dbName == 'PLP00001SDB' ? 'A00001SDB' : dbName 
+        if (dbName) dbName = dbName == 'PLP00001SDB' ? 'A00001SDB' : dbName
         this.connection = db.createPool(dbName);
         this.PLSDBADMI = definePLSDBADMI(this.connection);
     }
@@ -34,7 +34,7 @@ class ADMIController {
      * @param {Array} attributes - Attributes to select
      * @returns {Promise<Array>} - List of records
      */
-    async findAll(where = {}, orderby = [], attributes = null) {
+    async findAll(where = {}, orderby = [], attributes = null, transaction = null) {
         try {
             const options = {};
 
@@ -51,6 +51,10 @@ class ADMIController {
             // Select specific columns
             if (attributes && attributes.length) {
                 options.attributes = attributes;
+            }
+
+            if (transaction) {
+                options.transaction = transaction;
             }
 
             const results = await this.PLSDBADMI.findAll(options);
@@ -112,6 +116,25 @@ class ADMIController {
             return await this.PLSDBADMI.destroy(options);
         } catch (error) {
             throw new Error(`Failed to destroy record: ${error.message}`);
+        }
+    }
+    async count(where = {}, transaction = null) {
+        try {
+            const options = {};
+
+            if (where && Object.keys(where).length) {
+                options.where = where;
+            }
+
+            if (transaction) {
+                options.transaction = transaction;
+            }
+
+            return await this.PLSDBADMI.count(options);
+
+        } catch (error) {
+            console.error('Error in count:', error);
+            throw error;
         }
     }
 }

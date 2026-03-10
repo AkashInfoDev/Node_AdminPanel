@@ -951,9 +951,11 @@ class UserController {
                         const isExpired = tokenLife.exp && tokenLife.exp < currentTime;
 
                         if (isExpired) {
-                            await m83.destroy({
-                                M83F01: userId
-                            });
+                            if (corpId != 'PL-P-00001') {
+                                await m83.destroy({
+                                    M83F01: userId
+                                });
+                            }
                         } else {
                             response.status = 'FAIL';
                             response.message = 'User already Logged in';
@@ -1039,7 +1041,9 @@ class UserController {
                 //     cmpList: cmplist.CompList
                 // };
                 let currentTime = new Date();
-                let newLogin = await m83.create(userId, formatDate(currentTime), '', '', '', token);
+                if (corpId != 'PL-P-00001') {
+                    let newLogin = await m83.create(userId, formatDate(currentTime), '', '', '', token);
+                }
                 response.message = 'Login successful';
                 response.token = token;
                 response.status = 'SUCCESS'
@@ -1273,6 +1277,8 @@ class UserController {
 
                 // const token = jwt.sign({ userId: user.ADMIF01, roleId: user.ADMIF06, password: user.ADMIF05, corpId: corpId }, process.env.JWT_SECRET_KEY, { expiresIn: process.env.JWT_EXPIRATION });
 
+                const today = new Date();
+                const inputDate = new Date(corpRow.A01F13);
                 response.data = {
                     CustID: corpId,
                     CustName: user.ADMIF02 + ' ' + user.ADMIF04,
@@ -1283,7 +1289,8 @@ class UserController {
                     userNm: encryptor.decrypt(user.ADMIF01),
                     DefCmp: cmplist.DefComp.cmpNo,
                     cmpList: cmplist.CompList,
-                    purchasedSetUpIds: M81Row[0].M81SID
+                    purchasedSetUpIds: M81Row[0].M81SID,
+                    isActive: inputDate < today ? false : true
                 };
                 // let currentTime = new Date();
                 // let newLogin = await m83.create(userId, formatDate(currentTime), '', '', '', token);
@@ -1365,6 +1372,9 @@ class UserController {
                 // let currentTime = new Date();
                 // let newLogin = await m83.create(userId, formatDate(currentTime), '', '', '', token);
 
+                const today = new Date();
+                const inputDate = new Date(corpRow.A01F13);
+
                 response.data = {
                     CustID: corpId,
                     CustName: user.ADMIF02 + ' ' + user.ADMIF04,
@@ -1377,7 +1387,8 @@ class UserController {
                     cmpList: usrCompList,
                     userDetails: user,
                     modData: modData,
-                    purchasedSetUpIds: M81Row[0].M81SID
+                    purchasedSetUpIds: M81Row[0].M81SID,
+                    isActive: inputDate < today ? false : true
                 };
                 response.message = 'Login successful';
                 // response.token = token;
@@ -1468,9 +1479,11 @@ class UserController {
                     if (logOutReq) {
                         let resp = encryptor.decrypt(logOutReq.data);
                         resp = JSON.parse(resp);
-                        await m83.destroy({
-                            M83F01: userId
-                        });
+                        if (corpId != 'PL-P-00001') {
+                            await m83.destroy({
+                                M83F01: userId
+                            });
+                        }
                         if (resp.status == 'SUCCESS') {
                             response.message = 'Logout request sent Successfully';
                             response.status = 'SUCCESS';
@@ -1493,11 +1506,13 @@ class UserController {
 
             let loginExist = await m83.findAll();
             let lLog = null;
-            for (let i of loginExist) {
-                if (userId == i.M83F01) {
-                    lLog = await m83.destroy({
-                        M83F01: userId
-                    });
+            if (corpId != 'PL-P-00001') {
+                for (let i of loginExist) {
+                    if (userId == i.M83F01) {
+                        lLog = await m83.destroy({
+                            M83F01: userId
+                        });
+                    }
                 }
             }
             if (lLog != null) {
@@ -1839,9 +1854,11 @@ class UserController {
                 let sdbSeq = corpId.split('-');
                 let sdbdbname = sdbSeq.length == 3 ? `${sdbSeq[0]}${sdbSeq[1]}${sdbSeq[2]}SDB` : `${sdbSeq[0]}${sdbSeq[1]}SDB`;
                 let m83 = new M83Controller(sdbdbname);
-                await m83.destroy({
-                    M83F01: decoded.userId
-                });
+                if (corpId != 'PL-P-00001') {
+                    await m83.destroy({
+                        M83F01: decoded.userId
+                    });
+                }
                 let paObj = { "CorpID": `${decoded.corpId}`, "cUser": `${decoded.userId}`, "cPass": `${decoded.password}`, "lForce": true }
                 let encodedUrl = encodeURIComponent(JSON.stringify(paObj))
                 let encUrl = encryptor.encrypt(encodedUrl);
