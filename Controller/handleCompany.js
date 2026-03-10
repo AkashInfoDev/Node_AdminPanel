@@ -213,82 +213,89 @@ class handleCompany {
                             // DSDATE, DEDATE, _ADDRESS_1, _ADDRESS_2, _ADDRESS_3, _CITY, _PINCODE, _PHONE1, _PHONE2, _MOBILE1, _MOBILE2, _FAX1, _FAX2, _EMAIL, _WEB, _STATE, _COUNTRY, _STCD, _RPTHD1, _RPTHD2, _RPTFT1, _RPTFT2, _CMPLOGO, _PHONE3, _SYNCID, _BSYNCID, _01, _02, _03, _05, _06, _07, _08, _16, _17, _09, _10, _11, _12, _13, _14, _15
                             if (oM00.oEntDict.length == 0) {
                                 oM00.oEntDict["M00"] = {};  // Initialize M00 if it doesn't exist
-                            }
-                            oM00.oEntDict["M00"] = cmpRow[0];
-                            oM00.oEntDict["M00"].DSDATE = startDate; //MApp.DTOS(startDate, true);    // Financial year start date
-                            oM00.oEntDict["M00"].DEDATE = endDate; //MApp.DTOS(endDate, true);   // Financial year end date
-                            oDic = await oM00.GetDictionary(decoded, qS, oUser.lCode, '', oYear);
-                            let path = await PLRDBA01.findOne({
-                                A01F03: decoded.corpId
-                            })
-                            let formattedCmpNo = CmpNo.toString().padStart(4, '0');
-                            oDic["M00"]._CMPLOGO = `${path.FTPPATH}${decoded.corpId}/${formattedCmpNo}/images/${oDic["M00"]._CMPLOGO}`;
-                        }
-                        //M00 Entry
-
-                        //Country
-                        // let oTM = new TMApi();
-                        oDic["P_CONT"] = "P_COUNTRY~C~TFORM0000001";
-                        oDic["P_CONTDT"] = await sequelizeIDB.query("SELECT PLCF01, PLCF02 FROM COUNTRY", {
-                            type: sequelizeIDB.QueryTypes.SELECT
-                        });
-                        //oDic.Add("P_CONTDT", oTM.GetpopupData(oYear, oUser, "P_COUNTRY", "TFORM0000001"));
-
-                        //State
-                        oDic["P_STATE"] = "P_PLSTATE~C~TFORM0000001";
-                        oDic["P_STATEDT"] = await sequelizeIDB.query("SELECT PLSF01, PLSF02, PLSF06 FROM PLSTATE", {
-                            type: sequelizeIDB.QueryTypes.SELECT
-                        });
-                        //oDic.Add("P_STATEDT", oTM.GetpopupData(oYear, oUser, "P_PLSTATE", "TFORM0000001"));
-
-                        //Language
-                        oDic["CBOLAN"] = [
-                            { DisplayMember: "Gujarati", ValueMember: "01" },
-                            { DisplayMember: "English", ValueMember: "02" },
-                            { DisplayMember: "Hindi", ValueMember: "03" }
-                        ]
-
-                        //Category
-                        oDic["P_PLCAT"] = "P_PLCAT~C~TFORM0000001";
-                        oDic["P_PLCATDT"] = await sequelizeIDB.query("SELECT CATF01, CATF02, CATF03 FROM PLSYSCAT", {
-                            type: sequelizeIDB.QueryTypes.SELECT
-                        });
-                        //oDic.Add("P_PLCATDT", oTM.GetpopupData(oYear, oUser, "P_PLSTATE", "TFORM0000001"));
-
-                        oDic["P_GRPDT"] = await oM00.dtM00Grp(cUserID);
-                        if (cAction == 'E') {
-                            oDic["P_YRDT"] = await oCmp.GetYearJSon();
-                        }
-                        if (cAction == 'E') {
-                            let brcList = await brc.findAll({
-                                BRCCOMP: {
-                                    [Op.or]: [
-                                        { [Op.like]: `%,${CmpNo},%` },  // Number 0 in the middle
-                                        { [Op.like]: `${CmpNo},%` },     // Number 0 at the start
-                                        { [Op.like]: `%,${CmpNo}` },     // Number 0 at the end
-                                        { [Op.eq]: `${CmpNo}` }          // Exact match '0'
-                                    ]
+                                console.log(cmpRow);
+                                if (oM00.oEntDict.length == 0) {
+                                    oM00.oEntDict["M00"] = {};  // Initialize M00 if it doesn't exist
+                                    console.log("Initialized M00 in oEntDict");
                                 }
-                            }, [], ['BRCODE']);
-                            let FLDBRC = []
-                            if (brcList.length != 0) {
-                                if (brcList.length > 1) {
-                                    for (const bl of brcList) {
-                                        FLDBRC.push(bl.BRCODE.toString());
+                                oM00.oEntDict["M00"] = cmpRow[0];
+                                oM00.oEntDict["M00"].DSDATE = startDate; //MApp.DTOS(startDate, true);    // Financial year start date
+                                oM00.oEntDict["M00"].DEDATE = endDate; //MApp.DTOS(endDate, true);   // Financial year end date
+                                oDic = await oM00.GetDictionary(decoded, qS, oUser.lCode, '', oYear);
+                                let path = await PLRDBA01.findOne({
+                                    A01F03: decoded.corpId
+                                })
+                                let formattedCmpNo = CmpNo.toString().padStart(4, '0');
+                                oDic["M00"]._CMPLOGO = `${path.FTPPATH}${decoded.corpId}/${formattedCmpNo}/images/${oDic["M00"]._CMPLOGO}`;
+                            }
+                            //M00 Entry
+
+                            //Country
+                            // let oTM = new TMApi();
+                            oDic["P_CONT"] = "P_COUNTRY~C~TFORM0000001";
+                            oDic["P_CONTDT"] = await sequelizeIDB.query("SELECT PLCF01, PLCF02 FROM COUNTRY", {
+                                type: sequelizeIDB.QueryTypes.SELECT
+                            });
+                            //oDic.Add("P_CONTDT", oTM.GetpopupData(oYear, oUser, "P_COUNTRY", "TFORM0000001"));
+
+                            //State
+                            oDic["P_STATE"] = "P_PLSTATE~C~TFORM0000001";
+                            oDic["P_STATEDT"] = await sequelizeIDB.query("SELECT PLSF01, PLSF02, PLSF06 FROM PLSTATE", {
+                                type: sequelizeIDB.QueryTypes.SELECT
+                            });
+                            //oDic.Add("P_STATEDT", oTM.GetpopupData(oYear, oUser, "P_PLSTATE", "TFORM0000001"));
+
+                            //Language
+                            oDic["CBOLAN"] = [
+                                { DisplayMember: "Gujarati", ValueMember: "01" },
+                                { DisplayMember: "English", ValueMember: "02" },
+                                { DisplayMember: "Hindi", ValueMember: "03" }
+                            ]
+
+                            //Category
+                            oDic["P_PLCAT"] = "P_PLCAT~C~TFORM0000001";
+                            oDic["P_PLCATDT"] = await sequelizeIDB.query("SELECT CATF01, CATF02, CATF03 FROM PLSYSCAT", {
+                                type: sequelizeIDB.QueryTypes.SELECT
+                            });
+                            //oDic.Add("P_PLCATDT", oTM.GetpopupData(oYear, oUser, "P_PLSTATE", "TFORM0000001"));
+
+                            oDic["P_GRPDT"] = await oM00.dtM00Grp(cUserID);
+                            if (cAction == 'E') {
+                                oDic["P_YRDT"] = await oCmp.GetYearJSon();
+                            }
+                            if (cAction == 'E') {
+                                let brcList = await brc.findAll({
+                                    BRCCOMP: {
+                                        [Op.or]: [
+                                            { [Op.like]: `%,${CmpNo},%` },  // Number 0 in the middle
+                                            { [Op.like]: `${CmpNo},%` },     // Number 0 at the start
+                                            { [Op.like]: `%,${CmpNo}` },     // Number 0 at the end
+                                            { [Op.eq]: `${CmpNo}` }          // Exact match '0'
+                                        ]
                                     }
-                                } else {
-                                    FLDBRC.push(brcList[0]?.BRCODE)
+                                }, [], ['BRCODE']);
+                                let FLDBRC = []
+                                if (brcList.length != 0) {
+                                    if (brcList.length > 1) {
+                                        for (const bl of brcList) {
+                                            FLDBRC.push(bl.BRCODE.toString());
+                                        }
+                                    } else {
+                                        FLDBRC.push(brcList[0]?.BRCODE)
+                                    }
                                 }
+                                oDic["P_BRC"] = FLDBRC;
                             }
-                            oDic["P_BRC"] = FLDBRC;
-                        }
-                        oDic.FLDBRC = '';
-                        response.status = "SUCCESS";
-                        response.data = { ...oDic };
+                            oDic.FLDBRC = '';
+                            response.status = "SUCCESS";
+                            response.data = { ...oDic };
+                            console.log(response);
+                            console.log(JSON.stringify(response));
 
-                        let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-                        res.status(200).json({ encryptedResponse })
-                        break;
+                            let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                            res.status(200).json({ encryptedResponse })
+                        }
+                            break;
                     case "D":
                         let branch = await brc.findOne({
                             BRCCOMP: CmpNo
@@ -655,6 +662,41 @@ class handleCompany {
                             GAOF08: 0,
                             GAOF09: 5, // User Master(Limit Wise) Free
                             GAOF10: 0
+                        });
+                        let BRCOntroller = new BranchController(false, 'A', '', `${saveCmp.CmpNum}-HOME-BRC`, cSData["M00"]._16, '', decoded.corpId, 'Y', saveCmp.CmpNum)
+                        let AddHomeBrc = await BRCOntroller.handleAction(req, res, true);
+                        await PLSDBREL.create({
+                            M00F01: admin.ADMICORP,
+                            M00F02: admin.ADMIF01,
+                            M00F03: parseInt(saveCmp.CmpNum),
+                            M00F04: ''
+                        });
+                        await PLSDBM82.create({
+                            M82F01: cUserID,
+                            M82F02: parseInt(saveCmp.CmpNum),
+                            M82F11: '',
+                            M82F12: '',
+                            M82F13: '',
+                            M82F14: '',
+                            M82F21: '',
+                            M82F22: '',
+                            M82F23: '',
+                            M82CMP: 'N',
+                            M82YRN: (new Date().getFullYear() % 100).toString(),
+                            M82ADA: 'A'
+                        });
+                        await PLSDBCMP.create({
+                            CMPF01: parseInt(saveCmp.CmpNum),
+                            CMPF02: cSData['M00'].FIELD02,
+                            CMPF03: 'SQL',
+                            CMPF04: cSData['M00'].FIELD11,
+                            CMPF11: cUserID,
+                            CMPF12: formatDate(new Date()),
+                            CMPF21: '94.176.235.105',
+                            CMPF22: 'aipharma_aakash',
+                            CMPF23: 'Aipharma@360',
+                            CMPF24: 'DATA',
+                            CMPDEL: null
                         });
                         response.status = 'SUCCESS';
                         response.message = '';
