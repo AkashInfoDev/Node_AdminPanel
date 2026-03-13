@@ -208,7 +208,9 @@ const backupZipToDrive = async (req, res) => {
                 SELECT 1
                 FROM ${sourceDatabase}.INFORMATION_SCHEMA.TABLES
                 WHERE TABLE_NAME = '${sourceTable}'
-            `);
+            `, {
+                logging: false
+            });
 
             if (check[0].length === 0) {
                 console.log(`Skipping missing table: ${sourceTable}`);
@@ -226,7 +228,9 @@ const backupZipToDrive = async (req, res) => {
                 SELECT *
                 INTO ${sourceTable}
                 FROM ${sourceDatabase}.dbo.${sourceTable};
-            `);
+            `, {
+                logging: false
+            });
         }
 
         /* ===============================
@@ -235,7 +239,7 @@ const backupZipToDrive = async (req, res) => {
 
         const tempDir = path.join("/tmp", "downloads");
         console.log("Temp Diractory", tempDir);
-        
+
 
         if (!fs.existsSync(tempDir)) {
             fs.mkdirSync(tempDir, { recursive: true });
@@ -349,7 +353,10 @@ const backupZipToDrive = async (req, res) => {
         }
 
         await sequelizeMASTER.query(`DROP DATABASE ${newDatabaseName}`, {
-            type: QueryTypes.RAW
+            type: QueryTypes.RAW,
+            dialectOptions: {
+                requestTimeout: 600000 // 10 minutes
+            }
         })
         /* ===============================
            1️⃣4️⃣ SUCCESS RESPONSE
