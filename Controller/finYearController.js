@@ -236,7 +236,7 @@ const backupZipToDrive = async (req, res) => {
            7️⃣ PREPARE LOCAL BACKUP PATH
         =============================== */
 
-        const tempDir = path.join(__dirname, "../downloads");
+        const tempDir = path.join("/tmp", "downloads");
         console.log(tempDir);
         
 
