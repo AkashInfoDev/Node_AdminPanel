@@ -4,11 +4,9 @@ const ftp = require('basic-ftp');
 const archiver = require('archiver');
 const sql = require('mssql'); // Assuming SQL Server as the database
 const { google } = require('googleapis');
-// const { poolMASTER } = require("../db");
-// const { validateToken } = require("../middleware/authToken");
 const { validateToken } = require('../Services/tokenServices');
-// const { DT } = require("../DT");
 const db = require("../Config/config");
+const AdmZip = require('adm-zip');
 const definePLSYS14 = require('../Models/IDB/PLSYS14');
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01');
 const definePLSDBADMI = require('../Models/SDB/PLSDBADMI');
@@ -523,5 +521,75 @@ const uploadBackupToFTP1 = async (req, res) => {
     }
 };
 
+async function importBackupFromZip(zipFilePath, targetDB) {
+    // Step 1: Extract .bak from zip
+    const zip = new AdmZip(zipFilePath);
+    const bakEntry = zip.getEntries().find(e => path.extname(e.entryName) === '.bak');
+    if (!bakEntry) throw new Error('No .bak file found in the zip');
 
-module.exports = { backupZipToDrive, uploadBackupToFTP1 };
+    const bakPath = path.join(__dirname, '..', 'uploads', bakEntry.entryName);
+    zip.extractEntryTo(bakEntry, path.join(__dirname, '..', 'uploads'), false, true);
+
+    // Step 2: Connect to SQL Server
+    const pool = await sql.connect(config);
+
+    const tempDB = `TempRestoreDB_${Date.now()}`;
+
+    try {
+        // Step 3: Get logical file names from .bak
+        const fileList = await pool.request().query(`
+            RESTORE FILELISTONLY FROM DISK = '${bakPath}'
+        `);
+
+        const dataFile = fileList.recordset.find(f => f.Type === 'D').LogicalName;
+        const logFile = fileList.recordset.find(f => f.Type === 'L').LogicalName;
+
+        // Step 4: Restore temp database
+        await pool.request().query(`
+            RESTORE DATABASE [${tempDB}]
+            FROM DISK = '${bakPath}'
+            WITH MOVE '${dataFile}' TO 'C:\\SQLData\\${tempDB}.mdf',
+                 MOVE '${logFile}' TO 'C:\\SQLData\\${tempDB}_log.ldf',
+                 REPLACE
+        `);
+
+        // Step 5: Get list of tables in temp DB
+        const tablesResult = await pool.request().query(`
+            SELECT TABLE_NAME 
+            FROM [${tempDB}].INFORMATION_SCHEMA.TABLES
+            WHERE TABLE_TYPE = 'BASE TABLE'
+        `);
+
+        const tables = tablesResult.recordset.map(r => r.TABLE_NAME);
+
+        // Step 6: Check if all tables exist in target DB
+        const checkTablesResult = await pool.request().query(`
+            SELECT TABLE_NAME
+            FROM [${targetDB}].INFORMATION_SCHEMA.TABLES
+            WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME IN (${tables.map(t => `'${t}'`).join(',')})
+        `);
+
+        const existingTables = checkTablesResult.recordset.map(r => r.TABLE_NAME);
+
+        if (existingTables.length !== tables.length) {
+            throw new Error('Some tables in backup do not exist in target database');
+        }
+
+        // Step 7: Insert data
+        for (let table of tables) {
+            await pool.request().query(`
+                INSERT INTO [${targetDB}].dbo.[${table}]
+                SELECT * FROM [${tempDB}].dbo.[${table}]
+            `);
+        }
+
+        return 'Data imported successfully!';
+    } finally {
+        // Step 8: Clean up temp database
+        await pool.request().query(`DROP DATABASE IF EXISTS [${tempDB}]`);
+        fs.unlinkSync(zipFilePath);
+        fs.existsSync(bakPath) && fs.unlinkSync(bakPath);
+    }
+}
+
+module.exports = { backupZipToDrive, uploadBackupToFTP1, importBackupFromZip };
