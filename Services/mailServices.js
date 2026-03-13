@@ -171,5 +171,79 @@ async function sendLogOutMail({ to, corpId, otp, subject }) {
     return;
 }
 
+const sendEmailWithAttachment = async (to, attachmentPath, filename) => {
 
-module.exports = { sendAccountInfoMail, sendResetMail, sendLogOutMail };
+    const mailOptions = {
+        from: '"EPLUS Support" <demo@tcodes.in>',
+        to: to,
+        subject: 'Financial Year Backup - EPLUS Cloud ERP',
+
+        html: `
+    <div style="font-family: Arial, sans-serif; background:#f4f6f8; padding:20px;">
+      <div style="max-width:600px; margin:auto; background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 0 10px rgba(0,0,0,0.08);">
+
+        <div style="background:#0d6efd; color:#ffffff; padding:20px; text-align:center;">
+          <img src="E-Plus_Logo.jpg" alt="E-PLUS Logo" style="max-height:50px; vertical-align:middle; margin-right:10px;"/>
+          <h2 style="margin:0; display:inline;">E-PLUS CLOUD ERP</h2>
+          <p style="margin:5px 0 0;">Financial Year Backup</p>
+        </div>
+
+        <div style="padding:25px; color:#333;">
+          <p>Hello,</p>
+
+          <p>
+            Your requested <strong>Financial Year backup</strong> has been successfully generated.
+          </p>
+
+          <p>
+            Please find the attached <strong>ZIP file</strong> containing the backup data.
+          </p>
+
+          <table style="width:100%; border-collapse:collapse; margin:20px 0;">
+            <tr>
+              <td style="padding:10px; font-weight:bold; background:#f0f2f5;">File Name</td>
+              <td style="padding:10px; background:#fafafa;">${filename}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px; font-weight:bold; background:#f0f2f5;">Generated On</td>
+              <td style="padding:10px; background:#fafafa;">${new Date().toLocaleString()}</td>
+            </tr>
+          </table>
+
+          <p>
+            If you did not request this backup or face any issues accessing the file,
+            please contact your system administrator.
+          </p>
+
+          <p style="color:#666;">
+            Regards,<br/>
+            <strong>EPLUS Support Team</strong>
+          </p>
+        </div>
+
+        <div style="background:#f0f2f5; padding:15px; text-align:center; font-size:12px; color:#999;">
+          © ${new Date().getFullYear()} Aakash Infoway Pvt. Ltd. All rights reserved | Trusted since 2001
+        </div>
+
+      </div>
+    </div>
+    `,
+
+        attachments: [
+            {
+                filename: filename,
+                path: attachmentPath,
+                contentType: 'application/zip'
+            }
+        ]
+    };
+
+    try {
+        const info = await transporter.sendMail(mailOptions);
+        console.log("Email sent:", info.response);
+    } catch (error) {
+        console.log("Error sending email:", error);
+    }
+};
+
+module.exports = { sendAccountInfoMail, sendResetMail, sendLogOutMail, sendEmailWithAttachment };
