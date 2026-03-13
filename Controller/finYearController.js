@@ -374,7 +374,7 @@ const backupZipToDrive = async (req, res) => {
 
         return res.status(500).json({
             status: "FAIL",
-            message: err.message
+            message: err
         });
 
     }
