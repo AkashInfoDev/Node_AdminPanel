@@ -234,7 +234,7 @@ const backupZipToDrive = async (req, res) => {
         =============================== */
 
         const tempDir = path.join("/tmp", "downloads");
-        console.log(tempDir);
+        console.log("Temp Diractory", tempDir);
         
 
         if (!fs.existsSync(tempDir)) {
