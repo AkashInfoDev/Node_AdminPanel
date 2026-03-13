@@ -38,7 +38,7 @@ class CompanyService {
 
       if (this.oCmp) {
         let defYrno = await this.oCmp.oCon.query(`SELECT * FROM CMPCMM WHERE FIELD01 = '_CMPYEAR'`, { type: QueryTypes.SELECT });
-        let defYr = defYrno ? defYrno[0].FIELD02 : new Date().getFullYear();
+        let defYr = defYrno.length > 0 ? defYrno[0].FIELD02 : new Date().getFullYear() % 100;
         const f02Table = new F02Table('YR' + defYr, this.databaseName, langtpe);
         let table = f02Table.cTable
         dtCF02 = await this.oCmp.oCon.query(`SELECT * FROM ${table}`, { type: QueryTypes.SELECT });
