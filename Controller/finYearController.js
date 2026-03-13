@@ -175,9 +175,6 @@ const backupZipToDrive = async (req, res) => {
             attributes: ['S14F02']
         });
 
-        console.log(tableData);
-
-
         if (!tableData || tableData.length === 0) {
             return res.status(404).json({
                 status: "FAIL",
@@ -258,7 +255,6 @@ const backupZipToDrive = async (req, res) => {
             WITH FORMAT, INIT
         `);
         await downloadFile(newDatabaseName, corporateID)
-        console.log(bkup);
 
         /* ===============================
            9️⃣ ZIP BACKUP FILE
