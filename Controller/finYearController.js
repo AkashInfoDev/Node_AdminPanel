@@ -411,7 +411,7 @@ const downloadFile = async (newDatabaseName, corporateID) => {
 
         // Define the remote and local file paths
         const remoteFilePath = `/html/eplus/${newDatabaseName}.bak`;  // Adjust path as needed
-        const localFilePath = `./downloads/${newDatabaseName}.bak`;   // Local path where you want to save the file
+        const localFilePath = path.join("/tmp", "downloads", `${newDatabaseName}.bak`);   // Local path where you want to save the file
         const localDir = path.dirname(localFilePath);
 
         if (!fs.existsSync(localDir)) {
