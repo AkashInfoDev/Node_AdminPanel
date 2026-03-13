@@ -237,6 +237,8 @@ const backupZipToDrive = async (req, res) => {
         =============================== */
 
         const tempDir = path.join(__dirname, "../downloads");
+        console.log(tempDir);
+        
 
         if (!fs.existsSync(tempDir)) {
             fs.mkdirSync(tempDir, { recursive: true });
@@ -374,7 +376,8 @@ const backupZipToDrive = async (req, res) => {
 
         return res.status(500).json({
             status: "FAIL",
-            message: err
+            message: err.message,
+            dir: __dirname
         });
 
     }
