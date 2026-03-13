@@ -352,12 +352,16 @@ const backupZipToDrive = async (req, res) => {
             }
         }
 
-        await sequelizeMASTER.query(`DROP DATABASE ${newDatabaseName}`, {
+        await sequelizeMASTER.query(`
+            ALTER DATABASE [${newDatabaseName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+            DROP DATABASE [${newDatabaseName}];
+            `, {
             type: QueryTypes.RAW,
+            logging: false,
             dialectOptions: {
                 requestTimeout: 600000 // 10 minutes
             }
-        })
+        });
         /* ===============================
            1️⃣4️⃣ SUCCESS RESPONSE
         =============================== */
