@@ -61,6 +61,263 @@ async function ensureDirectoriesExist(ftpClient, remoteDir) {
 }
 
 
+// const backupToDrive = async (req, res) => {
+
+//     let response = { data: null, message: '', status: 'Success' };
+//     let encryptedResponse;
+
+//     const ftpClient = new ftp.Client();
+//     ftpClient.ftp.verbose = false;
+
+//     try {
+
+//         /* ===============================
+//            1️⃣ PAYLOAD VALIDATION
+//         =============================== */
+
+//         if (!req.body.pa) {
+//             response.status = "FAIL";
+//             response.message = "Missing payload";
+
+//             encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+//             return res.status(400).json({ encryptedResponse });
+//         }
+
+//         const parameterString = encryptor.decrypt(req.body.pa);
+//         const decodedParam = decodeURIComponent(parameterString);
+//         const p1 = JSON.parse(decodedParam);
+
+//         const { companyID, googledrive_token } = p1;
+
+//         if (!companyID || !googledrive_token) {
+//             response.status = "FAIL";
+//             response.message = "companyID and googledrive_token required";
+
+//             encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+//             return res.status(400).json({ encryptedResponse });
+//         }
+
+//         /* ===============================
+//            2️⃣ TOKEN VALIDATION
+//         =============================== */
+
+//         const token = req.headers.authorization?.split(" ")[1];
+
+//         if (!token) {
+//             response.status = "FAIL";
+//             response.message = "Authorization token missing";
+
+//             encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+//             return res.status(401).json({ encryptedResponse });
+//         }
+
+//         const decoded = await validateToken(token);
+//         const corporateID = decoded.corpId;
+
+//         if (!corporateID) {
+//             response.status = "FAIL";
+//             response.message = "Invalid token";
+
+//             encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+//             return res.status(401).json({ encryptedResponse });
+//         }
+
+//         /* ===============================
+//            3️⃣ DATABASE NAME GENERATION
+//         =============================== */
+
+//         const corporateLastFive = corporateID.slice(-5);
+//         const formattedCompanyID = companyID.toString().padStart(4, "0");
+
+//         const databaseName = `A${corporateLastFive}CMP${formattedCompanyID}`;
+//         const fileName = `${databaseName}.bak`;
+
+//         /* ===============================
+//            FTP & SERVER BACKUP PATH
+//         =============================== */
+
+//         const ftpFolderPath =
+//             `/html/eplus/`;
+
+//         const serverBackupPath =
+//             `/var/www/html/eplus/${fileName}`;
+
+//         /* ===============================
+//            ENSURE SERVER DIRECTORY EXISTS
+//         =============================== */
+
+//         const backupDir = `/var/www/html/eplus/`;
+
+//         if (!fs.existsSync(backupDir)) {
+//             fs.mkdirSync(backupDir, { recursive: true });
+//         }
+
+//         /* ===============================
+//            GOOGLE AUTH
+//         =============================== */
+
+//         oauth2Client.setCredentials({
+//             refresh_token: googledrive_token
+//         });
+
+//         /* ===============================
+//            CONNECT FTP
+//         =============================== */
+
+//         await ftpClient.access({
+//             host: process.env.FTP_HOST,
+//             user: process.env.FTP_USER,
+//             password: process.env.FTP_PASS,
+//             secure: false
+//         });
+
+//         /* ===============================
+//            ENSURE FTP DIRECTORY EXISTS
+//         =============================== */
+
+//         await ensureDirectoriesExist(ftpClient, ftpFolderPath);
+
+//         /* ===============================
+//            4️⃣ CREATE SQL BACKUP
+//         =============================== */
+
+//         console.log("Creating backup for DB:", databaseName);
+//         console.log("Backup path:", serverBackupPath);
+
+//         const query = `
+//         BACKUP DATABASE [${databaseName}]
+//         TO DISK = '${serverBackupPath}'
+//         WITH FORMAT, INIT, COMPRESSION, COPY_ONLY
+//         `;
+
+//         await sequelizeMASTER.query(query);
+
+//         /* ===============================
+//            LOCAL TEMP DIRECTORY
+//         =============================== */
+
+//         // const tempDir = path.join(__dirname, "../downloads");
+//         const tempDir = path.join("/tmp", "downloads");
+//         // fs.mkdirSync(tempDir, { recursive: true });
+//         await fs.promises.mkdir(tempDir, { recursive: true });
+
+//         const localPath = path.join(tempDir, fileName);
+
+//         /* ===============================
+//            NAVIGATE FTP DIRECTORY
+//         =============================== */
+
+//         await ftpClient.cd(ftpFolderPath);
+
+//         /* ===============================
+//            VERIFY BACKUP EXISTS
+//         =============================== */
+
+//         const files = await ftpClient.list();
+
+//         if (!files.some(f => f.name === fileName)) {
+//             throw new Error("Backup file not found on FTP");
+//         }
+
+//         /* ===============================
+//            DOWNLOAD BACKUP
+//         =============================== */
+
+//         await ftpClient.downloadTo(localPath, fileName);
+
+//         /* ===============================
+//            GOOGLE DRIVE FOLDERS
+//         =============================== */
+
+//         const root = await getOrCreateFolder("eplus");
+//         const corp = await getOrCreateFolder(corporateID, root);
+//         const comp = await getOrCreateFolder(companyID.toString(), corp);
+
+//         /* ===============================
+//            DELETE OLD DRIVE FILE
+//         =============================== */
+
+//         const existing = await drive.files.list({
+//             q: `name='${fileName}' and '${comp}' in parents and trashed=false`,
+//             fields: "files(id)"
+//         });
+
+//         for (const f of existing.data.files) {
+//             await drive.files.delete({ fileId: f.id });
+//         }
+
+//         /* ===============================
+//            UPLOAD TO GOOGLE DRIVE
+//         =============================== */
+
+//         const driveFile = await drive.files.create({
+//             requestBody: {
+//                 name: fileName,
+//                 parents: [comp]
+//             },
+//             media: {
+//                 mimeType: "application/octet-stream",
+//                 body: fs.createReadStream(localPath)
+//             },
+//             fields: "id"
+//         });
+
+//         /* ===============================
+//            DELETE FTP FILE AFTER UPLOAD
+//         =============================== */
+
+//         try {
+//             await ftpClient.remove(fileName);
+//         } catch (err) {
+//             console.log("FTP delete warning:", err.message);
+//         }
+
+//         /* ===============================
+//            DELETE LOCAL TEMP FILE
+//         =============================== */
+
+//         if (fs.existsSync(localPath)) {
+//             fs.unlinkSync(localPath);
+//         }
+
+//         /* ===============================
+//            SUCCESS RESPONSE
+//         =============================== */
+
+//         response.status = "SUCCESS";
+//         response.message = "Backup created and uploaded to Google Drive";
+
+//         response.data = {
+//             corporateID,
+//             companyID,
+//             databaseName,
+//             // driveFileId: driveFile.data.id,
+//             // drivePath: `/eplus/${corporateID}/${companyID}/${databaseName}/${fileName}`
+//         };
+
+//         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+
+//         return res.status(200).json({ encryptedResponse });
+
+//     } catch (err) {
+
+//         console.error("backupToDrive error:", err);
+
+//         response.status = "FAIL";
+//         response.message = err.message;
+
+//         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+
+//         return res.status(500).json({ encryptedResponse });
+
+//     } finally {
+
+//         ftpClient.close();
+
+//     }
+// };
+
+
 const backupToDrive = async (req, res) => {
 
     let response = { data: null, message: '', status: 'Success' };
@@ -146,10 +403,16 @@ const backupToDrive = async (req, res) => {
            ENSURE SERVER DIRECTORY EXISTS
         =============================== */
 
-        const backupDir = `/var/www/html/eplus/`;
+        const backupDir = '/var/www/html/eplus/';
 
+        // Ensure that the backup directory exists, create it if it doesn't
         if (!fs.existsSync(backupDir)) {
-            fs.mkdirSync(backupDir, { recursive: true });
+            try {
+                fs.mkdirSync(backupDir, { recursive: true });
+            } catch (err) {
+                console.error(`Error creating backup directory ${backupDir}:`, err);
+                throw new Error(`Failed to create backup directory: ${backupDir}`);
+            }
         }
 
         /* ===============================
@@ -196,10 +459,15 @@ const backupToDrive = async (req, res) => {
            LOCAL TEMP DIRECTORY
         =============================== */
 
-        // const tempDir = path.join(__dirname, "../downloads");
         const tempDir = path.join("/tmp", "downloads");
-        // fs.mkdirSync(tempDir, { recursive: true });
-        await fs.promises.mkdir(tempDir, { recursive: true });
+
+        // Ensure that the temp directory exists, create it if necessary
+        try {
+            await fs.promises.mkdir(tempDir, { recursive: true });
+        } catch (err) {
+            console.error(`Error creating temp directory ${tempDir}:`, err);
+            throw new Error(`Failed to create temp directory: ${tempDir}`);
+        }
 
         const localPath = path.join(tempDir, fileName);
 
@@ -291,7 +559,7 @@ const backupToDrive = async (req, res) => {
             corporateID,
             companyID,
             databaseName,
-            driveFileId: driveFile.data.id,
+            // driveFileId: driveFile.data.id,
             // drivePath: `/eplus/${corporateID}/${companyID}/${databaseName}/${fileName}`
         };
 
@@ -316,7 +584,6 @@ const backupToDrive = async (req, res) => {
 
     }
 };
-
 
 const uploadBackupToFTP = async (req, res) => {
 
