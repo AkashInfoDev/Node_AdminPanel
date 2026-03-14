@@ -456,7 +456,7 @@ const backupToDrive = async (req, res) => {
            DOWNLOAD BACKUP FROM FTP
         =============================== */
 
-        const localPath = path.join(__dirname, '..', "downloads", fileName); // Temporary path for downloading
+        const localPath = path.join('/tmp', "downloads", fileName); // Temporary path for downloading
 
         // Ensure that the temp directory exists
         await fs.promises.mkdir(path.dirname(localPath), { recursive: true });
