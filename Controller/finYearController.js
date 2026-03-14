@@ -16,7 +16,7 @@ const sequelizeRDB = db.getConnection('RDB');
 const PLSYS14 = definePLSYS14(sequelizeIDB);
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 const Encryptor = require("../Services/encryptor");
-const { Op, QueryTypes } = require('sequelize');
+const { Op } = require('sequelize');
 const { sendEmailWithAttachment } = require('../Services/mailServices');
 const encryptor = new Encryptor();
 
@@ -98,8 +98,10 @@ const getCorporateEmails = async (corporateID) => {
 
     return emails;
 };
-const backupZipToDrive = async (req, res) => {
 
+const backupZipToDrive = async (req, res) => {
+    let response = { data: null, message: '', status: 'Success' };
+    let encryptedResponse;
     const ftpClient = new ftp.Client();
     ftpClient.ftp.verbose = false;
 
@@ -110,10 +112,11 @@ const backupZipToDrive = async (req, res) => {
         =============================== */
 
         if (!req.body.pa) {
-            return res.status(400).json({
-                status: "FAIL",
-                message: "Missing payload"
-            });
+            response.status = "FAIL";
+            response.message = "Missing payload";
+
+            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(400).json({ encryptedResponse });
         }
 
         const parameterString = encryptor.decrypt(req.body.pa);
@@ -122,11 +125,21 @@ const backupZipToDrive = async (req, res) => {
 
         const { companyID, yearNo, refresh_token, action } = p1;
 
-        if (!companyID || !yearNo || !refresh_token) {
-            return res.status(400).json({
-                status: "FAIL",
-                message: "companyID, yearNo and refresh_token required"
-            });
+        if (!companyID || !yearNo) {
+            response.status = "FAIL";
+            response.message = "companyID and yearNo required";
+
+            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(400).json({ encryptedResponse });
+        }
+
+        // refresh_token required only for Google Drive upload
+        if (action === "G" && !refresh_token) {
+            response.status = "FAIL";
+            response.message = "refresh_token required for Google Drive upload";
+
+            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(400).json({ encryptedResponse });
         }
 
         /* ===============================
@@ -136,21 +149,22 @@ const backupZipToDrive = async (req, res) => {
         const token = req.headers.authorization?.split(" ")[1];
 
         if (!token) {
-            return res.status(401).json({
-                status: "FAIL",
-                message: "Authorization token missing"
-            });
+            response.status = "FAIL";
+            response.message = "Authorization token missing";
+
+            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(401).json({ encryptedResponse });
         }
 
         const decoded = await validateToken(token);
 
         if (!decoded || !decoded.corpId) {
-            return res.status(401).json({
-                status: "FAIL",
-                message: "Invalid token or corporateID missing"
-            });
-        }
+            response.status = "FAIL";
+            response.message = "Invalid token or corporateID missing";
 
+            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(401).json({ encryptedResponse });
+        }
         const corporateID = decoded.corpId;
 
         /* ===============================
@@ -176,66 +190,64 @@ const backupZipToDrive = async (req, res) => {
         });
 
         if (!tableData || tableData.length === 0) {
-            return res.status(404).json({
-                status: "FAIL",
-                message: "No tables configured for backup"
-            });
-        }
+    response.status = "FAIL";
+    response.message = "No tables configured for backup";
+
+    encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+    return res.status(404).json({ encryptedResponse });
+}
 
         /* ===============================
            5️⃣ CREATE TEMP DATABASE
         =============================== */
 
-        await sequelizeMASTER.query(`
-            IF DB_ID('${newDatabaseName}') IS NULL
-            BEGIN
-                CREATE DATABASE [${newDatabaseName}]
-            END
-        `);
+        // await sequelizeMASTER.query(`
+        //     IF DB_ID('${newDatabaseName}') IS NULL
+        //     BEGIN
+        //         CREATE DATABASE [${newDatabaseName}]
+        //     END
+        // `);
 
         /* ===============================
            6️⃣ COPY YEAR TABLES
         =============================== */
 
-        for (const row of tableData) {
+        // for (const row of tableData) {
 
-            const tablePrefix = row.S14F02.trim();
-            const sourceTable = `YR${yearNo}${tablePrefix}`;
+        //     const tablePrefix = row.S14F02.trim();
+        //     const sourceTable = `YR${yearNo}${tablePrefix}`;
 
-            console.log(`Checking table ${sourceTable}`);
+        //     console.log(`Checking table ${sourceTable}`);
 
-            const check = await sequelizeMASTER.query(`
-                SELECT 1
-                FROM ${sourceDatabase}.INFORMATION_SCHEMA.TABLES
-                WHERE TABLE_NAME = '${sourceTable}'
-            `, {
-                logging: false
-            });
+        //     const check = await sequelizeMASTER.query(`
+        //         SELECT 1
+        //         FROM ${sourceDatabase}.INFORMATION_SCHEMA.TABLES
+        //         WHERE TABLE_NAME = '${sourceTable}'
+        //     `, {
+        //         logging: false
+        //     });
 
-            if (check[0].length === 0) {
-                console.log(`Skipping missing table: ${sourceTable}`);
-                continue;
-            }
+        //     if (check[0].length === 0) {
+        //         console.log(`Skipping missing table: ${sourceTable}`);
+        //         continue;
+        //     }
 
-            console.log(`Copying ${sourceTable}`);
+        //     console.log(`Copying ${sourceTable}`);
 
-            await sequelizeMASTER.query(`
-                USE [${newDatabaseName}];
+        //     await sequelizeMASTER.query(`
+        //         USE [${newDatabaseName}];
 
-                IF OBJECT_ID('${sourceTable}') IS NOT NULL
-                    DROP TABLE ${sourceTable};
+        //         IF OBJECT_ID('${sourceTable}') IS NOT NULL
+        //             DROP TABLE ${sourceTable};
 
-                SELECT *
-                INTO ${sourceTable}
-                FROM ${sourceDatabase}.dbo.${sourceTable};
-            `, {
-                logging: false
-            });
-        }
+        //         SELECT *
+        //         INTO ${sourceTable}
+        //         FROM ${sourceDatabase}.dbo.${sourceTable};
+        //     `, {
+        //         logging: false
+        //     });
+        // }
 
-        /* ===============================
-           7️⃣ PREPARE LOCAL BACKUP PATH
-        =============================== */
 
         const tempDir = path.join("/tmp", "downloads");
         console.log("Temp Diractory", tempDir);
@@ -245,28 +257,65 @@ const backupZipToDrive = async (req, res) => {
             fs.mkdirSync(tempDir, { recursive: true });
         }
 
-        const backupFilePath = path.join(tempDir, `${newDatabaseName}.bak`);
+        // const backupFilePath = path.join(tempDir, `${newDatabaseName}.bak`);
+
+        const backupFolder = path.join(tempDir, newDatabaseName);
+
+        if (!fs.existsSync(backupFolder)) {
+            fs.mkdirSync(backupFolder, { recursive: true });
+        }
+
+        /* ===============================
+   6️⃣ EXPORT TABLES TO SQL FILES
+=============================== */
+
+        for (const row of tableData) {
+
+            const tablePrefix = row.S14F02.trim();
+            const tableName = `YR${yearNo}${tablePrefix}`;
+
+            console.log(`Processing ${tableName}`);
+
+            const check = await sequelizeMASTER.query(`
+        SELECT 1
+        FROM ${sourceDatabase}.INFORMATION_SCHEMA.TABLES
+        WHERE TABLE_NAME = '${tableName}'
+    `);
+
+            if (check[0].length === 0) {
+                console.log(`Skipping missing table: ${tableName}`);
+                continue;
+            }
+
+            await exportTableData(sourceDatabase, tableName, backupFolder);
+        }
+
+        /* ===============================
+           7️⃣ PREPARE LOCAL BACKUP PATH
+        =============================== */
 
         /* ===============================
            8️⃣ CREATE DATABASE BACKUP
         =============================== */
 
-        console.log("Creating backup:", backupFilePath);
+        // console.log("Creating backup:", backupFilePath);
 
-        let bkup = await sequelizeMASTER.query(`
-            BACKUP DATABASE [${newDatabaseName}]
-            TO DISK = '/var/www/html/eplus/${newDatabaseName}.bak'
-            WITH FORMAT, INIT
-        `);
-        await downloadFile(newDatabaseName, corporateID)
+        // let bkup = await sequelizeMASTER.query(`
+        //     BACKUP DATABASE [${newDatabaseName}]
+        //     TO DISK = '/var/www/html/eplus/${newDatabaseName}.bak'
+        //     WITH FORMAT, INIT
+        // `);
+        // await downloadFile(newDatabaseName, corporateID)
 
         /* ===============================
            9️⃣ ZIP BACKUP FILE
         =============================== */
 
-        const zipFilePath = `${backupFilePath}.zip`;
+        // const zipFilePath = `${backupFilePath}.zip`;
+        // await zipBackupFile(backupFilePath, zipFilePath);
 
-        await zipBackupFile(backupFilePath, zipFilePath);
+        const zipFilePath = path.join(tempDir, `${newDatabaseName}.zip`);
+        await zipFolder(backupFolder, zipFilePath);
 
         if (!fs.existsSync(zipFilePath)) {
             throw new Error("Zip file creation failed");
@@ -315,13 +364,16 @@ const backupZipToDrive = async (req, res) => {
             /* ===============================
            1️⃣3️⃣ CLEANUP LOCAL FILES
         =============================== */
-
-            if (fs.existsSync(backupFilePath)) {
-                fs.unlinkSync(backupFilePath);
-            }
+            /* ===============================
+               1️⃣3️⃣ CLEANUP LOCAL FILES
+            =============================== */
 
             if (fs.existsSync(zipFilePath)) {
                 fs.unlinkSync(zipFilePath);
+            }
+
+            if (fs.existsSync(backupFolder)) {
+                fs.rmSync(backupFolder, { recursive: true, force: true });
             }
         } else if (action == 'M') {
             // let fName = zipFilePath.split('/');
@@ -343,49 +395,55 @@ const backupZipToDrive = async (req, res) => {
            1️⃣3️⃣ CLEANUP LOCAL FILES
         =============================== */
 
-            if (fs.existsSync(backupFilePath)) {
-                fs.unlinkSync(backupFilePath);
-            }
+            /* ===============================
+       1️⃣3️⃣ CLEANUP LOCAL FILES
+    =============================== */
 
             if (fs.existsSync(zipFilePath)) {
                 fs.unlinkSync(zipFilePath);
             }
-        }
 
-        await sequelizeMASTER.query(`
-            ALTER DATABASE [${newDatabaseName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
-            DROP DATABASE [${newDatabaseName}];
-            `, {
-            type: QueryTypes.RAW,
-            logging: false,
-            dialectOptions: {
-                requestTimeout: 600000 // 10 minutes
+            if (fs.existsSync(backupFolder)) {
+                fs.rmSync(backupFolder, { recursive: true, force: true });
             }
-        });
+        }
+        // await sequelizeMASTER.query(`
+        //     ALTER DATABASE [${newDatabaseName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+        //     DROP DATABASE [${newDatabaseName}];
+        //     `, {
+        //     type: QueryTypes.RAW,
+        //     logging: false,
+        //     dialectOptions: {
+        //         requestTimeout: 600000 // 10 minutes
+        //     }
+        // });
         /* ===============================
            1️⃣4️⃣ SUCCESS RESPONSE
         =============================== */
 
-        return res.json({
-            status: "SUCCESS",
-            message: "Financial backup uploaded",
-            data: {
-                corporateID,
-                companyID,
-                sourceDatabase,
-                backupDatabase: newDatabaseName
-            }
-        });
+        response.data = {
+            corporateID,
+            companyID,
+            sourceDatabase,
+            backupDatabase: newDatabaseName
+        };
+        response.status = 'SUCCESS';
+        response.message = "Financial backup created successfully";
+
+        encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+
+        return res.status(200).json({ encryptedResponse });
 
     } catch (err) {
 
         console.error("backupToDrive error:", err);
 
-        return res.status(500).json({
-            status: "FAIL",
-            message: err.message,
-            dir: __dirname
-        });
+        response.status = "FAIL";
+        response.message = err.message;
+
+        encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+
+        return res.status(500).json({ encryptedResponse });
 
     }
     //  finally {
@@ -395,80 +453,87 @@ const backupZipToDrive = async (req, res) => {
     // }
 };
 
-const downloadFile = async (newDatabaseName, corporateID) => {
-    const client = new ftp.Client();
-    client.ftp.verbose = true;  // Set to `false` to hide FTP commands for cleaner logs
+async function exportTableData(database, tableName, folderPath) {
 
-    try {
-        // Fetch FTP details from the database (replace with your logic)
-        let FTPdetail = await PLRDBA01.findOne({
-            where: {
-                A01F03: corporateID // Assuming you're using `this.decoded.corpId` here
-            }
-        });
+    const filePath = path.join(folderPath, `${tableName}.sql`);
 
-        if (!FTPdetail) {
-            console.error("FTP details not found for the given corpId");
-            return;
-        }
+    // get table data
+    const rows = await sequelizeMASTER.query(`
+        SELECT * FROM ${database}.dbo.${tableName}
+    `);
 
-        // Connect to the FTP server (no credentials needed)
-        await client.access({
-            host: FTPdetail.FTPURL,     // FTP server hostname
-            user: FTPdetail.FTPUID,       // FTP username
-            password: FTPdetail.FTPPWD,   // FTP password
-            secure: false,                   // Set to `true` if using FTPS
-        });
-
-        // Define the remote and local file paths
-        const remoteFilePath = `/html/eplus/${newDatabaseName}.bak`;  // Adjust path as needed
-        const localFilePath = path.join("/tmp", "downloads", `${newDatabaseName}.bak`);   // Local path where you want to save the file
-        const localDir = path.dirname(localFilePath);
-
-        if (!fs.existsSync(localDir)) {
-            fs.mkdirSync(localDir, { recursive: true });
-        }
-
-        // Download file from the FTP server
-        let downloadStatus = await client.downloadTo(localFilePath, remoteFilePath);
-        console.log(`File successfully downloaded to ${localFilePath}`);
-
-        // If download was successful, remove the file from the FTP server
-        if (downloadStatus) {
-            await client.remove(remoteFilePath);  // Remove the file from the FTP server
-            console.log(`File successfully removed from FTP server: ${remoteFilePath}`);
-        }
-    } catch (error) {
-        console.error("Error accessing FTP server:", error);
-    } finally {
-        // Ensure the client is closed after the operation
-        client.close();
+    if (!rows[0].length) {
+        console.log(`No data in ${tableName}`);
+        return;
     }
-};
 
-function zipBackupFile(backupFilePath, zipFilePath) {
+    /* =================================
+       CHECK IF TABLE HAS IDENTITY COLUMN
+    ================================= */
+
+    const identityCheck = await sequelizeMASTER.query(`
+        SELECT name
+        FROM ${database}.sys.identity_columns
+        WHERE object_id = OBJECT_ID('${database}.dbo.${tableName}')
+    `);
+
+    const hasIdentity = identityCheck[0].length > 0;
+
+    let sqlContent = "";
+
+    if (hasIdentity) {
+        sqlContent += `SET IDENTITY_INSERT ${tableName} ON;\n\n`;
+    }
+
+    /* =================================
+       GET COLUMN NAMES
+    ================================= */
+
+    const columns = Object.keys(rows[0][0]);
+
+    const columnList = columns.join(",");
+
+    /* =================================
+       GENERATE INSERT QUERIES
+    ================================= */
+
+    for (let row of rows[0]) {
+
+        const values = columns.map(col => {
+
+            const v = row[col];
+
+            if (v === null) return "NULL";
+            if (typeof v === "number") return v;
+
+            return `'${v.toString().replace(/'/g, "''")}'`;
+
+        });
+
+        sqlContent += `INSERT INTO ${tableName} (${columnList}) VALUES (${values.join(",")});\n`;
+    }
+
+    if (hasIdentity) {
+        sqlContent += `\nSET IDENTITY_INSERT ${tableName} OFF;\n`;
+    }
+
+    fs.writeFileSync(filePath, sqlContent);
+
+    console.log(`Created ${filePath}`);
+}
+
+function zipFolder(sourceFolder, zipPath) {
+
     return new Promise((resolve, reject) => {
-        if (!fs.existsSync(backupFilePath)) {
-            return reject(new Error(`Backup file not found at: ${backupFilePath}`));
-        }
 
-        const output = fs.createWriteStream(zipFilePath);
-        const archive = archiver('zip', {
-            zlib: { level: 9 } // Highest compression level
-        });
+        const output = fs.createWriteStream(zipPath);
+        const archive = archiver("zip", { zlib: { level: 9 } });
 
-        output.on('close', function () {
-            console.log(`Backup file successfully zipped: ${zipFilePath}`);
-            resolve();
-        });
-
-        archive.on('error', function (err) {
-            console.error('Error creating zip file:', err);
-            reject(err);
-        });
+        output.on("close", resolve);
+        archive.on("error", reject);
 
         archive.pipe(output);
-        archive.append(fs.createReadStream(backupFilePath), { name: path.basename(backupFilePath) });
+        archive.directory(sourceFolder, false);
         archive.finalize();
     });
 }
@@ -531,74 +596,78 @@ const uploadBackupToFTP1 = async (req, res) => {
     }
 };
 
-async function importBackupFromZip(zipFilePath, targetDB) {
-    // Step 1: Extract .bak from zip
-    const zip = new AdmZip(zipFilePath);
-    const bakEntry = zip.getEntries().find(e => path.extname(e.entryName) === '.bak');
-    if (!bakEntry) throw new Error('No .bak file found in the zip');
+async function importBackupFromZip(req, res) {
+    // const { targetDB } = req.body; // Extract targetDB from request body
+    const parameterString = encryptor.decrypt(req.body.pa);
+    const decodedParam = decodeURIComponent(parameterString);
+    const p1 = JSON.parse(decodedParam);
 
-    const bakPath = path.join(__dirname, '..', 'uploads', bakEntry.entryName);
-    zip.extractEntryTo(bakEntry, path.join(__dirname, '..', 'uploads'), false, true);
+    const token = req.headers.authorization?.split(" ")[1];
 
-    // Step 2: Connect to SQL Server
+        if (!token) {
+            return res.status(401).json({
+                status: "FAIL",
+                message: "Authorization token missing"
+            });
+        }
+
+        const decoded = await validateToken(token);
+
+        if (!decoded || !decoded.corpId) {
+            return res.status(401).json({
+                status: "FAIL",
+                message: "Invalid token or corporateID missing"
+            });
+        }
+
+        const corporateID = decoded.corpId;
+
+    if (!targetDB) {
+        return res.status(400).json({ error: 'Target database not specified' });
+    }
+
+    // Step 1: Check if files were uploaded
+    if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ error: 'No .sql files uploaded' });
+    }
+
+    // Connect to the SQL Server database
     const pool = await sql.connect(config);
 
-    const tempDB = `TempRestoreDB_${Date.now()}`;
-
     try {
-        // Step 3: Get logical file names from .bak
-        const fileList = await pool.request().query(`
-            RESTORE FILELISTONLY FROM DISK = '${bakPath}'
-        `);
+        // Step 2: Execute each uploaded .sql file
+        for (let file of req.files) {
+            const filePath = path.join(__dirname, '..', 'uploads', file.filename);
 
-        const dataFile = fileList.recordset.find(f => f.Type === 'D').LogicalName;
-        const logFile = fileList.recordset.find(f => f.Type === 'L').LogicalName;
+            // Ensure the file is a .sql file
+            if (path.extname(filePath) !== '.sql') {
+                continue; // Skip files that are not .sql
+            }
 
-        // Step 4: Restore temp database
-        await pool.request().query(`
-            RESTORE DATABASE [${tempDB}]
-            FROM DISK = '${bakPath}'
-            WITH MOVE '${dataFile}' TO 'C:\\SQLData\\${tempDB}.mdf',
-                 MOVE '${logFile}' TO 'C:\\SQLData\\${tempDB}_log.ldf',
-                 REPLACE
-        `);
+            // Read the .sql file content
+            const sqlScript = fs.readFileSync(filePath, 'utf-8');
 
-        // Step 5: Get list of tables in temp DB
-        const tablesResult = await pool.request().query(`
-            SELECT TABLE_NAME 
-            FROM [${tempDB}].INFORMATION_SCHEMA.TABLES
-            WHERE TABLE_TYPE = 'BASE TABLE'
-        `);
+            // Execute the SQL script against the target DB
+            console.log(`Executing SQL script from file: ${file.originalname}`);
+            await pool.request().query(`USE ${targetDB}; ${sqlScript}`);
 
-        const tables = tablesResult.recordset.map(r => r.TABLE_NAME);
-
-        // Step 6: Check if all tables exist in target DB
-        const checkTablesResult = await pool.request().query(`
-            SELECT TABLE_NAME
-            FROM [${targetDB}].INFORMATION_SCHEMA.TABLES
-            WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME IN (${tables.map(t => `'${t}'`).join(',')})
-        `);
-
-        const existingTables = checkTablesResult.recordset.map(r => r.TABLE_NAME);
-
-        if (existingTables.length !== tables.length) {
-            throw new Error('Some tables in backup do not exist in target database');
+            // Optionally delete the file after execution
+            fs.unlinkSync(filePath);
         }
 
-        // Step 7: Insert data
-        for (let table of tables) {
-            await pool.request().query(`
-                INSERT INTO [${targetDB}].dbo.[${table}]
-                SELECT * FROM [${tempDB}].dbo.[${table}]
-            `);
-        }
-
-        return 'Data imported successfully!';
+        return res.status(200).json({ message: 'SQL scripts executed successfully!' });
+    } catch (error) {
+        return res.status(500).json({ error: `Error executing SQL scripts: ${error.message}` });
     } finally {
-        // Step 8: Clean up temp database
-        await pool.request().query(`DROP DATABASE IF EXISTS [${tempDB}]`);
-        fs.unlinkSync(zipFilePath);
-        fs.existsSync(bakPath) && fs.unlinkSync(bakPath);
+        // Clean up any files in case of errors
+        if (req.files) {
+            req.files.forEach(file => {
+                const filePath = path.join(__dirname, '..', 'uploads', file.filename);
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                }
+            });
+        }
     }
 }
 

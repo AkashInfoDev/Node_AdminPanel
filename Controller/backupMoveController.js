@@ -20,43 +20,6 @@ const oauth2Client = new google.auth.OAuth2(
 
 const drive = google.drive({ version: "v3", auth: oauth2Client });
 
-
-const createDatabaseBackup = async (databaseName) => {
-
-    const checkDB = await sequelizeMASTER.query(
-        `
-        SELECT name 
-        FROM sys.databases 
-        WHERE name = :dbName
-        `,
-        {
-            replacements: { dbName: databaseName },
-            type: sequelizeMASTER.QueryTypes.SELECT
-        }
-    );
-
-    if (!checkDB || checkDB.length === 0) {
-        throw new Error(`Database ${databaseName} does not exist`);
-    }
-
-    // if (!fs.existsSync(backupFolder)) {
-    //     fs.mkdirSync(backupFolder, { recursive: true });
-    // }
-
-    // const backupPath = path.join(backupFolder, `${databaseName}.bak`);
-    const backupFolder = "/var/www/html/eplus/";
-    const backupPath = `${backupFolder}${databaseName}.bak`;
-
-    const query = `
-        BACKUP DATABASE [${databaseName}]
-        TO DISK = '${backupPath}'
-        WITH FORMAT, INIT
-    `;
-
-    await sequelizeMASTER.query(query);
-
-    return backupPath;
-};
 /* ================= DRIVE FOLDER ================= */
 async function getOrCreateFolder(name, parentId = null) {
     const q = [
@@ -100,6 +63,9 @@ async function ensureDirectoriesExist(ftpClient, remoteDir) {
 
 const backupToDrive = async (req, res) => {
 
+    let response = { data: null, message: '', status: 'Success' };
+    let encryptedResponse;
+
     const ftpClient = new ftp.Client();
     ftpClient.ftp.verbose = false;
 
@@ -110,10 +76,11 @@ const backupToDrive = async (req, res) => {
         =============================== */
 
         if (!req.body.pa) {
-            return res.json({
-                status: "FAIL",
-                message: "Missing payload"
-            });
+            response.status = "FAIL";
+            response.message = "Missing payload";
+
+            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(400).json({ encryptedResponse });
         }
 
         const parameterString = encryptor.decrypt(req.body.pa);
@@ -123,10 +90,11 @@ const backupToDrive = async (req, res) => {
         const { companyID, googledrive_token } = p1;
 
         if (!companyID || !googledrive_token) {
-            return res.json({
-                status: "FAIL",
-                message: "companyID and googledrive_token required"
-            });
+            response.status = "FAIL";
+            response.message = "companyID and googledrive_token required";
+
+            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(400).json({ encryptedResponse });
         }
 
         /* ===============================
@@ -136,20 +104,22 @@ const backupToDrive = async (req, res) => {
         const token = req.headers.authorization?.split(" ")[1];
 
         if (!token) {
-            return res.json({
-                status: "FAIL",
-                message: "Authorization token missing"
-            });
+            response.status = "FAIL";
+            response.message = "Authorization token missing";
+
+            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(401).json({ encryptedResponse });
         }
 
         const decoded = await validateToken(token);
         const corporateID = decoded.corpId;
 
         if (!corporateID) {
-            return res.json({
-                status: "FAIL",
-                message: "Invalid token"
-            });
+            response.status = "FAIL";
+            response.message = "Invalid token";
+
+            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(401).json({ encryptedResponse });
         }
 
         /* ===============================
@@ -226,8 +196,10 @@ const backupToDrive = async (req, res) => {
            LOCAL TEMP DIRECTORY
         =============================== */
 
-        const tempDir = path.join(__dirname, "../downloads");
-        fs.mkdirSync(tempDir, { recursive: true });
+        // const tempDir = path.join(__dirname, "../downloads");
+        const tempDir = path.join("/tmp", "downloads");
+        // fs.mkdirSync(tempDir, { recursive: true });
+        await fs.promises.mkdir(tempDir, { recursive: true });
 
         const localPath = path.join(tempDir, fileName);
 
@@ -284,6 +256,7 @@ const backupToDrive = async (req, res) => {
                 parents: [comp]
             },
             media: {
+                mimeType: "application/octet-stream",
                 body: fs.createReadStream(localPath)
             },
             fields: "id"
@@ -311,26 +284,31 @@ const backupToDrive = async (req, res) => {
            SUCCESS RESPONSE
         =============================== */
 
-        return res.json({
-            status: "SUCCESS",
-            message: "Backup created and uploaded to Google Drive",
-            data: {
-                corporateID,
-                companyID,
-                databaseName,
-                driveFileId: driveFile.data.id,
-                drivePath: `/eplus/${corporateID}/${companyID}/${databaseName}/${fileName}`
-            }
-        });
+        response.status = "SUCCESS";
+        response.message = "Backup created and uploaded to Google Drive";
+
+        response.data = {
+            corporateID,
+            companyID,
+            databaseName,
+            driveFileId: driveFile.data.id,
+            drivePath: `/eplus/${corporateID}/${companyID}/${databaseName}/${fileName}`
+        };
+
+        encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+
+        return res.status(200).json({ encryptedResponse });
 
     } catch (err) {
 
         console.error("backupToDrive error:", err);
 
-        return res.status(500).json({
-            status: "FAIL",
-            message: err.message
-        });
+        response.status = "FAIL";
+        response.message = err.message;
+
+        encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+
+        return res.status(500).json({ encryptedResponse });
 
     } finally {
 
