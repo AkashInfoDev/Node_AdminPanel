@@ -292,7 +292,7 @@ const backupToDrive = async (req, res) => {
             companyID,
             databaseName,
             driveFileId: driveFile.data.id,
-            drivePath: `/eplus/${corporateID}/${companyID}/${databaseName}/${fileName}`
+            // drivePath: `/eplus/${corporateID}/${companyID}/${databaseName}/${fileName}`
         };
 
         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
