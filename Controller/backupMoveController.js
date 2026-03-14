@@ -319,7 +319,6 @@ async function ensureDirectoriesExist(ftpClient, remoteDir) {
 
 
 const backupToDrive = async (req, res) => {
-
     let response = { data: null, message: '', status: 'Success' };
     let encryptedResponse;
 
@@ -327,7 +326,6 @@ const backupToDrive = async (req, res) => {
     ftpClient.ftp.verbose = false;
 
     try {
-
         /* ===============================
            1️⃣ PAYLOAD VALIDATION
         =============================== */
@@ -390,30 +388,11 @@ const backupToDrive = async (req, res) => {
         const fileName = `${databaseName}.bak`;
 
         /* ===============================
-           FTP & SERVER BACKUP PATH
+           FTP BACKUP PATH
         =============================== */
 
-        const ftpFolderPath =
-            `/html/eplus/`;
-
-        const serverBackupPath =
-            `/var/www/html/eplus/${fileName}`;
-
-        /* ===============================
-           ENSURE SERVER DIRECTORY EXISTS
-        =============================== */
-
-        const backupDir = '/var/www/html/eplus/';
-
-        // Ensure that the backup directory exists, create it if it doesn't
-        if (!fs.existsSync(backupDir)) {
-            try {
-                fs.mkdirSync(backupDir, { recursive: true });
-            } catch (err) {
-                console.error(`Error creating backup directory ${backupDir}:`, err);
-                throw new Error(`Failed to create backup directory: ${backupDir}`);
-            }
-        }
+        const ftpFolderPath = `/html/eplus/`; // FTP folder path for storing the backup
+        const remoteBackupPath = `/var/www${ftpFolderPath}${fileName}`; // Remote path for backup on FTP
 
         /* ===============================
            GOOGLE AUTH
@@ -441,57 +420,16 @@ const backupToDrive = async (req, res) => {
         await ensureDirectoriesExist(ftpClient, ftpFolderPath);
 
         /* ===============================
-           4️⃣ CREATE SQL BACKUP
+           4️⃣ CREATE SQL BACKUP ON FTP
         =============================== */
 
         console.log("Creating backup for DB:", databaseName);
-        console.log("Backup path:", serverBackupPath);
-
         const query = `
         BACKUP DATABASE [${databaseName}]
-        TO DISK = '${serverBackupPath}'
+        TO DISK = '${remoteBackupPath}'
         WITH FORMAT, INIT, COMPRESSION, COPY_ONLY
         `;
-
-        await sequelizeMASTER.query(query);
-
-        /* ===============================
-           LOCAL TEMP DIRECTORY
-        =============================== */
-
-        const tempDir = path.join("/tmp", "downloads");
-
-        // Ensure that the temp directory exists, create it if necessary
-        try {
-            await fs.promises.mkdir(tempDir, { recursive: true });
-        } catch (err) {
-            console.error(`Error creating temp directory ${tempDir}:`, err);
-            throw new Error(`Failed to create temp directory: ${tempDir}`);
-        }
-
-        const localPath = path.join(tempDir, fileName);
-
-        /* ===============================
-           NAVIGATE FTP DIRECTORY
-        =============================== */
-
-        await ftpClient.cd(ftpFolderPath);
-
-        /* ===============================
-           VERIFY BACKUP EXISTS
-        =============================== */
-
-        const files = await ftpClient.list();
-
-        if (!files.some(f => f.name === fileName)) {
-            throw new Error("Backup file not found on FTP");
-        }
-
-        /* ===============================
-           DOWNLOAD BACKUP
-        =============================== */
-
-        await ftpClient.downloadTo(localPath, fileName);
+        await sequelizeMASTER.query(query); // Assuming you use sequelize or a similar ORM
 
         /* ===============================
            GOOGLE DRIVE FOLDERS
@@ -515,6 +453,21 @@ const backupToDrive = async (req, res) => {
         }
 
         /* ===============================
+           DOWNLOAD BACKUP FROM FTP
+        =============================== */
+
+        const localPath = path.join(__dirname, '..', "downloads", fileName); // Temporary path for downloading
+
+        // Ensure that the temp directory exists
+        await fs.promises.mkdir(path.dirname(localPath), { recursive: true });
+
+        // Download the file from FTP
+        console.log('localPath: ', localPath);
+        console.log('remoteBackupPath: ', remoteBackupPath);
+        
+        await ftpClient.downloadTo(localPath, `/html/eplus/${fileName}`);
+
+        /* ===============================
            UPLOAD TO GOOGLE DRIVE
         =============================== */
 
@@ -535,7 +488,7 @@ const backupToDrive = async (req, res) => {
         =============================== */
 
         try {
-            await ftpClient.remove(fileName);
+            await ftpClient.remove(remoteBackupPath); // Delete the backup from FTP server after uploading
         } catch (err) {
             console.log("FTP delete warning:", err.message);
         }
@@ -545,7 +498,7 @@ const backupToDrive = async (req, res) => {
         =============================== */
 
         if (fs.existsSync(localPath)) {
-            fs.unlinkSync(localPath);
+            fs.unlinkSync(localPath); // Delete the local temporary file after uploading to Google Drive
         }
 
         /* ===============================
@@ -559,8 +512,6 @@ const backupToDrive = async (req, res) => {
             corporateID,
             companyID,
             databaseName,
-            // driveFileId: driveFile.data.id,
-            // drivePath: `/eplus/${corporateID}/${companyID}/${databaseName}/${fileName}`
         };
 
         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
@@ -580,7 +531,7 @@ const backupToDrive = async (req, res) => {
 
     } finally {
 
-        ftpClient.close();
+        ftpClient.close(); // Ensure FTP client is properly closed
 
     }
 };
