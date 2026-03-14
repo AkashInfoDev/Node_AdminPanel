@@ -137,16 +137,16 @@ const backupToDrive = async (req, res) => {
         =============================== */
 
         const ftpFolderPath =
-            `/html/eplus/DbBackup/${corporateID}`;
+            `/html/eplus/${corporateID}`;
 
         const serverBackupPath =
-            `/var/www/html/eplus/DbBackup/${corporateID}/${fileName}`;
+            `/var/www/html/eplus/${corporateID}/${fileName}`;
 
         /* ===============================
            ENSURE SERVER DIRECTORY EXISTS
         =============================== */
 
-        const backupDir = `/var/www/html/eplus/DbBackup/${corporateID}`;
+        const backupDir = `/var/www/html/eplus/${corporateID}`;
 
         if (!fs.existsSync(backupDir)) {
             fs.mkdirSync(backupDir, { recursive: true });
