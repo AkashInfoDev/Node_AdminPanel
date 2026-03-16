@@ -7,6 +7,7 @@ const { google } = require('googleapis');
 const { validateToken } = require('../Services/tokenServices');
 const db = require("../Config/config");
 const AdmZip = require('adm-zip');
+const unzipper = require('unzipper');
 const definePLSYS14 = require('../Models/IDB/PLSYS14');
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01');
 const definePLSDBADMI = require('../Models/SDB/PLSDBADMI');
@@ -16,8 +17,9 @@ const sequelizeRDB = db.getConnection('RDB');
 const PLSYS14 = definePLSYS14(sequelizeIDB);
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 const Encryptor = require("../Services/encryptor");
-const { Op } = require('sequelize');
+const { Op, QueryTypes } = require('sequelize');
 const { sendEmailWithAttachment } = require('../Services/mailServices');
+const { generateDatabaseName } = require('../Services/queryService');
 const encryptor = new Encryptor();
 
 /* ================= GOOGLE OAUTH ================= */
@@ -190,12 +192,12 @@ const backupZipToDrive = async (req, res) => {
         });
 
         if (!tableData || tableData.length === 0) {
-    response.status = "FAIL";
-    response.message = "No tables configured for backup";
+            response.status = "FAIL";
+            response.message = "No tables configured for backup";
 
-    encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-    return res.status(404).json({ encryptedResponse });
-}
+            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(404).json({ encryptedResponse });
+        }
 
         /* ===============================
            5️⃣ CREATE TEMP DATABASE
@@ -597,77 +599,128 @@ const uploadBackupToFTP1 = async (req, res) => {
 };
 
 async function importBackupFromZip(req, res) {
-    // const { targetDB } = req.body; // Extract targetDB from request body
     const parameterString = encryptor.decrypt(req.body.pa);
     const decodedParam = decodeURIComponent(parameterString);
     const p1 = JSON.parse(decodedParam);
 
+    // Token validation
     const token = req.headers.authorization?.split(" ")[1];
+    if (!token) {
+        return res.status(401).json({
+            status: "FAIL",
+            message: "Authorization token missing"
+        });
+    }
 
-        if (!token) {
-            return res.status(401).json({
-                status: "FAIL",
-                message: "Authorization token missing"
-            });
-        }
+    const decoded = await validateToken(token);
+    if (!decoded || !decoded.corpId) {
+        return res.status(401).json({
+            status: "FAIL",
+            message: "Invalid token or corporateID missing"
+        });
+    }
 
-        const decoded = await validateToken(token);
-
-        if (!decoded || !decoded.corpId) {
-            return res.status(401).json({
-                status: "FAIL",
-                message: "Invalid token or corporateID missing"
-            });
-        }
-
-        const corporateID = decoded.corpId;
-
+    const corporateID = decoded.corpId;
+    const targetDB = generateDatabaseName(corporateID, p1.companyID);
     if (!targetDB) {
         return res.status(400).json({ error: 'Target database not specified' });
     }
 
-    // Step 1: Check if files were uploaded
-    if (!req.files || req.files.length === 0) {
-        return res.status(400).json({ error: 'No .sql files uploaded' });
+    const file = req.files[0];
+    if (!file) {
+        return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    // Connect to the SQL Server database
-    const pool = await sql.connect(config);
+    // Validate file type
+    if (path.extname(file.originalname) !== '.zip') {
+        return res.status(400).json({ error: 'Uploaded file is not a .zip file' });
+    }
+
+    const zipPath = path.join(__dirname, "..", "downloads", file.originalname);
+    const extractPath = path.join(__dirname, "..", "downloads", file.originalname.replace('.zip', ''));
 
     try {
-        // Step 2: Execute each uploaded .sql file
-        for (let file of req.files) {
-            const filePath = path.join(__dirname, '..', 'uploads', file.filename);
+        // Save the uploaded file first to the temp location
+        await fs.promises.writeFile(zipPath, file.buffer);
 
-            // Ensure the file is a .sql file
-            if (path.extname(filePath) !== '.sql') {
-                continue; // Skip files that are not .sql
-            }
-
-            // Read the .sql file content
-            const sqlScript = fs.readFileSync(filePath, 'utf-8');
-
-            // Execute the SQL script against the target DB
-            console.log(`Executing SQL script from file: ${file.originalname}`);
-            await pool.request().query(`USE ${targetDB}; ${sqlScript}`);
-
-            // Optionally delete the file after execution
-            fs.unlinkSync(filePath);
+        // Check if the file exists after saving
+        if (!fs.existsSync(zipPath)) {
+            return res.status(400).json({ error: `The file ${zipPath} does not exist.` });
         }
 
-        return res.status(200).json({ message: 'SQL scripts executed successfully!' });
-    } catch (error) {
-        return res.status(500).json({ error: `Error executing SQL scripts: ${error.message}` });
-    } finally {
-        // Clean up any files in case of errors
-        if (req.files) {
-            req.files.forEach(file => {
-                const filePath = path.join(__dirname, '..', 'uploads', file.filename);
-                if (fs.existsSync(filePath)) {
-                    fs.unlinkSync(filePath);
-                }
+        // Extract ZIP
+        await fs.promises.mkdir(extractPath, { recursive: true });
+        const zipStream = fs.createReadStream(zipPath).pipe(unzipper.Extract({ path: extractPath }));
+
+        await new Promise((resolve, reject) => {
+            zipStream.on('close', resolve);
+            zipStream.on('error', reject);
+        });
+
+        const sqlFiles = fs.readdirSync(extractPath).filter(file => path.extname(file) === '.sql');
+        if (sqlFiles.length === 0) {
+            return res.status(400).json({ error: 'No .sql files found in the zip archive' });
+        }
+
+        // Step 1: Extract table names from filenames and check if tables exist in the database
+        const tableCheckPromises = sqlFiles.map(async (sqlFile) => {
+            const tableName = path.basename(sqlFile, '.sql'); // Extract table name from file name
+
+            // Use db.getConnection(targetDB) to connect to the target database
+            const dbConn = db.getConnection(targetDB);
+
+            try {
+                // Query to check if the table exists in the target database
+                const result = await dbConn.query(`
+                    SELECT COUNT(*) AS TableCount
+                    FROM INFORMATION_SCHEMA.TABLES
+                    WHERE TABLE_NAME = '${tableName}' AND TABLE_CATALOG = '${targetDB}'
+                `, {
+                    replacements: { tableName, targetDB },
+                    type: QueryTypes.SELECT
+                });
+
+                return { tableName, tableExists: result[0].TableCount > 0 };
+            } catch (err) {
+                console.error(`Error checking if table ${tableName} exists:`, err);
+                return { tableName, tableExists: false };  // If error occurs, assume table does not exist
+            }
+        });
+
+        const tableChecks = await Promise.all(tableCheckPromises);
+
+        // If any table doesn't exist, abort and inform the user
+        const missingTables = tableChecks.filter(check => !check.tableExists).map(check => check.tableName);
+        if (missingTables.length > 0) {
+            return res.status(400).json({
+                error: `The following tables do not exist in the database: ${missingTables.join(', ')}`
             });
         }
+
+        // Step 2: If all tables exist, execute the SQL scripts
+        for (let sqlFile of sqlFiles) {
+            const sqlFilePath = path.join(extractPath, sqlFile);
+            const sqlScript = fs.readFileSync(sqlFilePath, 'utf-8');
+
+            try {
+                 const dbConn = db.getConnection(targetDB);  // Get the connection again to execute queries
+                await dbConn.query(`USE ${targetDB}; ${sqlScript}`, { type: QueryTypes.RAW });
+                fs.unlinkSync(sqlFilePath);
+            } catch (error) {
+                console.error(`Error executing SQL script from ${sqlFile}:`, error);
+                return res.status(500).json({ error: `Error executing SQL: ${error.message}` });
+            }
+        }
+
+        // Cleanup
+        fs.rmSync(extractPath, { recursive: true, force: true });
+        fs.unlinkSync(zipPath);
+
+        return res.status(200).json({ message: 'SQL scripts executed successfully!' });
+
+    } catch (error) {
+        console.error('Error processing ZIP file:', error);
+        return res.status(500).json({ error: `Error processing the ZIP file: ${error.message}` });
     }
 }
 

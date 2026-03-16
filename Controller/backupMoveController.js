@@ -456,7 +456,7 @@ const backupToDrive = async (req, res) => {
            DOWNLOAD BACKUP FROM FTP
         =============================== */
 
-        const localPath = path.join("..", "..", "..",'/tmp', "downloads", fileName); // Temporary path for downloading
+        const localPath = path.join("..", "..", "..", '/tmp', "downloads", fileName); // Temporary path for downloading
 
         // Ensure that the temp directory exists
         await fs.promises.mkdir(path.dirname(localPath), { recursive: true });
@@ -464,7 +464,7 @@ const backupToDrive = async (req, res) => {
         // Download the file from FTP
         console.log('localPath: ', localPath);
         console.log('remoteBackupPath: ', remoteBackupPath);
-        
+
         await ftpClient.downloadTo(localPath, `/html/eplus/${fileName}`);
 
         /* ===============================
@@ -488,7 +488,7 @@ const backupToDrive = async (req, res) => {
         =============================== */
 
         try {
-            await ftpClient.remove(remoteBackupPath); // Delete the backup from FTP server after uploading
+            await ftpClient.remove(`/html/eplus/${fileName}`);
         } catch (err) {
             console.log("FTP delete warning:", err.message);
         }
