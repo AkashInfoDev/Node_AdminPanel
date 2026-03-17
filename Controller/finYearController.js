@@ -8,6 +8,7 @@ const { validateToken } = require('../Services/tokenServices');
 const db = require("../Config/config");
 const AdmZip = require('adm-zip');
 const unzipper = require('unzipper');
+const csvParser = require("csv-parser");
 const definePLSYS14 = require('../Models/IDB/PLSYS14');
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01');
 const definePLSDBADMI = require('../Models/SDB/PLSDBADMI');
@@ -20,6 +21,7 @@ const Encryptor = require("../Services/encryptor");
 const { Op, QueryTypes } = require('sequelize');
 const { sendEmailWithAttachment } = require('../Services/mailServices');
 const { generateDatabaseName } = require('../Services/queryService');
+const { error } = require('console');
 const encryptor = new Encryptor();
 
 /* ================= GOOGLE OAUTH ================= */
@@ -279,10 +281,10 @@ const backupZipToDrive = async (req, res) => {
             console.log(`Processing ${tableName}`);
 
             const check = await sequelizeMASTER.query(`
-        SELECT 1
-        FROM ${sourceDatabase}.INFORMATION_SCHEMA.TABLES
-        WHERE TABLE_NAME = '${tableName}'
-    `);
+                SELECT 1
+                FROM ${sourceDatabase}.INFORMATION_SCHEMA.TABLES
+                WHERE TABLE_NAME = '${tableName}'
+                `);
 
             if (check[0].length === 0) {
                 console.log(`Skipping missing table: ${tableName}`);
@@ -291,7 +293,7 @@ const backupZipToDrive = async (req, res) => {
 
             await exportTableData(sourceDatabase, tableName, backupFolder);
         }
-
+        await exportCMPF01Data(sourceDatabase, backupFolder, yearNo);
         /* ===============================
            7️⃣ PREPARE LOCAL BACKUP PATH
         =============================== */
@@ -524,6 +526,47 @@ async function exportTableData(database, tableName, folderPath) {
     console.log(`Created ${filePath}`);
 }
 
+async function exportCMPF01Data(database, folderPath, yeNo) {
+    const tableName = "CMPF01";
+    const filePath = path.join(folderPath, `CMPF01.csv`);
+
+    // Fetch only rows where FIELD01 = 25
+    const [rows] = await sequelizeMASTER.query(
+        `SELECT * FROM ${database}.dbo.CMPF01 WHERE FIELD01 = ${yeNo}`
+    );
+
+    if (!rows.length) {
+        console.log(`No data found in CMPF01 with FIELD01 = ${yeNo}`);
+        return;
+    }
+
+    // Get column names for header
+    const columns = Object.keys(rows[0]);
+    const header = columns.join(",") + "\n";
+
+    // Convert rows to CSV format
+    const csvContent = rows
+        .map(row => {
+            return columns
+                .map(col => {
+                    const val = row[col];
+                    if (val === null) return "";
+                    if (typeof val === "string") {
+                        // Escape quotes by doubling them
+                        return `"${val.replace(/"/g, '""')}"`;
+                    }
+                    return val;
+                })
+                .join(",");
+        })
+        .join("\n");
+
+    // Write to file
+    fs.writeFileSync(filePath, header + csvContent);
+
+    console.log(`CMPF01 data exported to ${filePath}`);
+}
+
 function zipFolder(sourceFolder, zipPath) {
 
     return new Promise((resolve, reject) => {
@@ -631,7 +674,6 @@ async function importBackupFromZip(req, res) {
         return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    // Validate file type
     if (path.extname(file.originalname) !== '.zip') {
         return res.status(400).json({ error: 'Uploaded file is not a .zip file' });
     }
@@ -639,13 +681,16 @@ async function importBackupFromZip(req, res) {
     const zipPath = path.join(__dirname, "..", "downloads", file.originalname);
     const extractPath = path.join(__dirname, "..", "downloads", file.originalname.replace('.zip', ''));
 
+    // Postfix table lists
+    const datePostfixTables = ['T07', 'T02', 'T05', 'T11', 'T50', 'T82', 'T17', 'T06', 'T01', 'T41'];
+    const uniquePostfixTables = ['M01', 'M21'];
+
     try {
-        // Save the uploaded file first to the temp location
+        // Save uploaded zip
         await fs.promises.writeFile(zipPath, file.buffer);
 
-        // Check if the file exists after saving
         if (!fs.existsSync(zipPath)) {
-            return res.status(400).json({ error: `The file ${zipPath} does not exist.` });
+            return { status: 400, message: `The file ${zipPath} does not exist.` };
         }
 
         // Extract ZIP
@@ -653,62 +698,147 @@ async function importBackupFromZip(req, res) {
         const zipStream = fs.createReadStream(zipPath).pipe(unzipper.Extract({ path: extractPath }));
 
         await new Promise((resolve, reject) => {
-            zipStream.on('close', resolve);
-            zipStream.on('error', reject);
+            zipStream.on("close", resolve);
+            zipStream.on("error", reject);
         });
 
-        const sqlFiles = fs.readdirSync(extractPath).filter(file => path.extname(file) === '.sql');
-        if (sqlFiles.length === 0) {
-            return res.status(400).json({ error: 'No .sql files found in the zip archive' });
+        const files = fs.readdirSync(extractPath);
+
+        // Step 0: Validate CSV if exists and get financial year
+        const csvFiles = files.filter(f => path.extname(f) === ".csv");
+        if (csvFiles.length === 0) {
+            return res.status(400).json({ error: 'No CSV file found for financial year.' });
         }
 
-        // Step 1: Extract table names from filenames and check if tables exist in the database
+        const csvPath = path.join(extractPath, csvFiles[0]);
+        let financialYearStart, financialYearEnd;
+
+        const csvRows = [];
+        await new Promise((resolve, reject) => {
+            fs.createReadStream(csvPath)
+                .pipe(csvParser())
+                .on("data", (row) => csvRows.push(row))
+                .on("end", resolve)
+                .on("error", reject);
+        });
+
+        for (let row of csvRows) {
+            const field01 = row.FIELD01;
+            const field02 = row.FIELD02;
+            const field03 = row.FIELD03;
+
+            const [dbRow] = await sequelizeMASTER.query(
+                `SELECT FIELD02, FIELD03 FROM ${targetDB}.dbo.CMPF01 WHERE FIELD01 = :field01`,
+                { replacements: { field01 }, type: QueryTypes.SELECT }
+            );
+
+            if (!dbRow) throw new Error(`FIELD01=${field01} not found in database.`);
+
+            const csvStart = csvRows[0].FIELD02;
+            const csvEnd = csvRows[0].FIELD03;
+            const dbStart = dbRow.FIELD02;
+            const dbEnd = dbRow.FIELD03;
+
+            const exactMatch = csvStart === dbStart && csvEnd === dbEnd;
+            const rangeInside = csvStart >= dbStart && csvEnd <= dbEnd;
+
+            if (!exactMatch && !rangeInside) {
+                const response = { status: 'FAIL', message: "Financial Date Mismatched." };
+                const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                return res.status(400).json({ encryptedResponse });
+            }
+        }
+
+        financialYearStart = csvRows[0].FIELD02;
+        financialYearEnd = csvRows[0].FIELD03;
+
+        console.log(`Financial year: ${financialYearStart} - ${financialYearEnd}`);
+        console.log("CSV validation completed successfully.");
+
+        // Step 1: Check tables exist
+        const sqlFiles = files.filter(f => path.extname(f) === ".sql");
+        if (sqlFiles.length === 0) {
+            return { status: 400, message: "No .sql files found in the zip archive" };
+        }
+
         const tableCheckPromises = sqlFiles.map(async (sqlFile) => {
-            const tableName = path.basename(sqlFile, '.sql'); // Extract table name from file name
-
-            // Use db.getConnection(targetDB) to connect to the target database
+            const tableName = path.basename(sqlFile, ".sql");
             const dbConn = db.getConnection(targetDB);
-
             try {
-                // Query to check if the table exists in the target database
-                const result = await dbConn.query(`
-                    SELECT COUNT(*) AS TableCount
-                    FROM INFORMATION_SCHEMA.TABLES
-                    WHERE TABLE_NAME = '${tableName}' AND TABLE_CATALOG = '${targetDB}'
-                `, {
-                    replacements: { tableName, targetDB },
-                    type: QueryTypes.SELECT
-                });
-
+                const result = await dbConn.query(
+                    `SELECT COUNT(*) AS TableCount
+                     FROM INFORMATION_SCHEMA.TABLES
+                     WHERE TABLE_NAME = '${tableName}' AND TABLE_CATALOG = '${targetDB}'`,
+                    { type: QueryTypes.SELECT }
+                );
                 return { tableName, tableExists: result[0].TableCount > 0 };
             } catch (err) {
-                console.error(`Error checking if table ${tableName} exists:`, err);
-                return { tableName, tableExists: false };  // If error occurs, assume table does not exist
+                console.error(`Error checking table ${tableName}:`, err);
+                return { tableName, tableExists: false };
             }
         });
 
         const tableChecks = await Promise.all(tableCheckPromises);
-
-        // If any table doesn't exist, abort and inform the user
         const missingTables = tableChecks.filter(check => !check.tableExists).map(check => check.tableName);
         if (missingTables.length > 0) {
-            return res.status(400).json({
-                error: `The following tables do not exist in the database: ${missingTables.join(', ')}`
-            });
+            return { status: 400, message: `Missing tables: ${missingTables.join(", ")}` };
         }
 
-        // Step 2: If all tables exist, execute the SQL scripts
+        // Step 2: Filter and execute SQL scripts
         for (let sqlFile of sqlFiles) {
             const sqlFilePath = path.join(extractPath, sqlFile);
-            const sqlScript = fs.readFileSync(sqlFilePath, 'utf-8');
+            let sqlScript = fs.readFileSync(sqlFilePath, "utf-8");
+            const tableName = path.basename(sqlFile, '.sql').slice(-3); // last 3 chars as postfix
 
-            try {
-                 const dbConn = db.getConnection(targetDB);  // Get the connection again to execute queries
-                await dbConn.query(`USE ${targetDB}; ${sqlScript}`, { type: QueryTypes.RAW });
-                fs.unlinkSync(sqlFilePath);
-            } catch (error) {
-                console.error(`Error executing SQL script from ${sqlFile}:`, error);
-                return res.status(500).json({ error: `Error executing SQL: ${error.message}` });
+            const filteredSQL = filterInsertStatements(sqlScript, tableName, datePostfixTables, uniquePostfixTables, financialYearStart, financialYearEnd);
+
+            if (filteredSQL.trim()) {
+                try {
+                    const dbConn = db.getConnection(targetDB);
+                    await dbConn.query(`USE ${targetDB}; ${filteredSQL}`, { type: QueryTypes.RAW });
+                    if (tableName.includes('M01')) {
+                        let tabName = filteredSQL.split(' ');
+                        await dbConn.query(
+                            `SELECT FIELD02, COUNT(*) AS duplicate_count
+                        FROM ${tabName[2]}
+                        GROUP BY FIELD02
+                        HAVING COUNT(*) > 1;
+                        
+                        WITH CTE AS (
+                        SELECT *,
+                        ROW_NUMBER() OVER (PARTITION BY FIELD02 ORDER BY (SELECT 0)) AS rn
+                        FROM ${tabName[2]}
+                        )
+                        DELETE FROM CTE
+                        WHERE rn > 1;`,
+                            { type: QueryTypes.RAW }
+                        );
+                    } else if (tableName.includes('M21')) {
+                        let tabName = filteredSQL.split(' ');
+                        await dbConn.query(
+                            `SELECT FIELD02, COUNT(*) AS duplicate_count
+                            FROM ${tabName[2]}
+                            GROUP BY FIELD02
+                            HAVING COUNT(*) > 1;
+                            
+                            WITH CTE AS (
+                            SELECT *,
+                            ROW_NUMBER() OVER (PARTITION BY FIELD02 ORDER BY (SELECT 0)) AS rn
+                            FROM ${tabName[2]}
+                            )
+                            DELETE FROM CTE
+                            WHERE rn > 1;`,
+                            { type: QueryTypes.RAW }
+                        );
+                    }
+                    fs.unlinkSync(sqlFilePath);
+                    console.log(`Executed ${sqlFile} successfully.`);
+                } catch (err) {
+                    console.log(err);
+                    return { status: 500, message: `Error executing SQL ${sqlFile}: ${err.message}` };
+                }
+            } else {
+                console.log(`Skipping ${sqlFile}: no valid rows to insert`);
             }
         }
 
@@ -716,12 +846,94 @@ async function importBackupFromZip(req, res) {
         fs.rmSync(extractPath, { recursive: true, force: true });
         fs.unlinkSync(zipPath);
 
-        return res.status(200).json({ message: 'SQL scripts executed successfully!' });
+        const response = { status: 'SUCCESS', message: "Financial year restored successfully" };
+        const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+        return res.status(200).json({ encryptedResponse });
 
     } catch (error) {
         console.error('Error processing ZIP file:', error);
         return res.status(500).json({ error: `Error processing the ZIP file: ${error.message}` });
     }
+}
+
+/**
+ * Filters INSERT statements based on table rules
+ */
+function filterInsertStatements(sqlScript, tableName, dateTables, uniqueTables, startDate, endDate) {
+    const insertStatements = sqlScript.split(/;\s*INSERT INTO/i)
+        .map((stmt, i) => i === 0 ? stmt : 'INSERT INTO ' + stmt)
+        .filter(stmt => stmt.trim() !== '');
+
+    const filteredStatements = insertStatements.map(stmt => {
+        if (dateTables.includes(tableName)) {
+            const seen = new Set(); // track FLDUNQ
+
+            return stmt.replace(/INSERT INTO\s+\S+\s*\(([\s\S]*?)\)\s*VALUES\s*\(([\s\S]*?)\);?/gi, (fullMatch, colNames, valuesBlock) => {
+                // Get array of column names
+                const columns = colNames.split(',').map(c => c.trim());
+
+                // Identify indexes for FLDUNQ and FIELD02 dynamically
+                const fldUnqIndex = columns.findIndex(c => c.toUpperCase() === 'FLDUNQ');
+                const fieldDateIndex = columns.findIndex(c => c.toUpperCase() === 'FIELD02');
+
+                if (fldUnqIndex === -1 || fieldDateIndex === -1) return ''; // skip if essential columns missing
+
+                // Split multiple rows: "),(" is the separator
+                const rows = valuesBlock.split(/\),\s*\(/).map(r => r.replace(/^[(]|[)]$/g, '').trim());
+
+                const filteredRows = rows.filter(row => {
+                    if (!row) return false; // skip empty rows
+
+                    // Split row safely respecting quotes
+                    const rowValues = row.match(/'[^']*'|[^,]+/g).map(v => v.trim());
+
+                    const fldUnq = rowValues[fldUnqIndex].replace(/'/g, '').trim();
+                    const fieldDate = parseInt(rowValues[fieldDateIndex].replace(/'/g, '').trim());
+
+                    // Date filter
+                    if (fieldDate < startDate || fieldDate > endDate) return false;
+
+                    // Uniqueness filter (except T05)
+                    if (tableName !== 'T05') {
+                        if (seen.has(fldUnq)) return false;
+                        seen.add(fldUnq);
+                    }
+
+                    return true;
+                });
+
+                if (filteredRows.length === 0) return ''; // remove entire INSERT if no rows left
+
+                return `${fullMatch.match(/INSERT INTO\s+\S+/i)[0]} (${columns.join(',')}) VALUES (${filteredRows.join('),(')});`;
+            });
+        } else if (uniqueTables.includes(tableName)) {
+
+            const seen = new Set();
+
+            return stmt.replace(/\((.*?)\)/g, (match, values) => {
+                const rows = values.split(/\),\s*\(/).map(v => v.replace(/^[(]|[)]$/g, ''));
+
+                const filteredRows = rows.filter(row => {
+                    const field02 = row.includes(',')
+                        ? row.split(',')[1].replace(/'/g, '').trim()
+                        : row;
+
+                    if (seen.has(field02)) return false;
+                    seen.add(field02);
+                    return true;
+                });
+
+                if (filteredRows.length === 0) return null;
+
+                return '(' + filteredRows.join('),(') + ')';
+            }).replace(/\(\)/g, '');
+
+        } else {
+            return stmt;
+        }
+    });
+
+    return filteredStatements.filter(s => s && s.trim() !== '').join(';\n');
 }
 
 module.exports = { backupZipToDrive, uploadBackupToFTP1, importBackupFromZip };
