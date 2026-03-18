@@ -678,8 +678,8 @@ async function importBackupFromZip(req, res) {
         return res.status(400).json({ error: 'Uploaded file is not a .zip file' });
     }
 
-    const zipPath = path.join("tmp","downloads", file.originalname);
-    const extractPath = path.join("tmp","downloads", file.originalname.replace('.zip', ''));
+    const zipPath = path.join("/downloads", file.originalname);
+    const extractPath = path.join("/downloads", file.originalname.replace('.zip', ''));
 
     // Postfix table lists
     const datePostfixTables = ['T07', 'T02', 'T05', 'T11', 'T50', 'T82', 'T17', 'T06', 'T01', 'T41'];
