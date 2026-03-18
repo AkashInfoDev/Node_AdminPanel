@@ -229,7 +229,7 @@ class handleCompany {
                                 oDic["M00"]._CMPLOGO = `${path.FTPPATH}${decoded.corpId}/${formattedCmpNo}/images/${oDic["M00"]._CMPLOGO}`;
                             }
                             //M00 Entry
-
+                        }
                             //Country
                             // let oTM = new TMApi();
                             oDic["P_CONT"] = "P_COUNTRY~C~TFORM0000001";
@@ -294,7 +294,6 @@ class handleCompany {
 
                             let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                             res.status(200).json({ encryptedResponse })
-                        }
                             break;
                     case "D":
                         let branch = await brc.findOne({
