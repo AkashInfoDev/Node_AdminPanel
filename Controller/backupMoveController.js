@@ -1,14 +1,15 @@
-// const { poolMASTER } = require("../db");
 const ftp = require("basic-ftp");
 const fs = require("fs");
 const path = require("path");
+const archiver = require("archiver");
 const { google } = require("googleapis");
-// const { validateToken } = require("../middleware/authToken");
 const { validateToken } = require('../Services/tokenServices');
-// const { DT } = require("../DT");
 const db = require("../Config/config");
 const sequelizeMASTER = db.getConnection("MASTER");
 const Encryptor = require("../Services/encryptor");
+const { QueryTypes } = require("sequelize");
+const { Readable } = require("stream");
+const unzipper = require("unzipper");
 const encryptor = new Encryptor();
 
 /* ================= GOOGLE OAUTH ================= */
@@ -20,8 +21,39 @@ const oauth2Client = new google.auth.OAuth2(
 
 const drive = google.drive({ version: "v3", auth: oauth2Client });
 
+/* ================= ZIP HELPER ================= */
+function zipFiles(files, zipPath) {
+    return new Promise((resolve, reject) => {
+        console.log("📦 ZIP START:", zipPath);
+
+        const output = fs.createWriteStream(zipPath);
+        const archive = archiver("zip", { zlib: { level: 9 } });
+
+        output.on("close", () => {
+            console.log("✅ ZIP CREATED:", zipPath);
+            resolve();
+        });
+
+        archive.on("error", (err) => {
+            console.error("❌ ZIP ERROR:", err);
+            reject(err);
+        });
+
+        archive.pipe(output);
+
+        files.forEach(f => {
+            console.log("➕ Adding to ZIP:", f.name);
+            archive.file(f.path, { name: f.name });
+        });
+
+        archive.finalize();
+    });
+}
 /* ================= DRIVE FOLDER ================= */
 async function getOrCreateFolder(name, parentId = null) {
+
+    console.log("📁 Checking/Creating folder:", name);
+
     const q = [
         `name='${name}'`,
         `mimeType='application/vnd.google-apps.folder'`,
@@ -29,8 +61,17 @@ async function getOrCreateFolder(name, parentId = null) {
         "trashed=false"
     ].filter(Boolean).join(" and ");
 
-    const res = await drive.files.list({ q, fields: "files(id,name)" });
-    if (res.data.files.length) return res.data.files[0].id;
+    const res = await drive.files.list({
+        q,
+        fields: "files(id,name)"
+    });
+
+    if (res.data.files.length) {
+        console.log("📁 Folder exists:", name);
+        return res.data.files[0].id;
+    }
+
+    console.log("📁 Creating folder:", name);
 
     const folder = await drive.files.create({
         requestBody: {
@@ -41,371 +82,113 @@ async function getOrCreateFolder(name, parentId = null) {
         fields: "id"
     });
 
+    console.log("✅ Folder created:", name);
+
     return folder.data.id;
 }
+/* ================= BRANCH FETCH ================= */
+async function getCompanyBranches(corporateID, companyID) {
 
+    console.log("🔍 Fetching corpUnq for:", corporateID);
 
+    const corp = await db.getConnection("RDB").query(`
+        SELECT A01F01 FROM PLRDBA01 WHERE A01F03 = :corporateID
+    `, {
+        replacements: { corporateID },
+        type: QueryTypes.SELECT
+    });
 
-async function ensureDirectoriesExist(ftpClient, remoteDir) {
-    const directories = remoteDir.split('/').slice(1); // remove first empty
-    let currentDir = '';
+    if (!corp.length) throw new Error("Corporate not found");
 
-    for (const dir of directories) {
-        currentDir += `/${dir}`;
-        try {
-            await ftpClient.ensureDir(currentDir);
-        } catch (err) {
-            console.log(`Directory already exists: ${currentDir}`);
-        }
-    }
+    const corpUnq = corp[0].A01F01.trim();
+    console.log("✅ corpUnq:", corpUnq);
+
+    const parts = corporateID.split('-');
+    let sdbName =
+        parts.length === 3
+            ? `${parts[0]}${parts[1]}${parts[2]}SDB`
+            : `${parts[0]}${parts[1]}SDB`;
+
+    if (sdbName === 'PLP00001SDB') sdbName = 'A00001SDB';
+
+    console.log("📂 Using SDB:", sdbName);
+
+    const sequelizeSDB = db.getConnection(sdbName);
+
+    const branches = await sequelizeSDB.query(`
+        SELECT BRCODE, BRNAME, BRGST, BRCCOMP
+        FROM PLSDBBRC
+        WHERE BRCORP = :corpUnq
+    `, {
+        replacements: { corpUnq },
+        type: QueryTypes.SELECT
+    });
+
+    console.log("📊 Total branches fetched:", branches.length);
+
+    const filtered = branches.filter(b => {
+        if (!b.BRCCOMP) return false;
+
+        const list = b.BRCCOMP.split(',').map(x => x.trim());
+
+        return list.includes(companyID.toString()) ||
+            list.includes(companyID.toString().padStart(4, '0'));
+    });
+
+    console.log("✅ Filtered branches:", filtered.length);
+
+    return filtered.map(b => ({
+        BRCODE: b.BRCODE,
+        BRNAME: b.BRNAME,
+        BRGST: b.BRGST
+    }));
 }
 
-
-// const backupToDrive = async (req, res) => {
-
-//     let response = { data: null, message: '', status: 'Success' };
-//     let encryptedResponse;
-
-//     const ftpClient = new ftp.Client();
-//     ftpClient.ftp.verbose = false;
-
-//     try {
-
-//         /* ===============================
-//            1️⃣ PAYLOAD VALIDATION
-//         =============================== */
-
-//         if (!req.body.pa) {
-//             response.status = "FAIL";
-//             response.message = "Missing payload";
-
-//             encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-//             return res.status(400).json({ encryptedResponse });
-//         }
-
-//         const parameterString = encryptor.decrypt(req.body.pa);
-//         const decodedParam = decodeURIComponent(parameterString);
-//         const p1 = JSON.parse(decodedParam);
-
-//         const { companyID, googledrive_token } = p1;
-
-//         if (!companyID || !googledrive_token) {
-//             response.status = "FAIL";
-//             response.message = "companyID and googledrive_token required";
-
-//             encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-//             return res.status(400).json({ encryptedResponse });
-//         }
-
-//         /* ===============================
-//            2️⃣ TOKEN VALIDATION
-//         =============================== */
-
-//         const token = req.headers.authorization?.split(" ")[1];
-
-//         if (!token) {
-//             response.status = "FAIL";
-//             response.message = "Authorization token missing";
-
-//             encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-//             return res.status(401).json({ encryptedResponse });
-//         }
-
-//         const decoded = await validateToken(token);
-//         const corporateID = decoded.corpId;
-
-//         if (!corporateID) {
-//             response.status = "FAIL";
-//             response.message = "Invalid token";
-
-//             encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-//             return res.status(401).json({ encryptedResponse });
-//         }
-
-//         /* ===============================
-//            3️⃣ DATABASE NAME GENERATION
-//         =============================== */
-
-//         const corporateLastFive = corporateID.slice(-5);
-//         const formattedCompanyID = companyID.toString().padStart(4, "0");
-
-//         const databaseName = `A${corporateLastFive}CMP${formattedCompanyID}`;
-//         const fileName = `${databaseName}.bak`;
-
-//         /* ===============================
-//            FTP & SERVER BACKUP PATH
-//         =============================== */
-
-//         const ftpFolderPath =
-//             `/html/eplus/`;
-
-//         const serverBackupPath =
-//             `/var/www/html/eplus/${fileName}`;
-
-//         /* ===============================
-//            ENSURE SERVER DIRECTORY EXISTS
-//         =============================== */
-
-//         const backupDir = `/var/www/html/eplus/`;
-
-//         if (!fs.existsSync(backupDir)) {
-//             fs.mkdirSync(backupDir, { recursive: true });
-//         }
-
-//         /* ===============================
-//            GOOGLE AUTH
-//         =============================== */
-
-//         oauth2Client.setCredentials({
-//             refresh_token: googledrive_token
-//         });
-
-//         /* ===============================
-//            CONNECT FTP
-//         =============================== */
-
-//         await ftpClient.access({
-//             host: process.env.FTP_HOST,
-//             user: process.env.FTP_USER,
-//             password: process.env.FTP_PASS,
-//             secure: false
-//         });
-
-//         /* ===============================
-//            ENSURE FTP DIRECTORY EXISTS
-//         =============================== */
-
-//         await ensureDirectoriesExist(ftpClient, ftpFolderPath);
-
-//         /* ===============================
-//            4️⃣ CREATE SQL BACKUP
-//         =============================== */
-
-//         console.log("Creating backup for DB:", databaseName);
-//         console.log("Backup path:", serverBackupPath);
-
-//         const query = `
-//         BACKUP DATABASE [${databaseName}]
-//         TO DISK = '${serverBackupPath}'
-//         WITH FORMAT, INIT, COMPRESSION, COPY_ONLY
-//         `;
-
-//         await sequelizeMASTER.query(query);
-
-//         /* ===============================
-//            LOCAL TEMP DIRECTORY
-//         =============================== */
-
-//         // const tempDir = path.join(__dirname, "../downloads");
-//         const tempDir = path.join("/tmp", "downloads");
-//         // fs.mkdirSync(tempDir, { recursive: true });
-//         await fs.promises.mkdir(tempDir, { recursive: true });
-
-//         const localPath = path.join(tempDir, fileName);
-
-//         /* ===============================
-//            NAVIGATE FTP DIRECTORY
-//         =============================== */
-
-//         await ftpClient.cd(ftpFolderPath);
-
-//         /* ===============================
-//            VERIFY BACKUP EXISTS
-//         =============================== */
-
-//         const files = await ftpClient.list();
-
-//         if (!files.some(f => f.name === fileName)) {
-//             throw new Error("Backup file not found on FTP");
-//         }
-
-//         /* ===============================
-//            DOWNLOAD BACKUP
-//         =============================== */
-
-//         await ftpClient.downloadTo(localPath, fileName);
-
-//         /* ===============================
-//            GOOGLE DRIVE FOLDERS
-//         =============================== */
-
-//         const root = await getOrCreateFolder("eplus");
-//         const corp = await getOrCreateFolder(corporateID, root);
-//         const comp = await getOrCreateFolder(companyID.toString(), corp);
-
-//         /* ===============================
-//            DELETE OLD DRIVE FILE
-//         =============================== */
-
-//         const existing = await drive.files.list({
-//             q: `name='${fileName}' and '${comp}' in parents and trashed=false`,
-//             fields: "files(id)"
-//         });
-
-//         for (const f of existing.data.files) {
-//             await drive.files.delete({ fileId: f.id });
-//         }
-
-//         /* ===============================
-//            UPLOAD TO GOOGLE DRIVE
-//         =============================== */
-
-//         const driveFile = await drive.files.create({
-//             requestBody: {
-//                 name: fileName,
-//                 parents: [comp]
-//             },
-//             media: {
-//                 mimeType: "application/octet-stream",
-//                 body: fs.createReadStream(localPath)
-//             },
-//             fields: "id"
-//         });
-
-//         /* ===============================
-//            DELETE FTP FILE AFTER UPLOAD
-//         =============================== */
-
-//         try {
-//             await ftpClient.remove(fileName);
-//         } catch (err) {
-//             console.log("FTP delete warning:", err.message);
-//         }
-
-//         /* ===============================
-//            DELETE LOCAL TEMP FILE
-//         =============================== */
-
-//         if (fs.existsSync(localPath)) {
-//             fs.unlinkSync(localPath);
-//         }
-
-//         /* ===============================
-//            SUCCESS RESPONSE
-//         =============================== */
-
-//         response.status = "SUCCESS";
-//         response.message = "Backup created and uploaded to Google Drive";
-
-//         response.data = {
-//             corporateID,
-//             companyID,
-//             databaseName,
-//             // driveFileId: driveFile.data.id,
-//             // drivePath: `/eplus/${corporateID}/${companyID}/${databaseName}/${fileName}`
-//         };
-
-//         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-
-//         return res.status(200).json({ encryptedResponse });
-
-//     } catch (err) {
-
-//         console.error("backupToDrive error:", err);
-
-//         response.status = "FAIL";
-//         response.message = err.message;
-
-//         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-
-//         return res.status(500).json({ encryptedResponse });
-
-//     } finally {
-
-//         ftpClient.close();
-
-//     }
-// };
-
-
+/* ================= MAIN API ================= */
 const backupToDrive = async (req, res) => {
+
+    console.log("🚀 API HIT");
+
     let response = { data: null, message: '', status: 'Success' };
     let encryptedResponse;
 
     const ftpClient = new ftp.Client();
-    ftpClient.ftp.verbose = false;
 
     try {
-        /* ===============================
-           1️⃣ PAYLOAD VALIDATION
-        =============================== */
 
-        if (!req.body.pa) {
-            response.status = "FAIL";
-            response.message = "Missing payload";
-
-            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-            return res.status(400).json({ encryptedResponse });
-        }
-
-        const parameterString = encryptor.decrypt(req.body.pa);
-        const decodedParam = decodeURIComponent(parameterString);
-        const p1 = JSON.parse(decodedParam);
+        /* ========= PAYLOAD ========= */
+        console.log("🔐 Decrypting payload...");
+        const p1 = JSON.parse(
+            decodeURIComponent(encryptor.decrypt(req.body.pa))
+        );
 
         const { companyID, googledrive_token } = p1;
+        console.log("📥 Payload:", p1);
 
-        if (!companyID || !googledrive_token) {
-            response.status = "FAIL";
-            response.message = "companyID and googledrive_token required";
-
-            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-            return res.status(400).json({ encryptedResponse });
-        }
-
-        /* ===============================
-           2️⃣ TOKEN VALIDATION
-        =============================== */
-
+        /* ========= TOKEN ========= */
         const token = req.headers.authorization?.split(" ")[1];
-
-        if (!token) {
-            response.status = "FAIL";
-            response.message = "Authorization token missing";
-
-            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-            return res.status(401).json({ encryptedResponse });
-        }
-
         const decoded = await validateToken(token);
+
         const corporateID = decoded.corpId;
+        console.log("👤 CorporateID:", corporateID);
 
-        if (!corporateID) {
-            response.status = "FAIL";
-            response.message = "Invalid token";
-
-            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-            return res.status(401).json({ encryptedResponse });
-        }
-
-        /* ===============================
-           3️⃣ DATABASE NAME GENERATION
-        =============================== */
-
-        const corporateLastFive = corporateID.slice(-5);
-        const formattedCompanyID = companyID.toString().padStart(4, "0");
-
-        const databaseName = `A${corporateLastFive}CMP${formattedCompanyID}`;
+        /* ========= DB ========= */
+        const databaseName = `A${corporateID.slice(-5)}CMP${companyID.toString().padStart(4, "0")}`;
         const fileName = `${databaseName}.bak`;
 
-        /* ===============================
-           FTP BACKUP PATH
-        =============================== */
+        console.log("🗄 Database:", databaseName);
 
-        const ftpFolderPath = `/html/eplus/`; // FTP folder path for storing the backup
-        const remoteBackupPath = `/var/www${ftpFolderPath}${fileName}`; // Remote path for backup on FTP
+        const ftpFolderPath = `/html/eplus/`;
+        const remoteBackupPath = `/var/www${ftpFolderPath}${fileName}`;
 
-        /* ===============================
-           GOOGLE AUTH
-        =============================== */
-
+        /* ========= GOOGLE AUTH ========= */
+        console.log("🔑 Setting Google token...");
         oauth2Client.setCredentials({
             refresh_token: googledrive_token
         });
 
-        /* ===============================
-           CONNECT FTP
-        =============================== */
-
+        /* ========= FTP ========= */
+        console.log("🌐 Connecting FTP...");
         await ftpClient.access({
             host: process.env.FTP_HOST,
             user: process.env.FTP_USER,
@@ -413,186 +196,602 @@ const backupToDrive = async (req, res) => {
             secure: false
         });
 
-        /* ===============================
-           ENSURE FTP DIRECTORY EXISTS
-        =============================== */
+        console.log("✅ FTP Connected");
 
-        await ensureDirectoriesExist(ftpClient, ftpFolderPath);
+        /* ========= BACKUP ========= */
+        console.log("📦 Creating SQL Backup...");
+        await sequelizeMASTER.query(`
+            BACKUP DATABASE [${databaseName}]
+            TO DISK = '${remoteBackupPath}'
+            WITH FORMAT, INIT, COMPRESSION, COPY_ONLY
+        `);
 
-        /* ===============================
-           4️⃣ CREATE SQL BACKUP ON FTP
-        =============================== */
+        console.log("✅ Backup Created");
 
-        console.log("Creating backup for DB:", databaseName);
-        const query = `
-        BACKUP DATABASE [${databaseName}]
-        TO DISK = '${remoteBackupPath}'
-        WITH FORMAT, INIT, COMPRESSION, COPY_ONLY
-        `;
-        await sequelizeMASTER.query(query); // Assuming you use sequelize or a similar ORM
+        /* ========= DOWNLOAD ========= */
+        // const localDir = path.resolve("tmp", "downloads");
+        const localDir = path.join("..", "..", "..", '/tmp', "downloads", fileName); // Temporary path for downloading
+        await fs.promises.mkdir(localDir, { recursive: true });
 
-        /* ===============================
-           GOOGLE DRIVE FOLDERS
-        =============================== */
+        const bakPath = path.join(localDir, fileName);
+
+        console.log("⬇ Downloading BAK to:", bakPath);
+
+        await ftpClient.downloadTo(bakPath, `/html/eplus/${fileName}`);
+
+        console.log("✅ BAK Downloaded");
+
+        /* ========= JSON ========= */
+        console.log("🧾 Creating JSON...");
+        const branches = await getCompanyBranches(corporateID, companyID);
+
+        const jsonPath = path.join(localDir, `${databaseName}.json`);
+
+        await fs.promises.writeFile(
+            jsonPath,
+            JSON.stringify({ corporateID, companyID, branches }, null, 2)
+        );
+
+        console.log("✅ JSON Created:", jsonPath);
+
+        /* ========= ZIP ========= */
+        const zipPath = path.join(localDir, `${databaseName}.zip`);
+
+        await zipFiles([
+            { path: bakPath, name: fileName },
+            { path: jsonPath, name: "metadata.json" }
+        ], zipPath);
+
+        if (!fs.existsSync(zipPath)) {
+            throw new Error("ZIP NOT CREATED");
+        }
+
+        /* ========= DRIVE ========= */
+        console.log("☁️ Preparing Drive upload...");
 
         const root = await getOrCreateFolder("eplus");
         const corp = await getOrCreateFolder(corporateID, root);
         const comp = await getOrCreateFolder(companyID.toString(), corp);
 
-        /* ===============================
-           DELETE OLD DRIVE FILE
-        =============================== */
 
-        const existing = await drive.files.list({
-            q: `name='${fileName}' and '${comp}' in parents and trashed=false`,
-            fields: "files(id)"
+        /* ========= DELETE OLD ZIP IF EXISTS ========= */
+        console.log("🗑 Checking existing ZIP on Drive...");
+
+        const existingFiles = await drive.files.list({
+            q: `name='${databaseName}.zip' and '${comp}' in parents and trashed=false`,
+            fields: "files(id, name)"
         });
 
-        for (const f of existing.data.files) {
-            await drive.files.delete({ fileId: f.id });
+        if (existingFiles.data.files.length > 0) {
+            console.log(`⚠ Found ${existingFiles.data.files.length} existing file(s), deleting...`);
+
+            for (const file of existingFiles.data.files) {
+                await drive.files.delete({ fileId: file.id });
+                console.log(`🗑 Deleted: ${file.id}`);
+            }
+        } else {
+            console.log("✅ No existing ZIP found");
         }
 
-        /* ===============================
-           DOWNLOAD BACKUP FROM FTP
-        =============================== */
+        console.log("🚀 Uploading ZIP...");
 
-        const localPath = path.join("..", "..", "..", '/tmp', "downloads", fileName); // Temporary path for downloading
-
-        // Ensure that the temp directory exists
-        await fs.promises.mkdir(path.dirname(localPath), { recursive: true });
-
-        // Download the file from FTP
-        console.log('localPath: ', localPath);
-        console.log('remoteBackupPath: ', remoteBackupPath);
-
-        await ftpClient.downloadTo(localPath, `/html/eplus/${fileName}`);
-
-        /* ===============================
-           UPLOAD TO GOOGLE DRIVE
-        =============================== */
-
-        const driveFile = await drive.files.create({
+        const uploaded = await drive.files.create({
             requestBody: {
-                name: fileName,
+                name: `${databaseName}.zip`,
                 parents: [comp]
             },
             media: {
-                mimeType: "application/octet-stream",
-                body: fs.createReadStream(localPath)
-            },
-            fields: "id"
+                mimeType: "application/zip",
+                body: fs.createReadStream(zipPath)
+            }
         });
 
-        /* ===============================
-           DELETE FTP FILE AFTER UPLOAD
-        =============================== */
+        console.log("✅ Uploaded File ID:", uploaded.data.id);
+        console.log("🔗 File Link:");
+        console.log(`https://drive.google.com/file/d/${uploaded.data.id}/view`);
+
+        /* ========= CLEANUP ========= */
+        console.log("🧹 Cleaning up...");
 
         try {
             await ftpClient.remove(`/html/eplus/${fileName}`);
         } catch (err) {
-            console.log("FTP delete warning:", err.message);
+            console.log("⚠ FTP delete warning:", err.message);
         }
 
-        /* ===============================
-           DELETE LOCAL TEMP FILE
-        =============================== */
+        [bakPath, jsonPath, zipPath].forEach(f => {
+            if (fs.existsSync(f)) fs.unlinkSync(f);
+        });
 
-        if (fs.existsSync(localPath)) {
-            fs.unlinkSync(localPath); // Delete the local temporary file after uploading to Google Drive
-        }
-
-        /* ===============================
-           SUCCESS RESPONSE
-        =============================== */
+        console.log("✅ Cleanup done");
 
         response.status = "SUCCESS";
-        response.message = "Backup created and uploaded to Google Drive";
-
-        response.data = {
-            corporateID,
-            companyID,
-            databaseName,
-        };
+        response.message = "Backup ZIP uploaded successfully";
 
         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-
         return res.status(200).json({ encryptedResponse });
 
     } catch (err) {
 
-        console.error("backupToDrive error:", err);
+        console.error("❌ FULL ERROR:", err);
 
         response.status = "FAIL";
         response.message = err.message;
 
         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-
         return res.status(500).json({ encryptedResponse });
 
     } finally {
-
-        ftpClient.close(); // Ensure FTP client is properly closed
-
+        console.log("🔚 Closing FTP");
+        ftpClient.close();
     }
 };
 
-const uploadBackupToFTP = async (req, res) => {
+
+// for restore using .bak file
+// const restoreBak = async (req, res) => {
+
+//     let response = { status: "SUCCESS", message: "", data: null };
+//     let encryptedResponse;
+
+//     const ftpClient = new ftp.Client();
+
+//     try {
+
+//         console.log("🚀 BAK Restore API HIT");
+
+//         /* ========= PAYLOAD ========= */
+//         const p1 = JSON.parse(
+//             decodeURIComponent(encryptor.decrypt(req.body.pa))
+//         );
+
+//         /* ========= TOKEN ========= */
+//         const authHeader = req.headers.authorization;
+//         if (!authHeader) throw new Error("Authorization header missing");
+
+//         const token = authHeader.split(" ")[1];
+//         if (!token) throw new Error("Token missing");
+
+//         const decoded = await validateToken(token);
+//         console.log("🔍 Decoded Token:", decoded);
+
+//         if (!decoded || !decoded.corpId) {
+//             throw new Error("Invalid token or corpId missing");
+//         }
+
+//         const corporateID = decoded.corpId;
+//         console.log("👤 CorporateID:", corporateID);
+
+//         /* ========= GET SDB ========= */
+//         const parts = corporateID.split('-');
+
+//         let sdbName =
+//             parts.length === 3
+//                 ? `${parts[0]}${parts[1]}${parts[2]}SDB`
+//                 : `${parts[0]}${parts[1]}SDB`;
+
+//         if (sdbName === 'PLP00001SDB') sdbName = 'A00001SDB';
+
+//         console.log("📂 SDB:", sdbName);
+
+//         const sequelizeSDB = db.getConnection(sdbName);
+
+//         /* ========= GET NEXT COMPANY ========= */
+//         const result = await sequelizeSDB.query(`
+//             SELECT ISNULL(MAX(CMPF01), 0) + 1 AS nextCompany
+//             FROM PLSDBCMP
+//         `, { type: QueryTypes.SELECT });
+
+//         const nextCompanyID = result[0].nextCompany;
+//         console.log("🆕 Next Company ID:", nextCompanyID);
+
+//         /* ========= FILE ========= */
+//         const file = req.files[0];
+
+//         if (!file) throw new Error("No .bak file uploaded");
+//         if (path.extname(file.originalname) !== '.bak') {
+//             throw new Error("Only .bak file allowed");
+//         }
+
+//         /* ========= FTP CONNECT ========= */
+//         console.log("🌐 Connecting FTP...");
+//         await ftpClient.access({
+//             host: process.env.FTP_HOST,
+//             user: process.env.FTP_USER,
+//             password: process.env.FTP_PASS,
+//             secure: false
+//         });
+//         console.log("✅ FTP Connected");
+
+//         /* ========= UNIQUE FILE NAME ========= */
+//         const remoteFileName = `${Date.now()}_${file.originalname}`;
+//         const remoteFtpPath = `/html/eplus/${remoteFileName}`;
+//         const sqlPath = `/var/www/html/eplus/${remoteFileName}`;
+
+//         console.log("⬆ Uploading to FTP:", remoteFtpPath);
+
+//         const stream = Readable.from(file.buffer);
+//         await ftpClient.uploadFrom(stream, remoteFtpPath);
+
+//         console.log("✅ Uploaded to FTP");
+
+//         /* ========= NEW DB NAME ========= */
+//         const newDatabaseName =
+//             `A${corporateID.slice(-5)}CMP${nextCompanyID.toString().padStart(4, "0")}`;
+
+//         console.log("🆕 Final DB Name:", newDatabaseName);
+
+//         /* ========= DROP IF EXISTS ========= */
+//         await sequelizeMASTER.query(`
+//             IF DB_ID('${newDatabaseName}') IS NOT NULL
+//             BEGIN
+//                 ALTER DATABASE [${newDatabaseName}] 
+//                 SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+//                 DROP DATABASE [${newDatabaseName}];
+//             END
+//         `);
+
+//         /* ========= GET LOGICAL FILE ========= */
+//         const fileList = await sequelizeMASTER.query(`
+//             RESTORE FILELISTONLY 
+//             FROM DISK = '${sqlPath}'
+//         `);
+
+//         const dataFile = fileList[0].find(f => f.Type === 'D');
+//         const logFile = fileList[0].find(f => f.Type === 'L');
+
+//         if (!dataFile || !logFile) {
+//             throw new Error("Invalid BAK file");
+//         }
+
+//         console.log("📄 Logical Names:", dataFile.LogicalName, logFile.LogicalName);
+
+//         /* ========= RESTORE ========= */
+//         await sequelizeMASTER.query(`
+//             RESTORE DATABASE [${newDatabaseName}]
+//             FROM DISK = '${sqlPath}'
+//             WITH 
+//                 MOVE '${dataFile.LogicalName}' TO '/var/opt/mssql/data/${newDatabaseName}.mdf',
+//                 MOVE '${logFile.LogicalName}' TO '/var/opt/mssql/data/${newDatabaseName}_log.ldf',
+//                 REPLACE
+//         `);
+
+//         console.log("✅ DB Restored Successfully");
+
+//         /* ========= GET COMPANY NAME ========= */
+//         const [cmpData] = await sequelizeMASTER.query(`
+//             SELECT TOP 1 FIELD02 as companyName
+//             FROM ${newDatabaseName}.dbo.CMPM00
+//         `, { type: QueryTypes.SELECT });
+
+//         const companyName = cmpData?.companyName || `Company ${nextCompanyID}`;
+//         console.log("🏢 Company Name:", companyName);
+
+//         /* ========= INSERT INTO PLSDBCMP ========= */
+//         await sequelizeSDB.query(`
+//             INSERT INTO PLSDBCMP (
+//                 CMPF01, CMPF02, CMPF03, CMPF04,
+//                 CMPF11, CMPF12, CMPF21, CMPF22, CMPF23, CMPF24
+//             )
+//             VALUES (
+//                 :companyID, :companyName, 'SQL', 'No Group',
+//                 'U0000000', GETDATE(),
+//                 '94.176.235.105',
+//                 'aipharma_aakash',
+//                 'Aipharma@360',
+//                 'DATA'
+//             )
+//         `, {
+//             replacements: {
+//                 companyID: nextCompanyID,
+//                 companyName
+//             }
+//         });
+
+//         console.log("✅ Inserted into PLSDBCMP");
+
+//         /* ========= INSERT INTO PLSDBM82 ========= */
+//         await sequelizeSDB.query(`
+//             INSERT INTO PLSDBM82 (
+//                 M82F01, M82F02, M82CMP, M82YRN, M82ADA
+//             )
+//             VALUES (
+//                 'U0000000', :companyID, 'Y', '26', 'A'
+//             )
+//         `, {
+//             replacements: { companyID: nextCompanyID }
+//         });
+
+//         console.log("✅ Inserted into PLSDBM82");
+
+//         /* ========= UPDATE CMPM00 ========= */
+//         await sequelizeMASTER.query(`
+//             UPDATE ${newDatabaseName}.dbo.CMPM00
+//             SET FIELD01 = :companyID
+//         `, {
+//             replacements: { companyID: nextCompanyID }
+//         });
+
+//         console.log("✅ Updated CMPM00");
+
+//         /* ========= CLEANUP FTP ========= */
+//         try {
+//             await ftpClient.remove(remoteFtpPath);
+//             console.log("🧹 FTP file deleted");
+//         } catch (err) {
+//             console.log("⚠ FTP delete warning:", err.message);
+//         }
+
+//         /* ========= RESPONSE ========= */
+
+//         response.status = 'SUCCESS';
+//         response.message = "BAK restored and registered successfully";
+//         response.data = {
+//             database: newDatabaseName,
+//             companyID: nextCompanyID,
+//             companyName
+//         };
+
+//         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+//         return res.status(200).json({ encryptedResponse });
+
+//     } catch (err) {
+
+//         console.error("❌ Restore Error:", err);
+
+//         response.status = "FAIL";
+//         response.message = err.message;
+
+//         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+//         return res.status(500).json({ encryptedResponse });
+
+//     } finally {
+//         console.log("🔚 Closing FTP");
+//         ftpClient.close();
+//     }
+// };
+
+// ____________________________________________________________________________________
+// backup using zip file 
+
+
+const restoreBak = async (req, res) => {
+
+    let response = { status: "SUCCESS", message: "", data: null };
+    let encryptedResponse;
+
+    const ftpClient = new ftp.Client();
+
+    let tempDir = null;
+    let remoteFtpPath = null;
 
     try {
 
-        if (!req.body.pa) {
-            return res.json({
-                status: "FAIL",
-                message: "Missing payload"
-            });
+        console.log("🚀 ZIP Restore API HIT");
+
+        /* ========= PAYLOAD ========= */
+        // const p1 = JSON.parse(
+        //     decodeURIComponent(encryptor.decrypt(req.body.pa))
+        // );
+
+        /* ========= TOKEN ========= */
+        const authHeader = req.headers.authorization;
+        if (!authHeader) throw new Error("Authorization header missing");
+
+        const token = authHeader.split(" ")[1];
+        if (!token) throw new Error("Token missing");
+
+        const decoded = await validateToken(token);
+
+        if (!decoded || !decoded.corpId) {
+            throw new Error("Invalid token or corpId missing");
         }
 
-        const parameterString = encryptor.decrypt(req.body.pa);
-        let decodedParam = decodeURIComponent(parameterString);
-        let p1 = JSON.parse(decodedParam);
+        const corporateID = decoded.corpId;
+        console.log("👤 CorporateID:", corporateID);
 
-        const { databaseName } = p1;
+        /* ========= GET SDB ========= */
+        const parts = corporateID.split('-');
 
-        if (!databaseName) {
-            return res.json({
-                status: "FAIL",
-                message: "databaseName required"
-            });
+        let sdbName =
+            parts.length === 3
+                ? `${parts[0]}${parts[1]}${parts[2]}SDB`
+                : `${parts[0]}${parts[1]}SDB`;
+
+        if (sdbName === 'PLP00001SDB') sdbName = 'A00001SDB';
+
+        const sequelizeSDB = db.getConnection(sdbName);
+
+        /* ========= NEXT COMPANY ========= */
+        const result = await sequelizeSDB.query(`
+            SELECT ISNULL(MAX(CMPF01), 0) + 1 AS nextCompany
+            FROM PLSDBCMP
+        `, { type: QueryTypes.SELECT });
+
+        const nextCompanyID = result[0].nextCompany;
+
+        /* ========= FILE ========= */
+        const file = req.files[0];
+
+        if (!file) throw new Error("No file uploaded");
+
+        if (path.extname(file.originalname) !== ".zip") {
+            throw new Error("Only .zip file allowed");
         }
 
-        /* CREATE BACKUP DIRECTLY IN FTP STORAGE */
+        /* ========= TEMP DIR ========= */
+        tempDir = path.join("/tmp", "zip_" + Date.now());
+        await fs.promises.mkdir(tempDir, { recursive: true });
 
-        const backupPath = `/var/www/html/eplus/${databaseName}.bak`;
+        const zipPath = path.join(tempDir, file.originalname);
 
-        const query = `
-        BACKUP DATABASE [${databaseName}]
-        TO DISK = '${backupPath}'
-        WITH FORMAT, INIT, COMPRESSION
-        `;
+        await fs.promises.writeFile(zipPath, file.buffer);
 
-        await sequelizeMASTER.query(query);
+        console.log("📦 ZIP saved:", zipPath);
 
-        return res.json({
-            status: "SUCCESS",
-            message: "Backup created directly in FTP storage",
-            data: {
-                databaseName,
-                ftpPath: `/html/eplus/${databaseName}.bak`,
-                ftpUrl: `https://s01.lyfexplore.com/eplus/${databaseName}.bak`
-            }
+        /* ========= UNZIP ========= */
+        await fs.createReadStream(zipPath)
+            .pipe(unzipper.Extract({ path: tempDir }))
+            .promise();
+
+        console.log("📂 ZIP extracted");
+
+        /* ========= FIND FILES ========= */
+        const files = fs.readdirSync(tempDir);
+
+        const bakFile = files.find(f => path.extname(f) === ".bak");
+        const metaFile = files.find(f => f.endsWith(".json"));
+
+        if (!bakFile) {
+            throw new Error("No .bak file found inside ZIP");
+        }
+
+        const bakPath = path.join(tempDir, bakFile);
+
+        console.log("📂 BAK Found:", bakFile);
+
+        /* ========= OPTIONAL METADATA ========= */
+        if (metaFile) {
+            const metadata = JSON.parse(
+                fs.readFileSync(path.join(tempDir, metaFile), "utf-8")
+            );
+            console.log("📄 Metadata:", metadata);
+        }
+
+        /* ========= FTP CONNECT ========= */
+        await ftpClient.access({
+            host: process.env.FTP_HOST,
+            user: process.env.FTP_USER,
+            password: process.env.FTP_PASS,
+            secure: false
         });
+
+        console.log("✅ FTP Connected");
+
+        /* ========= FTP UPLOAD ========= */
+        const remoteFileName = `${Date.now()}_${bakFile}`;
+        remoteFtpPath = `/html/eplus/${remoteFileName}`;
+        const sqlPath = `/var/www/html/eplus/${remoteFileName}`;
+
+        await ftpClient.uploadFrom(
+            fs.createReadStream(bakPath),
+            remoteFtpPath
+        );
+
+        console.log("⬆ Uploaded to FTP");
+
+        /* ========= NEW DB NAME ========= */
+        const newDatabaseName =
+            `A${corporateID.slice(-5)}CMP${nextCompanyID.toString().padStart(4, "0")}`;
+
+        /* ========= DROP ========= */
+        await sequelizeMASTER.query(`
+            IF DB_ID('${newDatabaseName}') IS NOT NULL
+            BEGIN
+                ALTER DATABASE [${newDatabaseName}]
+                SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+                DROP DATABASE [${newDatabaseName}];
+            END
+        `);
+
+        /* ========= FILE LIST ========= */
+        const fileList = await sequelizeMASTER.query(`
+            RESTORE FILELISTONLY FROM DISK = '${sqlPath}'
+        `);
+
+        const dataFile = fileList[0].find(f => f.Type === 'D');
+        const logFile = fileList[0].find(f => f.Type === 'L');
+
+        /* ========= RESTORE ========= */
+        await sequelizeMASTER.query(`
+            RESTORE DATABASE [${newDatabaseName}]
+            FROM DISK = '${sqlPath}'
+            WITH 
+                MOVE '${dataFile.LogicalName}' TO '/var/opt/mssql/data/${newDatabaseName}.mdf',
+                MOVE '${logFile.LogicalName}' TO '/var/opt/mssql/data/${newDatabaseName}_log.ldf',
+                REPLACE
+        `);
+
+        console.log("✅ DB Restored");
+
+        /* ========= COMPANY NAME ========= */
+        const [cmpData] = await sequelizeMASTER.query(`
+            SELECT TOP 1 FIELD02 as companyName
+            FROM ${newDatabaseName}.dbo.CMPM00
+        `, { type: QueryTypes.SELECT });
+
+        const companyName = cmpData?.companyName || `Company ${nextCompanyID}`;
+
+        /* ========= INSERT PLSDBCMP ========= */
+        await sequelizeSDB.query(`
+            INSERT INTO PLSDBCMP (
+                CMPF01, CMPF02, CMPF03, CMPF04,
+                CMPF11, CMPF12, CMPF21, CMPF22, CMPF23, CMPF24
+            )
+            VALUES (
+                :companyID, :companyName, 'SQL', 'No Group',
+                'U0000000', GETDATE(),
+                '94.176.235.105',
+                'aipharma_aakash',
+                'Aipharma@360',
+                'DATA'
+            )
+        `, {
+            replacements: { companyID: nextCompanyID, companyName }
+        });
+
+        /* ========= INSERT M82 ========= */
+        await sequelizeSDB.query(`
+            INSERT INTO PLSDBM82 (
+                M82F01, M82F02, M82CMP, M82YRN, M82ADA
+            )
+            VALUES ('U0000000', :companyID, 'Y', '26', 'A')
+        `, {
+            replacements: { companyID: nextCompanyID }
+        });
+
+        /* ========= UPDATE CMPM00 ========= */
+        await sequelizeMASTER.query(`
+            UPDATE ${newDatabaseName}.dbo.CMPM00
+            SET FIELD01 = :companyID
+        `, {
+            replacements: { companyID: nextCompanyID }
+        });
+
+        console.log("✅ Registration Done");
+
+        /* ========= CLEANUP ========= */
+        try {
+            if (remoteFtpPath) await ftpClient.remove(remoteFtpPath);
+        } catch { }
+
+        if (tempDir) {
+            fs.rmSync(tempDir, { recursive: true, force: true });
+        }
+
+        response.status = "SUCCESS";
+        response.message = "ZIP restored successfully";
+        response.data = {
+            database: newDatabaseName,
+            companyID: nextCompanyID,
+            companyName
+        };
+
+        encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+        return res.status(200).json({ encryptedResponse });
 
     } catch (err) {
 
-        console.error(err);
+        console.error("❌ Restore Error:", err);
 
-        return res.status(500).json({
-            status: "FAIL",
-            message: err.message
-        });
+        response.status = "FAIL";
+        response.message = err.message;
 
+        encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+        return res.status(500).json({ encryptedResponse });
+
+    } finally {
+        ftpClient.close();
     }
 };
-
-
-module.exports = { backupToDrive, uploadBackupToFTP };
+module.exports = { backupToDrive, restoreBak };
