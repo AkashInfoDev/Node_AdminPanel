@@ -329,7 +329,6 @@ const backupZipToDrive = async (req, res) => {
            🔟 GOOGLE DRIVE AUTH
         =============================== */
 
-        oauth2Client.setCredentials({ refresh_token });
 
         const root = await getOrCreateFolder("eplus");
         const corp = await getOrCreateFolder(corporateID, root);
@@ -337,6 +336,7 @@ const backupZipToDrive = async (req, res) => {
 
         const zipFileName = path.basename(zipFilePath);
         if (action == 'G') {
+            oauth2Client.setCredentials({ refresh_token });
             /* ===============================
                1️⃣1️⃣ DELETE OLD FILE FROM DRIVE
             =============================== */
