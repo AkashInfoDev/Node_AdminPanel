@@ -330,13 +330,13 @@ const backupZipToDrive = async (req, res) => {
         =============================== */
 
 
-        const root = await getOrCreateFolder("eplus");
-        const corp = await getOrCreateFolder(corporateID, root);
-        const comp = await getOrCreateFolder(companyID.toString(), corp);
-
+        
         const zipFileName = path.basename(zipFilePath);
         if (action == 'G') {
             oauth2Client.setCredentials({ refresh_token });
+            const root = await getOrCreateFolder("eplus");
+            const corp = await getOrCreateFolder(corporateID, root);
+            const comp = await getOrCreateFolder(companyID.toString(), corp);
             /* ===============================
                1️⃣1️⃣ DELETE OLD FILE FROM DRIVE
             =============================== */
