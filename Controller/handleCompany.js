@@ -230,71 +230,71 @@ class handleCompany {
                             }
                             //M00 Entry
                         }
-                            //Country
-                            // let oTM = new TMApi();
-                            oDic["P_CONT"] = "P_COUNTRY~C~TFORM0000001";
-                            oDic["P_CONTDT"] = await sequelizeIDB.query("SELECT PLCF01, PLCF02 FROM COUNTRY", {
-                                type: sequelizeIDB.QueryTypes.SELECT
-                            });
-                            //oDic.Add("P_CONTDT", oTM.GetpopupData(oYear, oUser, "P_COUNTRY", "TFORM0000001"));
+                        //Country
+                        // let oTM = new TMApi();
+                        oDic["P_CONT"] = "P_COUNTRY~C~TFORM0000001";
+                        oDic["P_CONTDT"] = await sequelizeIDB.query("SELECT PLCF01, PLCF02 FROM COUNTRY", {
+                            type: sequelizeIDB.QueryTypes.SELECT
+                        });
+                        //oDic.Add("P_CONTDT", oTM.GetpopupData(oYear, oUser, "P_COUNTRY", "TFORM0000001"));
 
-                            //State
-                            oDic["P_STATE"] = "P_PLSTATE~C~TFORM0000001";
-                            oDic["P_STATEDT"] = await sequelizeIDB.query("SELECT PLSF01, PLSF02, PLSF06 FROM PLSTATE", {
-                                type: sequelizeIDB.QueryTypes.SELECT
-                            });
-                            //oDic.Add("P_STATEDT", oTM.GetpopupData(oYear, oUser, "P_PLSTATE", "TFORM0000001"));
+                        //State
+                        oDic["P_STATE"] = "P_PLSTATE~C~TFORM0000001";
+                        oDic["P_STATEDT"] = await sequelizeIDB.query("SELECT PLSF01, PLSF02, PLSF06 FROM PLSTATE", {
+                            type: sequelizeIDB.QueryTypes.SELECT
+                        });
+                        //oDic.Add("P_STATEDT", oTM.GetpopupData(oYear, oUser, "P_PLSTATE", "TFORM0000001"));
 
-                            //Language
-                            oDic["CBOLAN"] = [
-                                { DisplayMember: "Gujarati", ValueMember: "01" },
-                                { DisplayMember: "English", ValueMember: "02" },
-                                { DisplayMember: "Hindi", ValueMember: "03" }
-                            ]
+                        //Language
+                        oDic["CBOLAN"] = [
+                            { DisplayMember: "Gujarati", ValueMember: "01" },
+                            { DisplayMember: "English", ValueMember: "02" },
+                            { DisplayMember: "Hindi", ValueMember: "03" }
+                        ]
 
-                            //Category
-                            oDic["P_PLCAT"] = "P_PLCAT~C~TFORM0000001";
-                            oDic["P_PLCATDT"] = await sequelizeIDB.query("SELECT CATF01, CATF02, CATF03 FROM PLSYSCAT", {
-                                type: sequelizeIDB.QueryTypes.SELECT
-                            });
-                            //oDic.Add("P_PLCATDT", oTM.GetpopupData(oYear, oUser, "P_PLSTATE", "TFORM0000001"));
+                        //Category
+                        oDic["P_PLCAT"] = "P_PLCAT~C~TFORM0000001";
+                        oDic["P_PLCATDT"] = await sequelizeIDB.query("SELECT CATF01, CATF02, CATF03 FROM PLSYSCAT", {
+                            type: sequelizeIDB.QueryTypes.SELECT
+                        });
+                        //oDic.Add("P_PLCATDT", oTM.GetpopupData(oYear, oUser, "P_PLSTATE", "TFORM0000001"));
 
-                            oDic["P_GRPDT"] = await oM00.dtM00Grp(cUserID);
-                            if (cAction == 'E') {
-                                oDic["P_YRDT"] = await oCmp.GetYearJSon();
-                            }
-                            if (cAction == 'E') {
-                                let brcList = await brc.findAll({
-                                    BRCCOMP: {
-                                        [Op.or]: [
-                                            { [Op.like]: `%,${CmpNo},%` },  // Number 0 in the middle
-                                            { [Op.like]: `${CmpNo},%` },     // Number 0 at the start
-                                            { [Op.like]: `%,${CmpNo}` },     // Number 0 at the end
-                                            { [Op.eq]: `${CmpNo}` }          // Exact match '0'
-                                        ]
-                                    }
-                                }, [], ['BRCODE']);
-                                let FLDBRC = []
-                                if (brcList.length != 0) {
-                                    if (brcList.length > 1) {
-                                        for (const bl of brcList) {
-                                            FLDBRC.push(bl.BRCODE.toString());
-                                        }
-                                    } else {
-                                        FLDBRC.push(brcList[0]?.BRCODE)
-                                    }
+                        oDic["P_GRPDT"] = await oM00.dtM00Grp(cUserID);
+                        if (cAction == 'E') {
+                            oDic["P_YRDT"] = await oCmp.GetYearJSon();
+                        }
+                        if (cAction == 'E') {
+                            let brcList = await brc.findAll({
+                                BRCCOMP: {
+                                    [Op.or]: [
+                                        { [Op.like]: `%,${CmpNo},%` },  // Number 0 in the middle
+                                        { [Op.like]: `${CmpNo},%` },     // Number 0 at the start
+                                        { [Op.like]: `%,${CmpNo}` },     // Number 0 at the end
+                                        { [Op.eq]: `${CmpNo}` }          // Exact match '0'
+                                    ]
                                 }
-                                oDic["P_BRC"] = FLDBRC;
+                            }, [], ['BRCODE']);
+                            let FLDBRC = []
+                            if (brcList.length != 0) {
+                                if (brcList.length > 1) {
+                                    for (const bl of brcList) {
+                                        FLDBRC.push(bl.BRCODE.toString());
+                                    }
+                                } else {
+                                    FLDBRC.push(brcList[0]?.BRCODE)
+                                }
                             }
-                            oDic.FLDBRC = '';
-                            response.status = "SUCCESS";
-                            response.data = { ...oDic };
-                            console.log(response);
-                            console.log(JSON.stringify(response));
+                            oDic["P_BRC"] = FLDBRC;
+                        }
+                        oDic.FLDBRC = '';
+                        response.status = "SUCCESS";
+                        response.data = { ...oDic };
+                        console.log(response);
+                        console.log(JSON.stringify(response));
 
-                            let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-                            res.status(200).json({ encryptedResponse })
-                            break;
+                        let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        res.status(200).json({ encryptedResponse })
+                        break;
                     case "D":
                         let branch = await brc.findOne({
                             BRCCOMP: CmpNo
@@ -664,39 +664,9 @@ class handleCompany {
                         });
                         let BRCOntroller = new BranchController(false, 'A', '', `${saveCmp.CmpNum}-HOME-BRC`, cSData["M00"]._16, '', decoded.corpId, 'Y', saveCmp.CmpNum)
                         let AddHomeBrc = await BRCOntroller.handleAction(req, res, true);
-                        await PLSDBREL.create({
-                            M00F01: admin.ADMICORP,
-                            M00F02: admin.ADMIF01,
-                            M00F03: parseInt(saveCmp.CmpNum),
-                            M00F04: ''
-                        });
-                        await PLSDBM82.create({
-                            M82F01: cUserID,
-                            M82F02: parseInt(saveCmp.CmpNum),
-                            M82F11: '',
-                            M82F12: '',
-                            M82F13: '',
-                            M82F14: '',
-                            M82F21: '',
-                            M82F22: '',
-                            M82F23: '',
-                            M82CMP: 'N',
-                            M82YRN: (new Date().getFullYear() % 100).toString(),
-                            M82ADA: 'A'
-                        });
-                        await PLSDBCMP.create({
-                            CMPF01: parseInt(saveCmp.CmpNum),
-                            CMPF02: cSData['M00'].FIELD02,
-                            CMPF03: 'SQL',
-                            CMPF04: cSData['M00'].FIELD11,
-                            CMPF11: cUserID,
-                            CMPF12: formatDate(new Date()),
-                            CMPF21: '94.176.235.105',
-                            CMPF22: 'aipharma_aakash',
-                            CMPF23: 'Aipharma@360',
-                            CMPF24: 'DATA',
-                            CMPDEL: null
-                        });
+                        // await rel.create(admin.ADMICORP, admin.ADMIF01, parseInt(saveCmp.CmpNum), '');
+                        // await m82.create(cUserID, parseInt(saveCmp.CmpNum), '', '', '', '', '', '', '', 'N',(new Date().getFullYear() % 100).toString(), 'A');
+                        // await cmp.create( parseInt(saveCmp.CmpNum), cSData['M00'].FIELD02, 'SQL', cSData['M00'].FIELD11, cUserID, formatDate(new Date()), '94.176.235.105', 'aipharma_aakash', 'Aipharma@360', 'DATA', null);
                         response.status = 'SUCCESS';
                         response.message = '';
                         let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
