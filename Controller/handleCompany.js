@@ -496,7 +496,7 @@ class handleCompany {
                             let dbBrcCodes = findAllBrc.map(item => item.BRCODE.toString());
 
                             // Check if ANY db code exists in brcIdList
-                            let missingCodes = dbBrcCodes.filter(code => !brcIdList.includes(code))
+                            let missingCodes = brcIdList.filter(code => !dbBrcCodes.includes(code))
 
                             if (missingCodes.length > 0) {
                                 let dbName = queryService.generateDatabaseName(decoded.corpId, parseInt(saveCmp.CmpNum));
@@ -541,7 +541,7 @@ class handleCompany {
                             let dbBrcCodes = findAllBrc.map(item => item.BRCODE.toString());
 
                             // Check if ANY db code exists in brcIdList
-                            let missingCodes = dbBrcCodes.filter(code => !brcIdList.includes(code))
+                            let missingCodes = brcIdList.filter(code => !dbBrcCodes.includes(code))
 
                             for (const br of missingCodes) {
                                 let existingBrc = await brc.findOne({
