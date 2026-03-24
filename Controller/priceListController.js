@@ -101,7 +101,7 @@ class PricingPlanController {
                         A02F08,
                         A02F09,
                         A02F10,
-                        A01F11,  // Branch count field
+                        A02F11,  // Branch count field
                         A02F12   // Comma-separated menu IDs
                     });
 
@@ -195,19 +195,31 @@ class PricingPlanController {
                         where: { A02F09: '1' }
                     });
                     console.log(AMC_Transaction);
-                    let amc_Available = await AMC_Transaction.findOne({
+                    let amc_Available = await AMC_Transaction.findAll({
                         where: {
                             AMC_custid: decoded.corpId
                         }
                     });
                     let lAMC = false;
+                    let AMCObj = [];
                     if (amc_Available) {
-                        lAMC = true;
+                        for (const amc of amc_Available) {
+                            let AMC_TR = {
+                                cuser: amc.cuser,
+                                cpass: amc.cpass,
+                                auser: amc.auser,
+                                apass: amc.apass,
+                                einvcr: amc.einvcr,
+                                einvused: amc.einvused,
+                                gst_no: amc.AMC_CorporateId
+                            }
+                            AMCObj.push(AMC_TR)
+                        }
                     }
 
                     if (getAllList) {
                         response.message = 'All Price List';
-                        response.data = { getAllList, lAMC }
+                        response.data = { getAllList, AMCObj }
                         const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         return res.json({ encryptedResponse });
                     } else {
@@ -217,35 +229,59 @@ class PricingPlanController {
                     }
 
                 case 'F':
-                    let {
-                        Amc_date, Cust_Id, Amc_Start_date, Amc_End_date, Amc_Type, Amc_Amt, Payment_Type, Remarks, AMC_custid, AMC_CorporateId, AMC_UserID, AMC_URN, AMC_EntryDate, AMC_ModifiedDate, AMC_EntryBY, AMC_ReceivedBy, einv_cid, einv_secret, einvcr, einvused, cuser, cpass, apass, auser, apitype } = pa;
+                    let { Cust_Id, regSDate, regEDate, usrGST, cuser, cpass, apass, auser, apitype } = pa;
+
+                    // Function to format date to 'YYYY-MM-DD HH:MM:SS'
+                    const formatDate = (date) => {
+                        if (!date) return null;
+                        let formattedDate = new Date(date).toISOString().split('T')[0];  // Extracting 'YYYY-MM-DD' part
+                        let timePart = new Date(date).toISOString().split('T')[1].split('.')[0];  // Extracting 'HH:MM:SS' part
+                        return formattedDate + ' ' + timePart;
+                    };
+
+                    // Formatting start and end dates
+                    let sDate = formatDate(regSDate);
+                    let csDate = sDate.split(' ');
+                    let eDate = formatDate(regEDate);
+                    let ceDate = eDate.split(' ');
+
+                    // Creating the new AMC transaction without Amc_Id
                     const NewAMC = await AMC_Transaction.create({
-                        Amc_date,
-                        Cust_Id: null,
-                        Amc_Start_date,
-                        Amc_End_date,
-                        Amc_Type,
-                        Amc_Amt,
-                        Payment_Type,
-                        Remarks,
-                        AMC_custid,
-                        AMC_CorporateId,
-                        AMC_UserID,
-                        AMC_URN,
-                        AMC_EntryDate,
-                        AMC_ModifiedDate,
-                        AMC_EntryBY,
-                        AMC_ReceivedBy,
-                        einv_cid,
-                        einv_secret,
-                        einvcr,
-                        einvused,
-                        cuser,
-                        cpass,
-                        apass,
-                        auser,
-                        apitype: apitype ? 'A' : 'C'
+                        Amc_date: csDate[0],  // Properly formatted date for Amc_date
+                        Cust_Id,
+                        Amc_Start_date: csDate[0],  // Using the formatted date string
+                        Amc_End_date: ceDate[0],    // Using the formatted date string
+                        Amc_Type: 7,
+                        Amc_Amt: 0,
+                        Payment_Type: 0,
+                        Remarks: '',
+                        AMC_custid: decoded.corpId,  // Assuming decoded is a valid variable
+                        AMC_CorporateId: usrGST,
+                        AMC_UserID: null,
+                        AMC_URN: null,
+                        AMC_EntryDate: (new Date().toISOString().slice(0, 23).replace('T', ' ')).toString(),  // Current date-time in proper SQL Server format
+                        AMC_ModifiedDate: null,
+                        AMC_EntryBY: null,
+                        AMC_ReceivedBy: '',
+                        einv_cid: '',
+                        einv_secret: '',
+                        einvcr: 0,
+                        einvused: 0,
+                        cuser: cuser || null,
+                        cpass: cpass || null,
+                        apass: apass || null,
+                        auser: auser || null,
+                        apitype: cuser && cpass ? auser && apass ? 'A' : 'C' : 'A'  // If apitype is truthy, assign 'A', otherwise 'C'
                     });
+                    if (NewAMC) {
+                        response.message = 'Credentials added successfully';
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.json({ encryptedResponse });
+                    } else {
+                        response.message = 'Some Error occured';
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.json({ encryptedResponse });
+                    }
                 default:
                     response.message = 'Invalid or missing action. Use A, E, D, G or F.'
                     encryptedResponse = encryptor.encrypt(JSON.stringify(response));

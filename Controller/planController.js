@@ -7,14 +7,18 @@ const definePLRDBGAO = require('../Models/RDB/PLRDBGAO'); // Model factory
 const definePLRDBA02 = require('../Models/RDB/PLRDBA02'); // Model factory
 const definePLRDBPYMT = require('../Models/RDB/PLRDBPYMT'); // Model factory
 const definePLRDBRPAY = require('../Models/RDB/PLRDBRPAY');
+const defineAMC_Transaction = require('../Models/AiAdmin/AMC_Transaction'); // Model factory
+const defineAMC_TransactionHistory = require('../Models/AiAdmin/AMC_TransactionHistory'); // Model factory
 const Encryptor = require('../Services/encryptor');
 const { Op } = require('sequelize');
 const TokenService = require('../Services/tokenServices');
 const ADMIController = require('./ADMIController');
 const M81Controller = require('./M81Controller');
-
 // Get Sequelize instance for 'SDB' or your specific DB name
 const sequelizeRDB = db.getConnection('RDB');
+let sequelizeAIERP = db.createPoolEway('aiadmin_aierp_1');
+const AMC_Transaction = defineAMC_Transaction(sequelizeAIERP);
+const AMC_TransactionHistory = defineAMC_TransactionHistory(sequelizeAIERP);
 
 // Initialize model using the Sequelize instance
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
@@ -122,7 +126,20 @@ class UpgradePlan {
 
             // Action A - Update Branch, Company, or User Details
             else if (action === 'A') {
-                const { additionalBranch, additionalCompany, userId, cmpNum, custBP, custRS, usrFld, usrMstr } = pa;
+                const { additionalBranch, additionalCompany, cmpNum, custBP, custRS, usrFld, usrMstr } = pa;
+
+                let user
+                let decryptedUserId = encryptor.decrypt(decoded.userId)
+                const existing = await admi.findAll();
+                for (let i of existing) {
+                    const decrypted = encryptor.decrypt(i.ADMIF01)
+                    if (decrypted == decryptedUserId) {
+                        user = i;
+                        response = {
+                            message: 'User ID valid'
+                        }
+                    }
+                }
 
                 if (!transactionId) {
                     return sendResponse('FAIL', 'Branch ID, Company ID, and User ID are required for action A');
@@ -140,9 +157,11 @@ class UpgradePlan {
                     let numOfBrc = await PLRDBA01.findOne({ A01F03: corpId });
                     let totalBranch = parseInt(numOfBrc.A01BRC) + parseInt(additionalBranch);
                     await PLRDBA01.update({
-                        A01F10: totalBranch
+                        A01BRC: totalBranch
                     }, {
-                        A01F03: corpId
+                        where: {
+                            A01F03: corpId
+                        }
                     });
                 }
 
@@ -150,9 +169,11 @@ class UpgradePlan {
                     let numOfCmp = await PLRDBA01.findOne({ A01F03: corpId });
                     let totalCompany = parseInt(numOfCmp.A01CMP) + parseInt(additionalCompany);
                     await PLRDBA01.update({
-                        A01F10: totalCompany
+                        A01CMP: totalCompany
                     }, {
-                        A01F03: corpId
+                        where: {
+                            A01F03: corpId
+                        }
                     });
                 }
 
@@ -162,7 +183,9 @@ class UpgradePlan {
                     await PLRDBA01.update({
                         A01F10: totalUser
                     }, {
-                        A01F03: corpId
+                        where: {
+                            A01F03: corpId
+                        }
                     });
                 }
                 if (cmpNum) {
@@ -219,7 +242,7 @@ class UpgradePlan {
                     }
                 }
 
-                const paymentData = UpgradePlan.constructPaymentData(transactionDetail, paymentMode, A02id, corpId, userId, description, paymentMethod);
+                const paymentData = UpgradePlan.constructPaymentData(transactionDetail, paymentMode, A02id, corpId, user.ADMIF00, description, paymentMethod);
                 await PLRDBPYMT.create(paymentData);
                 return sendResponse('SUCCESS', 'Branch and company updated successfully');
             }
@@ -290,6 +313,56 @@ class UpgradePlan {
                 }
             }
 
+            else if (action === 'E') {
+                const { GstNo, creditAmt, creditqty } = pa;
+
+                let user
+                let decryptedUserId = encryptor.decrypt(decoded.userId)
+                const existing = await admi.findAll();
+                for (let i of existing) {
+                    const decrypted = encryptor.decrypt(i.ADMIF01)
+                    if (decrypted == decryptedUserId) {
+                        user = i;
+                        response = {
+                            message: 'User ID valid'
+                        }
+                    }
+                }
+
+                const transactionDetail = await PLRDBRPAY.findOne({
+                    where: { RPAYF01: transactionId }
+                });
+
+                if (!transactionDetail && paymentMode === 'ONLINE') {
+                    return sendResponse('FAIL', 'Transaction not found');
+                }
+                let GSTary = GstNo.split(',');
+                for (const Gst of GSTary) {
+                    let existingAmc = await AMC_Transaction.findOne({
+                        where: {
+                            Amc_type: 7,
+                            Amc_custId: corpId,
+                            AMC_CorporateId: Gst
+                        }
+                    });
+                    if (existingAmc) {
+                        await AMC_Transaction.update({
+                            Amc_Amt: parseInt(existingAmc.Amc_Amt) + parseInt(creditAmt),
+                            Payment_Type: '',
+                            einvcr: parseInt(existingAmc.einvcr) + parseInt(creditqty),
+                            Payment_Type: 1
+                        }, {
+                            where: {
+                                Amc_Id: existingAmc.Amc_Id
+                            }
+                        });
+                    }
+                }
+                const paymentData = UpgradePlan.constructPaymentData(transactionDetail, paymentMode, A02id, decoded.corpId, user.ADMIF00, description, paymentMethod);
+                await PLRDBPYMT.create(paymentData);
+                return sendResponse('SUCCESS', 'Credits Purchased Successsfully');
+            }
+
             // Action G - Get Transactions
             else if (action === 'G') {
                 let finalTransaction = [];
@@ -324,6 +397,7 @@ class UpgradePlan {
                 for (let transaction of allTransaction) {
                     let matchingPlan = planRows.find(plan => plan.A02F01.toString().trim() === transaction.PYMT01.toString().trim());
                     transaction.dataValues.PYMTPNM = matchingPlan ? matchingPlan.A02F02 : null;
+                    transaction.dataValues.
                     finalTransaction.push(transaction.dataValues);
                 }
                 return sendResponse('SUCCESS', 'Transactions fetched successfully', finalTransaction);
@@ -345,7 +419,7 @@ class UpgradePlan {
 
     // Helper function to construct payment data
     static constructPaymentData(transactionDetail, paymentMode, A02id, corpId, userId, description, paymentMethod) {
-        const tranInfo = transactionDetail?.RPAYF02;
+        const tranInfo = (JSON.parse(transactionDetail?.RPAYF02)).payment.entity;
         let transactionId = ''
         const now = new Date();
         if (paymentMode == 'OFFLINE') {
@@ -359,7 +433,7 @@ class UpgradePlan {
                 PYMT02: userId,
                 PYMT03: tranInfo.id,
                 PYMT04: paymentMode,
-                PYMT05: tranInfo.amount,
+                PYMT05: (tranInfo.amount)/100,
                 PYMT06: tranInfo.status,
                 PYMT07: tranInfo.method,
                 PYMT09: description,

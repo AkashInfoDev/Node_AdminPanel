@@ -8,11 +8,11 @@ module.exports = (sequelize) => {
     return sequelize.define('AMC_Transaction', {
         Amc_Id: {
             type: INTEGER,
-            primaryKey: true,
             autoincrement: true,
         },
         Amc_date: {
-            type: DATE,
+            type: STRING,
+            primaryKey:true,
             defaultValue: null
         },
         Cust_Id: {
@@ -20,11 +20,11 @@ module.exports = (sequelize) => {
             defaultValue: null
         },
         Amc_Start_date: {
-            type: DATE,
+            type: STRING,
             defaultValue: null
         },
         Amc_End_date: {
-            type: DATE,
+            type: STRING,
             defaultValue: null
         },
         Amc_Type: {
@@ -60,7 +60,7 @@ module.exports = (sequelize) => {
             defaultValue: null
         },
         AMC_EntryDate: {
-            type: DATE,
+            type: DataTypes.STRING,
             defaultValue: null
         },
         AMC_ModifiedDate: {
