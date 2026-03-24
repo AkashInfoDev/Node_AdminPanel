@@ -560,7 +560,7 @@ class handleCompany {
                                 // Join the array into a string, using a comma as separator
                                 newCmpLst = newCmpLst.join(',');
                                 await brc.update({
-                                    BRCCOMP: newCmpLst
+                                    BRCCOMP: newCmpLst+ `,${CmpNo}`
                                 }, {
                                     BRCODE: br
                                 })
