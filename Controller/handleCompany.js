@@ -478,114 +478,75 @@ class handleCompany {
                             let uploadFile = new FTPService(decoded, req.files[0].originalname, saveCmp.CmpNum);
                             let upFile = await uploadFile.uploadFile(req);
                         }
-                        let findAllBrc = await brc.findAll({
+
+                        // 2️⃣ Get all branches related to this company
+                        const findAllBrc = await brc.findAll({
                             BRCCOMP: {
                                 [Op.or]: [
-                                    { [Op.like]: `%,${CmpNo},%` },  // Number 0 in the middle
-                                    { [Op.like]: `${CmpNo},%` },     // Number 0 at the start
-                                    { [Op.like]: `%,${CmpNo}` },     // Number 0 at the end
-                                    { [Op.eq]: `${CmpNo}` }          // Exact match '0'
+                                    { [Op.like]: `%,${CmpNo},%` },  // Number in the middle
+                                    { [Op.like]: `${CmpNo},%` },     // Number at the start
+                                    { [Op.like]: `%,${CmpNo}` },     // Number at the end
+                                    { [Op.eq]: `${CmpNo}` }          // Exact match
                                 ]
                             }
                         }, [], ['BRCODE']);
+
                         if (jsonData.FLDBRC) {
-                            console.log(jsonData.FLDBRC);
-                            let brcIdList = jsonData.FLDBRC.split(',').map(id => id.trim());
+                            const brcIdList = jsonData.FLDBRC.split(',').map(id => id.trim());
+                            const dbBrcCodes = findAllBrc.map(item => item.BRCODE.toString());
 
-                            // Extract only BRCODE values from DB result
-                            let dbBrcCodes = findAllBrc.map(item => item.BRCODE.toString());
+                            // 3️⃣ Branches to add: present in request but not in DB
+                            const branchesToAdd = brcIdList.filter(code => !dbBrcCodes.includes(code));
 
-                            // Check if ANY db code exists in brcIdList
-                            let missingCodes = brcIdList.filter(code => !dbBrcCodes.includes(code))
+                            // 4️⃣ Branches to remove: present in DB but not in request
+                            const branchesToRemove = dbBrcCodes.filter(code => !brcIdList.includes(code));
 
-                            if (missingCodes.length > 0) {
-                                let dbName = queryService.generateDatabaseName(decoded.corpId, parseInt(saveCmp.CmpNum));
-                                let dbConn = db.createPool(dbName);
-                                let listOfYr = await dbConn.query('SELECT FIELD01 FROM CMPF01', {
-                                    type: QueryTypes.SELECT
-                                });
-                                let connectedRows;
-                                if (listOfYr) {
-                                    for (const ly of listOfYr) {
-                                        connectedRows = await dbConn.query(`SELECT * 
-                                            FROM YR${ly.FIELD01}T41 
-                                            WHERE FLDBRC IN (:codes)`,
-                                            {
-                                                replacements: { codes: missingCodes },
-                                                type: QueryTypes.SELECT
-                                            });
-                                        if (connectedRows.length > 0) {
-                                            response.message = 'This branch cannot be removed because it contains associated transactions.';
-                                            response.status = 'FAIL'
-                                            let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-                                            return res.status(200).json({ encryptedResponse });
-                                        }
+                            // 5️⃣ Check if branches to remove have associated transactions
+                            if (branchesToRemove.length > 0) {
+                                const dbName = queryService.generateDatabaseName(decoded.corpId, parseInt(saveCmp.CmpNum));
+                                const dbConn = db.createPool(dbName);
+                                const listOfYr = await dbConn.query('SELECT FIELD01 FROM CMPF01', { type: QueryTypes.SELECT });
+
+                                for (const ly of listOfYr) {
+                                    const connectedRows = await dbConn.query(`SELECT * FROM YR${ly.FIELD01}T41 WHERE FLDBRC IN (:codes)`, {
+                                        replacements: { codes: branchesToRemove },
+                                        type: QueryTypes.SELECT
+                                    });
+
+                                    if (connectedRows.length > 0) {
+                                        const response = {
+                                            status: 'FAIL',
+                                            message: 'This branch cannot be removed because it contains associated transactions.'
+                                        };
+                                        const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                                        return res.status(200).json({ encryptedResponse });
                                     }
                                 }
                             }
-                        }
-                        if ((jsonData.FLDBRC)) {
-                            let findAllBrc = await brc.findAll({
-                                BRCCOMP: {
-                                    [Op.or]: [
-                                        { [Op.like]: `%,${CmpNo},%` },  // Number 0 in the middle
-                                        { [Op.like]: `${CmpNo},%` },     // Number 0 at the start
-                                        { [Op.like]: `%,${CmpNo}` },     // Number 0 at the end
-                                        { [Op.eq]: `${CmpNo}` }          // Exact match '0'
-                                    ]
+
+                            // 6️⃣ Add company number to branches (if missing)
+                            for (const br of branchesToAdd) {
+                                const existingBrc = await brc.findOne({ BRCODE: br }, [], ['BRCCOMP']);
+                                let brListArray = existingBrc.BRCCOMP ? existingBrc.BRCCOMP.split(',') : [];
+                                if (!brListArray.includes(CmpNo.toString())) {
+                                    brListArray.push(CmpNo.toString());
                                 }
-                            }, [], ['BRCODE']);
-                            let brcIdList = (jsonData.FLDBRC).split(',').map(id => id.trim());
+                                await brc.update({ BRCCOMP: brListArray.join(',') }, { BRCODE: br });
+                            }
 
-                            // Extract only BRCODE values from DB result
-                            let dbBrcCodes = findAllBrc.map(item => item.BRCODE.toString());
-
-                            // Check if ANY db code exists in brcIdList
-                            let missingCodes = brcIdList.filter(code => !dbBrcCodes.includes(code))
-
-                            for (const br of missingCodes) {
-                                let existingBrc = await brc.findOne({
-                                    BRCODE: br
-                                }, [], ['BRCCOMP']);
-
-                                let brListarray = (existingBrc.BRCCOMP).split(',');
-                                let newCmpLst = []; // Use an array to collect values
-
-                                for (const bry of brListarray) {
-                                    if (parseInt(bry) !== parseInt(saveCmp.CmpNum)) {
-                                        newCmpLst.push(bry); // Push to array instead of concatenating directly
-                                    }
-                                }
-
-                                // Join the array into a string, using a comma as separator
-                                newCmpLst = newCmpLst.join(',');
-                                await brc.update({
-                                    BRCCOMP: newCmpLst+ `,${CmpNo}`
-                                }, {
-                                    BRCODE: br
-                                })
+                            // 7️⃣ Remove company number from branches
+                            for (const br of branchesToRemove) {
+                                const existingBrc = await brc.findOne({ BRCODE: br }, [], ['BRCCOMP']);
+                                let brListArray = existingBrc.BRCCOMP ? existingBrc.BRCCOMP.split(',') : [];
+                                brListArray = brListArray.filter(bry => parseInt(bry) !== parseInt(saveCmp.CmpNum));
+                                await brc.update({ BRCCOMP: brListArray.join(',') }, { BRCODE: br });
                             }
                         }
-                        // else {
-                        //     let brcIdList = jsonData.FLDBRC
-                        //     let existingBrc = await brc.findOne({
-                        //         BRCODE: brcIdList
-                        //     });
-                        //     let newCmpLst = (existingBrc.BRCCOMP.includes(',') && !existingBrc.BRCCOMP.includes(CmpNo.toString()))
-                        //         ? `${existingBrc.BRCCOMP},${CmpNo}`
-                        //         : existingBrc.BRCCOMP.includes(CmpNo.toString())
-                        //             ? existingBrc.BRCCOMP
-                        //             : CmpNo.toString();
-                        //     await brc.update({
-                        //         BRCCOMP: newCmpLst
-                        //     }, {
-                        //         BRCODE: brcIdList
-                        //     })
-                        // }
-                        response.status = 'SUCCESS';
-                        response.message = '';
-                        let encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-                        return res.status(201).json({ encryptedResponse: encryptedResponse });
+
+                        // 8️⃣ Final response
+                        const response = { status: 'SUCCESS', message: '' };
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                        return res.status(201).json({ encryptedResponse });
                     }
                 } else if (cAction == "A") {
                     if (decoded.corpId != 'PL-P-00001') {
