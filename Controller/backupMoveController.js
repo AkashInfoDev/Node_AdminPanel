@@ -12,6 +12,9 @@ const { Readable } = require("stream");
 const unzipper = require("unzipper");
 const definePLSTATE = require('../Models/IDB/PLSTATE');
 const sequelizeIDB = db.getConnection('IDBAPI');
+const definePLRDBA01 = require('../Models/RDB/PLRDBA01');
+const sequelizeRDB = db.getConnection("RDB");
+const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 
 const encryptor = new Encryptor();
 
@@ -165,8 +168,6 @@ async function getCompanyBranches(corporateID, companyID) {
 }
 
 /* ================= MAIN API ================= */
-
-
 const backupToDrive = async (req, res) => {
 
     console.log("🚀 API HIT");
@@ -184,15 +185,32 @@ const backupToDrive = async (req, res) => {
             decodeURIComponent(encryptor.decrypt(req.body.pa))
         );
 
-        const { companyID, googledrive_token } = p1;
+        const { companyID } = p1;
         console.log("📥 Payload:", p1);
 
         /* ========= TOKEN ========= */
         const token = req.headers.authorization?.split(" ")[1];
-        const decoded = await validateToken(token);
+        if (!token) throw new Error("Auth token missing");
 
+        const decoded = await validateToken(token);
         const corporateID = decoded.corpId;
+
         console.log("👤 CorporateID:", corporateID);
+
+        /* ========= FETCH GOOGLE TOKEN FROM DB ========= */
+        console.log("🔍 Fetching Google token from DB...");
+
+        const corpData = await PLRDBA01.findOne({
+            where: { A01F03: corporateID }
+        });
+
+        if (!corpData || !corpData.A01F18?.trim()) {
+            throw new Error("Google Drive token not found for this corporate");
+        }
+
+        const googledrive_token = corpData.A01F18.trim();
+
+        console.log("✅ Token fetched (length):", googledrive_token.length);
 
         /* ========= DB ========= */
         const databaseName = `A${corporateID.slice(-5)}CMP${companyID.toString().padStart(4, "0")}`;
@@ -243,7 +261,6 @@ const backupToDrive = async (req, res) => {
         const branches = await getCompanyBranches(corporateID, companyID);
         const states = await getStates();
 
-        /* 🔥 STATE LOOKUP */
         const stateMap = {};
         states.forEach(s => {
             stateMap[s.stateCode] = s.stateName;
@@ -284,14 +301,14 @@ const backupToDrive = async (req, res) => {
         console.log("☁️ Preparing Drive upload...");
 
         const root = await getOrCreateFolder("eplus");
-        const corp = await getOrCreateFolder(corporateID, root);
-        const comp = await getOrCreateFolder(companyID.toString(), corp);
+        const corpFolderId = await getOrCreateFolder(corporateID, root);
+        const compFolderId = await getOrCreateFolder(companyID.toString(), corpFolderId);
 
         /* ========= DELETE OLD ZIP ========= */
         console.log("🗑 Checking existing ZIP on Drive...");
 
         const existingFiles = await drive.files.list({
-            q: `name='${databaseName}.zip' and '${comp}' in parents and trashed=false`,
+            q: `name='${databaseName}.zip' and '${compFolderId}' in parents and trashed=false`,
             fields: "files(id, name)"
         });
 
@@ -305,7 +322,7 @@ const backupToDrive = async (req, res) => {
         const uploaded = await drive.files.create({
             requestBody: {
                 name: `${databaseName}.zip`,
-                parents: [comp]
+                parents: [compFolderId]
             },
             media: {
                 mimeType: "application/zip",
@@ -318,13 +335,11 @@ const backupToDrive = async (req, res) => {
         /* ========= CLEANUP ========= */
         console.log("🧹 Cleaning up...");
 
-        /* 🔥 FTP DELETE WITH RETRY */
         const deleteFromFTP = async (retries = 3) => {
             for (let i = 1; i <= retries; i++) {
                 try {
                     console.log(`🗑 Attempt ${i} to delete BAK from FTP...`);
 
-                    // wait to avoid SQL lock
                     await new Promise(r => setTimeout(r, 2000));
 
                     const list = await ftpClient.list(ftpFolderPath);
@@ -351,7 +366,6 @@ const backupToDrive = async (req, res) => {
 
         await deleteFromFTP();
 
-        /* LOCAL CLEANUP */
         [bakPath, jsonPath, zipPath].forEach(f => {
             if (fs.existsSync(f)) fs.unlinkSync(f);
         });
@@ -379,7 +393,6 @@ const backupToDrive = async (req, res) => {
         ftpClient.close();
     }
 };
-
 const restoreBak = async (req, res) => {
 
     let response = { status: "SUCCESS", message: "", data: null };
@@ -682,7 +695,7 @@ const restoreBak = async (req, res) => {
         }
 
         if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
-        
+
         response.status = 'SUCCESS';
         response.message = "ZIP restored successfully";
         response.data = { database: newDatabaseName };
@@ -782,4 +795,110 @@ const deleteFtpFile = async (req, res) => {
         ftpClient.close();
     }
 };
-module.exports = { backupToDrive, restoreBak, deleteFtpFile };
+
+
+const saveGoogleToken = async (req, res) => {
+    let response = { status: "SUCCESS", message: "", data: null };
+
+    try {
+        console.log("🚀 Save Google Token API HIT");
+
+        /* ========= BODY (PLAIN JSON) ========= */
+        const { googledrive_token } = req.body;
+
+        if (!googledrive_token) {
+            throw new Error("Google Drive token is required");
+        }
+
+        /* ========= AUTH TOKEN ========= */
+        const token = req.headers.authorization?.split(" ")[1];
+        if (!token) throw new Error("Auth token missing");
+
+        const decoded = await validateToken(token);
+        const corpId = decoded.corpId;
+
+        console.log("👤 CorporateID:", corpId);
+
+        /* ========= FIND ========= */
+        const corp = await PLRDBA01.findOne({
+            where: { A01F03: corpId }
+        });
+
+        if (!corp) {
+            throw new Error("Corporate not found");
+        }
+
+        /* ========= UPDATE (PLAIN STORE) ========= */
+        corp.A01F18 = googledrive_token;
+        await corp.save();
+
+        console.log("✅ Token saved (plain)");
+
+        response.status = "SUCCESS";
+        response.message = "Google Drive token saved successfully";
+
+        return res.status(200).json(response);
+
+    } catch (err) {
+
+        console.error("❌ ERROR:", err.message);
+
+        response.status = "FAIL";
+        response.message = err.message;
+
+        return res.status(500).json(response);
+    }
+};
+
+const checkGoogleToken = async (req, res) => {
+    let response = { status: "SUCCESS", message: "", data: null };
+
+    try {
+        console.log("🔍 Check Google Token API HIT");
+
+        /* ========= AUTH TOKEN ========= */
+        const token = req.headers.authorization?.split(" ")[1];
+        if (!token) throw new Error("Auth token missing");
+
+        const decoded = await validateToken(token);
+        const corpId = decoded.corpId;
+
+        console.log("👤 CorporateID:", corpId);
+
+        /* ========= FIND ========= */
+        const corp = await PLRDBA01.findOne({
+            where: { A01F03: corpId },
+            attributes: ['A01F18']
+        });
+
+        if (!corp) {
+            throw new Error("Corporate not found");
+        }
+
+        /* ========= CHECK TOKEN ========= */
+        const hasToken = !!corp.A01F18 && corp.A01F18.trim() !== "";
+
+        if (hasToken) {
+            response.status = "SUCCESS";
+            response.message = "Google Drive connected";
+            response.data = { isConnected: true };
+        } else {
+            response.status = "FAIL";
+            response.message = "Google Drive not connected. Please verify.";
+            response.data = { isConnected: false };
+        }
+
+        return res.status(200).json(response);
+
+    } catch (err) {
+
+        console.error("❌ ERROR:", err.message);
+
+        response.status = "FAIL";
+        response.message = err.message;
+        response.data = { isConnected: false };
+
+        return res.status(500).json(response);
+    }
+};
+module.exports = { backupToDrive, restoreBak, deleteFtpFile, saveGoogleToken, checkGoogleToken };

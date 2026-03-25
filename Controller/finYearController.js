@@ -103,6 +103,7 @@ const getCorporateEmails = async (corporateID) => {
     return emails;
 };
 
+
 const backupZipToDrive = async (req, res) => {
     let response = { data: null, message: '', status: 'Success' };
     let encryptedResponse;
@@ -127,7 +128,7 @@ const backupZipToDrive = async (req, res) => {
         const decodedParam = decodeURIComponent(parameterString);
         const p1 = JSON.parse(decodedParam);
 
-        const { companyID, yearNo, refresh_token, action } = p1;
+        const { companyID, yearNo, action } = p1;
 
         if (!companyID || !yearNo) {
             response.status = "FAIL";
@@ -137,14 +138,6 @@ const backupZipToDrive = async (req, res) => {
             return res.status(400).json({ encryptedResponse });
         }
 
-        // refresh_token required only for Google Drive upload
-        if (action === "G" && !refresh_token) {
-            response.status = "FAIL";
-            response.message = "refresh_token required for Google Drive upload";
-
-            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-            return res.status(400).json({ encryptedResponse });
-        }
 
         /* ===============================
            2️⃣ TOKEN VALIDATION
@@ -171,6 +164,24 @@ const backupZipToDrive = async (req, res) => {
         }
         const corporateID = decoded.corpId;
 
+        let refresh_token = null;
+
+        if (action === "G") {
+
+            console.log("🔍 Fetching Google token from DB...");
+
+            const corpData = await PLRDBA01.findOne({
+                where: { A01F03: corporateID }
+            });
+
+            if (!corpData || !corpData.A01F18?.trim()) {
+                throw new Error("Auth token not found for this corporate");
+            }
+
+            refresh_token = corpData.A01F18.trim();
+
+            console.log("✅ Token fetched (length):", refresh_token.length);
+        }
         /* ===============================
            3️⃣ GENERATE DATABASE NAME
         =============================== */
@@ -201,56 +212,6 @@ const backupZipToDrive = async (req, res) => {
             return res.status(404).json({ encryptedResponse });
         }
 
-        /* ===============================
-           5️⃣ CREATE TEMP DATABASE
-        =============================== */
-
-        // await sequelizeMASTER.query(`
-        //     IF DB_ID('${newDatabaseName}') IS NULL
-        //     BEGIN
-        //         CREATE DATABASE [${newDatabaseName}]
-        //     END
-        // `);
-
-        /* ===============================
-           6️⃣ COPY YEAR TABLES
-        =============================== */
-
-        // for (const row of tableData) {
-
-        //     const tablePrefix = row.S14F02.trim();
-        //     const sourceTable = `YR${yearNo}${tablePrefix}`;
-
-        //     console.log(`Checking table ${sourceTable}`);
-
-        //     const check = await sequelizeMASTER.query(`
-        //         SELECT 1
-        //         FROM ${sourceDatabase}.INFORMATION_SCHEMA.TABLES
-        //         WHERE TABLE_NAME = '${sourceTable}'
-        //     `, {
-        //         logging: false
-        //     });
-
-        //     if (check[0].length === 0) {
-        //         console.log(`Skipping missing table: ${sourceTable}`);
-        //         continue;
-        //     }
-
-        //     console.log(`Copying ${sourceTable}`);
-
-        //     await sequelizeMASTER.query(`
-        //         USE [${newDatabaseName}];
-
-        //         IF OBJECT_ID('${sourceTable}') IS NOT NULL
-        //             DROP TABLE ${sourceTable};
-
-        //         SELECT *
-        //         INTO ${sourceTable}
-        //         FROM ${sourceDatabase}.dbo.${sourceTable};
-        //     `, {
-        //         logging: false
-        //     });
-        // }
 
 
         const tempDir = path.join("/tmp", "downloads");
@@ -294,29 +255,7 @@ const backupZipToDrive = async (req, res) => {
             await exportTableData(sourceDatabase, tableName, backupFolder);
         }
         await exportCMPF01Data(sourceDatabase, backupFolder, yearNo);
-        /* ===============================
-           7️⃣ PREPARE LOCAL BACKUP PATH
-        =============================== */
 
-        /* ===============================
-           8️⃣ CREATE DATABASE BACKUP
-        =============================== */
-
-        // console.log("Creating backup:", backupFilePath);
-
-        // let bkup = await sequelizeMASTER.query(`
-        //     BACKUP DATABASE [${newDatabaseName}]
-        //     TO DISK = '/var/www/html/eplus/${newDatabaseName}.bak'
-        //     WITH FORMAT, INIT
-        // `);
-        // await downloadFile(newDatabaseName, corporateID)
-
-        /* ===============================
-           9️⃣ ZIP BACKUP FILE
-        =============================== */
-
-        // const zipFilePath = `${backupFilePath}.zip`;
-        // await zipBackupFile(backupFilePath, zipFilePath);
 
         const zipFilePath = path.join(tempDir, `${newDatabaseName}.zip`);
         await zipFolder(backupFolder, zipFilePath);
@@ -330,13 +269,24 @@ const backupZipToDrive = async (req, res) => {
         =============================== */
 
 
-        
-        const zipFileName = path.basename(zipFilePath);
-        if (action == 'G') {
+
+        if (action === "G") {
+            if (!refresh_token) {
+                throw new Error("Google Drive token missing");
+            }
             oauth2Client.setCredentials({ refresh_token });
+        }
+
+        let comp = null;
+
+        if (action === "G") {
             const root = await getOrCreateFolder("eplus");
             const corp = await getOrCreateFolder(corporateID, root);
-            const comp = await getOrCreateFolder(companyID.toString(), corp);
+            comp = await getOrCreateFolder(companyID.toString(), corp);
+        }
+
+        const zipFileName = path.basename(zipFilePath);
+        if (action == 'G') {
             /* ===============================
                1️⃣1️⃣ DELETE OLD FILE FROM DRIVE
             =============================== */
@@ -365,9 +315,7 @@ const backupZipToDrive = async (req, res) => {
                 },
                 fields: "id"
             });
-            /* ===============================
-           1️⃣3️⃣ CLEANUP LOCAL FILES
-        =============================== */
+
             /* ===============================
                1️⃣3️⃣ CLEANUP LOCAL FILES
             =============================== */
@@ -411,16 +359,7 @@ const backupZipToDrive = async (req, res) => {
                 fs.rmSync(backupFolder, { recursive: true, force: true });
             }
         }
-        // await sequelizeMASTER.query(`
-        //     ALTER DATABASE [${newDatabaseName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
-        //     DROP DATABASE [${newDatabaseName}];
-        //     `, {
-        //     type: QueryTypes.RAW,
-        //     logging: false,
-        //     dialectOptions: {
-        //         requestTimeout: 600000 // 10 minutes
-        //     }
-        // });
+
         /* ===============================
            1️⃣4️⃣ SUCCESS RESPONSE
         =============================== */
@@ -456,6 +395,8 @@ const backupZipToDrive = async (req, res) => {
 
     // }
 };
+
+
 
 async function exportTableData(database, tableName, folderPath) {
 
@@ -664,6 +605,9 @@ async function importBackupFromZip(req, res) {
     }
 
     const corporateID = decoded.corpId;
+
+
+
     const targetDB = generateDatabaseName(corporateID, p1.companyID);
     if (!targetDB) {
         return res.status(400).json({ error: 'Target database not specified' });
@@ -678,8 +622,9 @@ async function importBackupFromZip(req, res) {
         return res.status(400).json({ error: 'Uploaded file is not a .zip file' });
     }
 
-    const zipPath = path.join("/tmp", file.originalname);
-    const extractPath = path.join("/tmp", file.originalname.replace('.zip', ''));
+    const zipPath = path.join(__dirname, "..", "downloads", file.originalname);
+    const extractPath = path.join(__dirname, "..", "downloads", file.originalname.replace('.zip', ''));
+
     // Postfix table lists
     const datePostfixTables = ['T07', 'T02', 'T05', 'T11', 'T50', 'T82', 'T17', 'T06', 'T01', 'T41'];
     const uniquePostfixTables = ['M01', 'M21'];

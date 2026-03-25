@@ -212,7 +212,9 @@ class UpgradePlan {
                             await PLRDBGAO.update({
                                 GAOF03: totalUser
                             }, {
-                                GAOF01: corpId
+                                where: {
+                                    GAOF01: corpId
+                                }
                             });
                         }
                         if (custRS > 0) {
@@ -220,7 +222,9 @@ class UpgradePlan {
                             await PLRDBGAO.update({
                                 GAOF05: totalUser
                             }, {
-                                GAOF01: corpId
+                                where: {
+                                    GAOF01: corpId
+                                }
                             });
                         }
                         if (usrFld > 0) {
@@ -228,7 +232,9 @@ class UpgradePlan {
                             await PLRDBGAO.update({
                                 GAOF07: totalUser
                             }, {
-                                GAOF01: corpId
+                                where: {
+                                    GAOF01: corpId
+                                }
                             });
                         }
                         if (usrMstr > 0) {
@@ -236,7 +242,9 @@ class UpgradePlan {
                             await PLRDBGAO.update({
                                 GAOF09: totalUser
                             }, {
-                                GAOF01: corpId
+                                where: {
+                                    GAOF01: corpId
+                                }
                             });
                         }
                     }
@@ -244,7 +252,7 @@ class UpgradePlan {
 
                 const paymentData = UpgradePlan.constructPaymentData(transactionDetail, paymentMode, A02id, corpId, user.ADMIF00, description, paymentMethod);
                 await PLRDBPYMT.create(paymentData);
-                return sendResponse('SUCCESS', 'Branch and company updated successfully');
+                return sendResponse('SUCCESS', 'Add Ons updated successfully');
             }
 
             // Action M - Update or Activate Modules
@@ -282,7 +290,7 @@ class UpgradePlan {
                             ADMIF00: user.ADMIF00
                         });
                         if (!setUpId) {
-                            const paymentData = UpgradePlan.constructPaymentData(null, paymentMode, A02id, decoded.corpId, user.ADMIF00, description, paymentMethod);
+                            const paymentData = UpgradePlan.constructPaymentData(transactionDetail, paymentMode, A02id, decoded.corpId, user.ADMIF00, description, paymentMethod);
                             await PLRDBPYMT.create(paymentData);
                             return sendResponse('SUCCESS', 'Module activated for this user');
                         }
@@ -302,11 +310,11 @@ class UpgradePlan {
                             });
                         }
                         if (!moduleId) {
-                            const paymentData = UpgradePlan.constructPaymentData(null, paymentMode, A02id, decoded.corpId, user.ADMIF00, description, paymentMethod);
+                            const paymentData = UpgradePlan.constructPaymentData(transactionDetail, paymentMode, A02id, decoded.corpId, user.ADMIF00, description, paymentMethod);
                             await PLRDBPYMT.create(paymentData);
                             return sendResponse('SUCCESS', 'SetUp activated for this user');
                         }
-                        const paymentData = UpgradePlan.constructPaymentData(null, paymentMode, A02id, decoded.corpId, user.ADMIF00, description, paymentMethod);
+                        const paymentData = UpgradePlan.constructPaymentData(transactionDetail, paymentMode, A02id, decoded.corpId, user.ADMIF00, description, paymentMethod);
                         await PLRDBPYMT.create(paymentData);
                         return sendResponse('SUCCESS', 'Module activated for this user');
                     }
@@ -398,7 +406,7 @@ class UpgradePlan {
                     let matchingPlan = planRows.find(plan => plan.A02F01.toString().trim() === transaction.PYMT01.toString().trim());
                     transaction.dataValues.PYMTPNM = matchingPlan ? matchingPlan.A02F02 : null;
                     transaction.dataValues.
-                    finalTransaction.push(transaction.dataValues);
+                        finalTransaction.push(transaction.dataValues);
                 }
                 return sendResponse('SUCCESS', 'Transactions fetched successfully', finalTransaction);
             }
@@ -433,7 +441,7 @@ class UpgradePlan {
                 PYMT02: userId,
                 PYMT03: tranInfo.id,
                 PYMT04: paymentMode,
-                PYMT05: (tranInfo.amount)/100,
+                PYMT05: (tranInfo.amount) / 100,
                 PYMT06: tranInfo.status,
                 PYMT07: tranInfo.method,
                 PYMT09: description,
