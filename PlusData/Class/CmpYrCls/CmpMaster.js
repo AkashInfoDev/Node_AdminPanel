@@ -58,6 +58,10 @@ class CmpMaster extends PlusInfo {
         this.oEntDict["M00"].FIELD25 = MApp._evlStr(this.oEntDict["M00"]?.FIELD25, "MULTIPTAX");        // Category code for patch Company
         this.oEntDict["M00"].FIELD25 = MApp._evlStr(this.oEntDict["M00"]?.FIELD25, "GENERAL");        // Category code for patch Company
         this.oEntDict["M00"].FIELD11 = MApp._evlStr(this.oEntDict["M00"]?.FIELD11, "");      // Group Name
+        this.oEntDict["M00"].FIELD91 = MApp._evlStr(this.oEntDict["M00"]?.FIELD91, "");      // Group Name
+        this.oEntDict["M00"].FIELD92 = MApp._evlStr(this.oEntDict["M00"]?.FIELD92, "");      // Group Name
+        this.oEntDict["M00"].FIELD93 = MApp._evlStr(this.oEntDict["M00"]?.FIELD93, "");      // Group Name
+        this.oEntDict["M00"].FIELD94 = MApp._evlStr(this.oEntDict["M00"]?.FIELD94, "");      // Group Name
     }
 
     // Method to save the company
@@ -224,8 +228,8 @@ class CmpMaster extends PlusInfo {
                 await newDb.query(`
     TRUNCATE TABLE CMPM00;
 
-    INSERT INTO CMPM00 (FIELD01, FIELD02, FIELD03, FIELD25, FIELD81, DBSVER, FLDAED, M00V01, M00V02, M00V03, FIELD10, FIELD11)
-    VALUES (:FIELD01, :FIELD02, :FIELD03, :FIELD25, :FIELD81, :DBSVER, 'A', :M00V01, :M00V02, :M00V03, :FIELD10, :FIELD11);
+    INSERT INTO CMPM00 (FIELD01, FIELD02, FIELD03, FIELD25, FIELD81, DBSVER, FLDAED, M00V01, M00V02, M00V03, FIELD10, FIELD11, FIELD91, FIELD92, FIELD93, FIELD94)
+    VALUES (:FIELD01, :FIELD02, :FIELD03, :FIELD25, :FIELD81, :DBSVER, 'A', :M00V01, :M00V02, :M00V03, :FIELD10, :FIELD11, :FIELD91, :FIELD92, :FIELD93, :FIELD94);
 `, {
                     type: QueryTypes.INSERT,
                     replacements: {
@@ -239,7 +243,11 @@ class CmpMaster extends PlusInfo {
                         M00V02: this.oEntDict["M00"].M00V02,
                         M00V03: this.oEntDict["M00"].M00V03,
                         FIELD10: this.oEntDict["M00"].FIELD10,
-                        FIELD11: this.oEntDict["M00"].FIELD11
+                        FIELD11: this.oEntDict["M00"].FIELD11,
+                        FIELD91: this.oEntDict["M00"].FIELD91,
+                        FIELD92: this.oEntDict["M00"].FIELD92,
+                        FIELD93: this.oEntDict["M00"].FIELD93,
+                        FIELD94: this.oEntDict["M00"].FIELD94
                     }
                 });
 
@@ -247,8 +255,8 @@ class CmpMaster extends PlusInfo {
                 await CmpMaster.oCmp.oCon.query(`
     TRUNCATE TABLE CMPM00;
 
-    INSERT INTO CMPM00 (FIELD01, FIELD02, FIELD03, FIELD25, FIELD81, DBSVER, FLDAED, M00V01, M00V02, M00V03, FIELD10, FIELD11)
-    VALUES (:FIELD01, :FIELD02, :FIELD03, :FIELD25, :FIELD81, :DBSVER, 'A', :M00V01, :M00V02, :M00V03, :FIELD10, :FIELD11);
+    INSERT INTO CMPM00 (FIELD01, FIELD02, FIELD03, FIELD25, FIELD81, DBSVER, FLDAED, M00V01, M00V02, M00V03, FIELD10, FIELD11, FIELD91, FIELD92, FIELD93, FIELD94)
+    VALUES (:FIELD01, :FIELD02, :FIELD03, :FIELD25, :FIELD81, :DBSVER, 'A', :M00V01, :M00V02, :M00V03, :FIELD10, :FIELD11, :FIELD91, :FIELD92, :FIELD93, :FIELD94);
 `, {
                     type: QueryTypes.INSERT,
                     replacements: {
@@ -262,7 +270,11 @@ class CmpMaster extends PlusInfo {
                         M00V02: this.oEntDict["M00"].M00V02,
                         M00V03: this.oEntDict["M00"].M00V03,
                         FIELD10: this.oEntDict["M00"].FIELD10,
-                        FIELD11: this.oEntDict["M00"].FIELD11
+                        FIELD11: this.oEntDict["M00"].FIELD11,
+                        FIELD91: this.oEntDict["M00"].FIELD91,
+                        FIELD92: this.oEntDict["M00"].FIELD92,
+                        FIELD93: this.oEntDict["M00"].FIELD93,
+                        FIELD94: this.oEntDict["M00"].FIELD94
                     }
                 });
 
@@ -322,7 +334,7 @@ class CmpMaster extends PlusInfo {
             this.oEntDict["M00"].FIELD01 = cmpnm ? cmpnm : await MApp.GetEmptyCmpNo(decoded); // Company No
             this.oEntDict["M00"].DSDATE = MApp.DTOS(new Date(SYr, 3, 1), true);    // Financial year start date
             this.oEntDict["M00"].DEDATE = MApp.DTOS(new Date(EYr, 2, 31), true);   // Financial year end date
-        } else if(this.cAction == 'E'){
+        } else if (this.cAction == 'E') {
             this.oYear = oYr
             // this.oEntDict["M00"].DSDATE = MApp.DTOS(M82, true);    // Financial year start date
             // this.oEntDict["M00"].DEDATE = MApp.DTOS(M92, true);   // Financial year end date
