@@ -219,13 +219,11 @@ class CompanyService {
             let saveCmp = await cMaster.SaveCompany(nextCorpId, '', '', false, '', false)
             const dbName = queryService.generateDatabaseName(decoded.corpId, parseInt(saveCmp.CmpNum));
             const dbConn = db.createPool(dbName);
-            if (cMaster.oEntDict['M00']['_16'] != '') {
-                console.log(cMaster.oEntDict['M00']['_16']);
-                const listOfYr = await dbConn.query('SELECT FIELD01 FROM CMPF01', { type: QueryTypes.SELECT });
-                let GST00006 = await dbConn.query(`UPDATE YR${listOfYr[0].FIELD01}F02 SET FIELD07 = '${cMaster.oEntDict['M00']['_16']}' WHERE FIELD01 = 'GST00006'`, {
-                    type: QueryTypes.UPDATE
-                });
-            }
+            console.log(cMaster.oEntDict['M00']['_16']);
+            const listOfYr = await dbConn.query('SELECT FIELD01 FROM CMPF01', { type: QueryTypes.SELECT });
+            let GST00006 = await dbConn.query(`UPDATE YR${listOfYr[0].FIELD01}F02 SET FIELD07 = '${cMaster.oEntDict['M00']['_16']}' WHERE FIELD01 = 'GST00006'`, {
+                type: QueryTypes.UPDATE
+            });
             if (!lbool) {
                 if (!saveCmp.result) {
                     return res.status(201).json(message = 'error');
