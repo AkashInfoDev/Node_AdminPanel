@@ -226,11 +226,10 @@ class CmpMaster extends PlusInfo {
 
             if (newDb) {
                 await newDb.query(`
-    TRUNCATE TABLE CMPM00;
-
-    INSERT INTO CMPM00 (FIELD01, FIELD02, FIELD03, FIELD25, FIELD81, DBSVER, FLDAED, M00V01, M00V02, M00V03, FIELD10, FIELD11, FIELD91, FIELD92, FIELD93, FIELD94)
-    VALUES (:FIELD01, :FIELD02, :FIELD03, :FIELD25, :FIELD81, :DBSVER, 'A', :M00V01, :M00V02, :M00V03, :FIELD10, :FIELD11, :FIELD91, :FIELD92, :FIELD93, :FIELD94);
-`, {
+                    TRUNCATE TABLE CMPM00;
+                    INSERT INTO CMPM00 (FIELD01, FIELD02, FIELD03, FIELD25, FIELD81, DBSVER, FLDAED, M00V01, M00V02, M00V03, FIELD10, FIELD11, FIELD91, FIELD92, FIELD93, FIELD94)
+                    VALUES (:FIELD01, :FIELD02, :FIELD03, :FIELD25, :FIELD81, :DBSVER, 'A', :M00V01, :M00V02, :M00V03, :FIELD10, :FIELD11, :FIELD91, :FIELD92, :FIELD93, :FIELD94);
+                    `, {
                     type: QueryTypes.INSERT,
                     replacements: {
                         FIELD01: parseInt(CmpMaster.newDatabase.slice(-4)),
@@ -253,11 +252,10 @@ class CmpMaster extends PlusInfo {
 
             } else {
                 await CmpMaster.oCmp.oCon.query(`
-    TRUNCATE TABLE CMPM00;
-
-    INSERT INTO CMPM00 (FIELD01, FIELD02, FIELD03, FIELD25, FIELD81, DBSVER, FLDAED, M00V01, M00V02, M00V03, FIELD10, FIELD11, FIELD91, FIELD92, FIELD93, FIELD94)
-    VALUES (:FIELD01, :FIELD02, :FIELD03, :FIELD25, :FIELD81, :DBSVER, 'A', :M00V01, :M00V02, :M00V03, :FIELD10, :FIELD11, :FIELD91, :FIELD92, :FIELD93, :FIELD94);
-`, {
+                    TRUNCATE TABLE CMPM00;
+                    INSERT INTO CMPM00 (FIELD01, FIELD02, FIELD03, FIELD25, FIELD81, DBSVER, FLDAED, M00V01, M00V02, M00V03, FIELD10, FIELD11, FIELD91, FIELD92, FIELD93, FIELD94)
+                    VALUES (:FIELD01, :FIELD02, :FIELD03, :FIELD25, :FIELD81, :DBSVER, 'A', :M00V01, :M00V02, :M00V03, :FIELD10, :FIELD11, :FIELD91, :FIELD92, :FIELD93, :FIELD94);
+                    `, {
                     type: QueryTypes.INSERT,
                     replacements: {
                         FIELD01: parseInt(CmpMaster.newDatabase.slice(-4)),

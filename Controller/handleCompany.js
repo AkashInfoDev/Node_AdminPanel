@@ -473,6 +473,15 @@ class handleCompany {
                 if (cAction == "E" && isComapny) {
                     CmpMaster.newDatabase = qS;
                     let saveCmp = await cMaster.SaveCompany(decoded.corpId, '', '', false, '', true);
+                    const dbName = queryService.generateDatabaseName(decoded.corpId, parseInt(saveCmp.CmpNum));
+                    const dbConn = db.createPool(dbName);
+                    if (jsonData['M00']['_16'] != '') {
+                        console.log(jsonData['M00']['_16']);
+                        const listOfYr = await dbConn.query('SELECT FIELD01 FROM CMPF01', { type: QueryTypes.SELECT });
+                        let GST00006 = await dbConn.query(`UPDATE YR${listOfYr[0].FIELD01}F02 SET FIELD07 = '${jsonData['M00']['_16']}' WHERE FIELD01 = 'GST00006'`, {
+                            type: QueryTypes.UPDATE
+                        });
+                    }
                     if (!saveCmp.result) {
                         if (req.files[0]?.originalname) {
                             let uploadFile = new FTPService(decoded, req.files[0].originalname, saveCmp.CmpNum);
@@ -503,8 +512,7 @@ class handleCompany {
 
                             // 5️⃣ Check if branches to remove have associated transactions
                             if (branchesToRemove.length > 0) {
-                                const dbName = queryService.generateDatabaseName(decoded.corpId, parseInt(saveCmp.CmpNum));
-                                const dbConn = db.createPool(dbName);
+
                                 const listOfYr = await dbConn.query('SELECT FIELD01 FROM CMPF01', { type: QueryTypes.SELECT });
 
                                 for (const ly of listOfYr) {
@@ -571,6 +579,15 @@ class handleCompany {
                     if (!saveCmp.result) {
                         // let BRCOntroller = new BranchController(false, 'A', '', `${saveCmp.CmpNum}-HOME-BRC`, cSData["M00"]._16, '', decoded.corpId, 'Y', saveCmp.CmpNum)
                         // let AddHomeBrc = await BRCOntroller.handleAction(req, res, true);
+                        const dbName = queryService.generateDatabaseName(decoded.corpId, parseInt(saveCmp.CmpNum));
+                        const dbConn = db.createPool(dbName);
+
+                        console.log(jsonData['M00']['_16']);
+                        const listOfYr = await dbConn.query('SELECT FIELD01 FROM CMPF01', { type: QueryTypes.SELECT });
+                        let GST00006 = await dbConn.query(`UPDATE YR${listOfYr[0].FIELD01}F02 SET FIELD07 = '${jsonData['M00']['_16']}' WHERE FIELD01 = 'GST00006'`, {
+                            type: QueryTypes.UPDATE
+                        });
+
                         let cnum = parseInt(saveCmp.CmpNum);
                         if ((cSData.FLDBRC).includes(',')) {
                             let brcIdList = (cSData.FLDBRC).split(',');

@@ -102,9 +102,9 @@ class CompanyService {
 
             if (lbool) {
                 const corpIds = await PLRDBA01.findAll({
-                attributes: ['A01F03'],
-                where: { A01F03: { [Op.like]: 'EP-%' } }
-            });
+                    attributes: ['A01F03'],
+                    where: { A01F03: { [Op.like]: 'EP-%' } }
+                });
                 corpNumbers = corpIds.map(item => parseInt(item.A01F03.slice(5))).filter(Number.isFinite);
                 nextCorpNum = (corpNumbers.length > 0 ? Math.max(...corpNumbers) : 0) + 1;
                 nextCorpId = 'EP-' + nextCorpNum.toString().padStart(5, '0');
@@ -217,6 +217,15 @@ class CompanyService {
             let BRcode;
             let brGst = GSTNumber ? GSTNumber : '';
             let saveCmp = await cMaster.SaveCompany(nextCorpId, '', '', false, '', false)
+            const dbName = queryService.generateDatabaseName(decoded.corpId, parseInt(saveCmp.CmpNum));
+            const dbConn = db.createPool(dbName);
+            if (cMaster.oEntDict['M00']['_16'] != '') {
+                console.log(cMaster.oEntDict['M00']['_16']);
+                const listOfYr = await dbConn.query('SELECT FIELD01 FROM CMPF01', { type: QueryTypes.SELECT });
+                let GST00006 = await dbConn.query(`UPDATE YR${listOfYr[0].FIELD01}F02 SET FIELD07 = '${cMaster.oEntDict['M00']['_16']}' WHERE FIELD01 = 'GST00006'`, {
+                    type: QueryTypes.UPDATE
+                });
+            }
             if (!lbool) {
                 if (!saveCmp.result) {
                     return res.status(201).json(message = 'error');
