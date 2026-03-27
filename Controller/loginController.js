@@ -1290,7 +1290,8 @@ class UserController {
                     DefCmp: cmplist.DefComp.cmpNo,
                     cmpList: cmplist.CompList,
                     purchasedSetUpIds: M81Row[0].M81SID,
-                    isActive: inputDate < today ? false : true
+                    isActive: inputDate < today ? false : true,
+                    userMail: user.ADMIF07
                 };
                 // let currentTime = new Date();
                 // let newLogin = await m83.create(userId, formatDate(currentTime), '', '', '', token);
@@ -1388,7 +1389,8 @@ class UserController {
                     userDetails: user,
                     modData: modData,
                     purchasedSetUpIds: M81Row[0].M81SID,
-                    isActive: inputDate < today ? false : true
+                    isActive: inputDate < today ? false : true,
+                    userMail: user.ADMIF07
                 };
                 response.message = 'Login successful';
                 // response.token = token;
