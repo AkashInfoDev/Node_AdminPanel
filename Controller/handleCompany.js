@@ -623,8 +623,8 @@ class handleCompany {
                             GAOF09: 5, // User Master(Limit Wise) Free
                             GAOF10: 0
                         });
-                        let BRCOntroller = new BranchController(false, 'A', '', `${saveCmp.CmpNum}-HOME-BRC`, cSData["M00"]._16, '', decoded.corpId, 'Y', saveCmp.CmpNum)
-                        let AddHomeBrc = await BRCOntroller.handleAction(req, res, true);
+                        // let BRCOntroller = new BranchController(false, 'A', '', `${saveCmp.CmpNum}-HOME-BRC`, cSData["M00"]._16, '', decoded.corpId, 'Y', saveCmp.CmpNum)
+                        // let AddHomeBrc = await BRCOntroller.handleAction(req, res, true);
                         // await rel.create(admin.ADMICORP, admin.ADMIF01, parseInt(saveCmp.CmpNum), '');
                         // await m82.create(cUserID, parseInt(saveCmp.CmpNum), '', '', '', '', '', '', '', 'N',(new Date().getFullYear() % 100).toString(), 'A');
                         // await cmp.create( parseInt(saveCmp.CmpNum), cSData['M00'].FIELD02, 'SQL', cSData['M00'].FIELD11, cUserID, formatDate(new Date()), '94.176.235.105', 'aipharma_aakash', 'Aipharma@360', 'DATA', null);
