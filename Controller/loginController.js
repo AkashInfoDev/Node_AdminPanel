@@ -224,9 +224,11 @@ class AdminController {
             for (let i of existingAdmin) {
                 const decrypted = encryptor.decrypt(i.ADMIF01)
                 if (decrypted == userId) {
-                    admin = i;
-                    response = {
-                        message: 'User ID valid'
+                    if (i.ADMIF06 == 1) {
+                        admin = i;
+                        response = {
+                            message: 'User ID valid'
+                        }
                     }
                 }
             }
