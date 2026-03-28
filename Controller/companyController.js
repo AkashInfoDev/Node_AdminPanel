@@ -18,6 +18,7 @@ const ADMIController = require('./ADMIController');
 const RELController = require('./RELController');
 const M81Controller = require('./M81Controller');
 const { formatDate } = require('../Services/customServices');
+const queryService = require('../Services/queryService');
 
 // Get Sequelize instance for 'SDB' or your specific DB name
 const sequelizeRDB = db.getConnection('RDB');
@@ -217,7 +218,7 @@ class CompanyService {
             let BRcode;
             let brGst = GSTNumber ? GSTNumber : '';
             let saveCmp = await cMaster.SaveCompany(nextCorpId, '', '', false, '', false)
-            const dbName = queryService.generateDatabaseName(decoded.corpId, parseInt(saveCmp.CmpNum));
+            const dbName = queryService.generateDatabaseName(nextCorpId, parseInt(saveCmp.CmpNum));
             const dbConn = db.createPool(dbName);
             console.log(cMaster.oEntDict['M00']['_16']);
             const listOfYr = await dbConn.query('SELECT FIELD01 FROM CMPF01', { type: QueryTypes.SELECT });
