@@ -86,9 +86,13 @@ class CompanyService {
       this.oEntDict['M00']._STCD = stcdRow.length ? MApp._evlStr(stcdRow[0].PLSF06) : '';
       this.oEntDict['M00']._SYNCID = this.oEntDict['M00'].FIELD07 || '';
       this.oEntDict['M00']._BSYNCID = this.oEntDict['M00'].FIELD08 || '';
-      // let defYrno = await this.oCmp.oCon.query(`SELECT * FROM CMPCMM WHERE FIELD01 = '_CMPYEAR'`, { type: QueryTypes.SELECT });
-      // let defYr = defYrno ? defYrno[0].FIELD02 : new Date().getFullYear();
-      const f02Table = new F02Table('YR' + new Date().getFullYear() % 100, this.databaseName, langtpe);
+      let defYrno = null
+      if (this.databaseName) {
+        let connctioDb = db.createPool(this.databaseName);
+        defYrno = await connctioDb.query(`SELECT * FROM CMPCMM WHERE FIELD01 = '_CMPYEAR'`, { type: QueryTypes.SELECT });
+      }
+      let defYr = defYrno ? defYrno[0].FIELD02 : new Date().getFullYear() % 100;
+      const f02Table = new F02Table('YR' + defYr, this.databaseName, langtpe);
       let dtCF02 = await f02Table.getDictionary('', '', true, true);
 
       for (const row of dtF02) {

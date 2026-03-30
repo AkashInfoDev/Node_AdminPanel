@@ -2,6 +2,7 @@
 const DDefine = require('./DcDefine'); // Adjust import path as needed
 const db = require('../../Config/config'); // Your Database class
 const { getQuery } = require('../../Services/queryService');
+const { QueryTypes } = require('sequelize');
 const sequelizeIDB = db.getConnection('IDBAPI');
 
 
@@ -206,12 +207,29 @@ class DBHandler {
 
     async AppendEntryDict(cTblNm, DRDict, lDelete = false, cWhere = "", transaction) {
         if (!await this.appendEntryDict(cTblNm, DRDict, lDelete, cWhere, transaction)) {
-            let ToDT = await this.sequelizeDynamic.query(`SELECT TOP 1 * FROM ${cTblNm}`);
+            let ToDT
+            try {
+                ToDT = await this.sequelizeDynamic.query(`SELECT TOP 1 * FROM ${cTblNm}`, {
+                    type: QueryTypes.SELECT,
+                    transaction: transaction,
+                    timeout: 50000 // 30 seconds
+                });
+            } catch (EX) {
+                console.log(EX);
+                if (EX.original.code == 'ETIMEOUT') {
+                    ToDT = await this.sequelizeDynamic.query(`SELECT TOP 1 * FROM ${cTblNm}`, {
+                        type: QueryTypes.SELECT,
+                        timeout: 50000 // 30 seconds
+                    });
+                }
+            }
             ToDT = ToDT[0];
             let lCol, lColUpper;
             try {
                 let SbF = "", SbV = "", ColNM;
-                let ColList = Object.keys(ToDT[0]);
+                console.log(typeof ToDT);
+
+                let ColList = typeof ToDT == 'object' ? Object.keys(ToDT) : Object.keys(ToDT[0]);
 
                 for (let nI = 0; nI < ColList.length; nI++) {
                     let ColNM = ColList[nI].toString();
@@ -390,39 +408,39 @@ class DBHandler {
     async GetRowDict(cTblNM, cExFld = "", cWhere = "", lBlankRow = false, obj) {   // cExFld  - Field name ~C~ DataType ~C~ Default Value ~C~ Max length if Any ~R~ Next Field Defination
         cWhere = cWhere ? cWhere : '';
         let DTable = [];
-    
-        if (obj?.transactionMap != undefined || obj?.transactionMap != null) {
-          transactionMap = obj.transactionMap;
-          request = transactionMap[obj.cBeginID].request;
-          let qry = getQuery(cExFld, cTblNM, cWhere, '', '');
-          DTable = await this.sequelizeDynamic.query(qry, {
-            type: this.sequelizeDynamic.QueryTypes.SELECT
-        });
-        } else {
-          let qry = getQuery('TOP 1 *', cTblNM, cWhere, '', '');
-          DTable = await this.sequelizeDynamic.query(qry, {
-            type: this.sequelizeDynamic.QueryTypes.SELECT
-        });
 
-        //   await DT('DynamicPool', 'get', 'TOP 1 *', cTblNM, cWhere, '', '', '', obj.corporateID, obj.companyID, obj.YrNo);
+        if (obj?.transactionMap != undefined || obj?.transactionMap != null) {
+            transactionMap = obj.transactionMap;
+            request = transactionMap[obj.cBeginID].request;
+            let qry = getQuery(cExFld, cTblNM, cWhere, '', '');
+            DTable = await this.sequelizeDynamic.query(qry, {
+                type: this.sequelizeDynamic.QueryTypes.SELECT
+            });
+        } else {
+            let qry = getQuery('TOP 1 *', cTblNM, cWhere, '', '');
+            DTable = await this.sequelizeDynamic.query(qry, {
+                type: this.sequelizeDynamic.QueryTypes.SELECT
+            });
+
+            //   await DT('DynamicPool', 'get', 'TOP 1 *', cTblNM, cWhere, '', '', '', obj.corporateID, obj.companyID, obj.YrNo);
         }
         // DTable = DTable.recordset;
         if (DTable.length == 0)
-          DTable = await customServices.GetEmptyRow(DTable, '', false, true);
+            DTable = await customServices.GetEmptyRow(DTable, '', false, true);
         if (cExFld) {
-          DBHandler.AddExColInDT(DTable, cExFld);
+            DBHandler.AddExColInDT(DTable, cExFld);
         }
         if (lBlankRow && DTable.length == 0) {
-          return await GetEmptyRow(DTable, '', false, true);
+            return await GetEmptyRow(DTable, '', false, true);
         }
         else if (DTable.length == 0) {
-          return null;
+            return null;
         }
         else {
-          return DTable.length > 0 ? DTable[0] : DTable;
+            return DTable.length > 0 ? DTable[0] : DTable;
         }
         // return null;
-      }
+    }
 }
 
 module.exports = DBHandler;

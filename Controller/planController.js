@@ -14,6 +14,7 @@ const { Op } = require('sequelize');
 const TokenService = require('../Services/tokenServices');
 const ADMIController = require('./ADMIController');
 const M81Controller = require('./M81Controller');
+const PLRDBPLRELController = require('./PLRDBPLRELController');
 // Get Sequelize instance for 'SDB' or your specific DB name
 const sequelizeRDB = db.getConnection('RDB');
 let sequelizeAIERP = db.createPoolEway('aiadmin_aierp_1');
@@ -26,6 +27,7 @@ const PLRDBGAO = definePLRDBGAO(sequelizeRDB);
 const PLRDBA02 = definePLRDBA02(sequelizeRDB);
 const PLRDBPYMT = definePLRDBPYMT(sequelizeRDB);
 const PLRDBRPAY = definePLRDBRPAY(sequelizeRDB);
+const PLRDBPLREL = new PLRDBPLRELController(sequelizeRDB);
 const encryptor = new Encryptor();
 
 class UpgradePlan {
@@ -295,6 +297,9 @@ class UpgradePlan {
                             return sendResponse('SUCCESS', 'Module activated for this user');
                         }
                     }
+                    const UserData = await admi.findOne({
+                        ADMIF00: user.ADMIF00
+                    });
                     if (setUpId) {
                         let m81Usr = await m81.findOne({
                             M81F01: 'U0000000'
@@ -307,6 +312,34 @@ class UpgradePlan {
                         } else {
                             await m81.update({
                                 M81SID: setUpId
+                            });
+                        }
+                        if (setUpId.includes(',')) {
+                            let sUpId = setUpId.split(',');
+                            for (const sId of sUpId) {
+                                let setUpMod = await PLRDBPLREL.findOne({
+                                    RELF01: {
+                                        [Op.like]: `%${sId}%`
+                                    }
+                                });
+                                const newADMIMOD = setUpMod.RELF04 ? UserData.ADMIMOD + ',' + setUpMod.RELF04 : UserData.ADMIMOD;
+                                await admi.update({
+                                    ADMIMOD: newADMIMOD
+                                }, {
+                                    ADMIF00: UserData.ADMIF00
+                                });
+                            }
+                        } else {
+                            let setUpMod = await PLRDBPLREL.findOne({
+                                RELF01: {
+                                    [Op.like]: `%${setUpId}%`
+                                }
+                            });
+                            const newADMIMOD = setUpMod.RELF04 ? UserData.ADMIMOD + ',' + setUpMod.RELF04 : UserData.ADMIMOD;
+                            await admi.update({
+                                ADMIMOD: newADMIMOD
+                            }, {
+                                ADMIF00: UserData.ADMIF00
                             });
                         }
                         if (!moduleId) {
