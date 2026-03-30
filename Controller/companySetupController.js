@@ -91,7 +91,7 @@ class CompanyService {
         let connctioDb = db.createPool(this.databaseName);
         defYrno = await connctioDb.query(`SELECT * FROM CMPCMM WHERE FIELD01 = '_CMPYEAR'`, { type: QueryTypes.SELECT });
       }
-      let defYr = defYrno ? defYrno[0].FIELD02 : new Date().getFullYear() % 100;
+      let defYr = defYrno.length > 0 ? defYrno[0]?.FIELD02 : new Date().getFullYear() % 100;
       const f02Table = new F02Table('YR' + defYr, this.databaseName, langtpe);
       let dtCF02 = await f02Table.getDictionary('', '', true, true);
 

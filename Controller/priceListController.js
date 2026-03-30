@@ -229,7 +229,7 @@ class PricingPlanController {
                     }
 
                 case 'F':
-                    let { Cust_Id, regSDate, regEDate, usrGST, cuser, cpass, apass, auser, apitype } = pa;
+                    let { Cust_Id, regSDate, regEDate, usrGST, cuser, cpass, apass, auser } = pa;
 
                     // Function to format date to 'YYYY-MM-DD HH:MM:SS'
                     const formatDate = (date) => {
@@ -245,34 +245,54 @@ class PricingPlanController {
                     let eDate = formatDate(regEDate);
                     let ceDate = eDate.split(' ');
 
-                    // Creating the new AMC transaction without Amc_Id
-                    const NewAMC = await AMC_Transaction.create({
-                        Amc_date: csDate[0],  // Properly formatted date for Amc_date
-                        Cust_Id,
-                        Amc_Start_date: csDate[0],  // Using the formatted date string
-                        Amc_End_date: ceDate[0],    // Using the formatted date string
-                        Amc_Type: 7,
-                        Amc_Amt: 0,
-                        Payment_Type: 0,
-                        Remarks: '',
-                        AMC_custid: decoded.corpId,  // Assuming decoded is a valid variable
-                        AMC_CorporateId: usrGST,
-                        AMC_UserID: null,
-                        AMC_URN: null,
-                        AMC_EntryDate: (new Date().toISOString().slice(0, 23).replace('T', ' ')).toString(),  // Current date-time in proper SQL Server format
-                        AMC_ModifiedDate: null,
-                        AMC_EntryBY: null,
-                        AMC_ReceivedBy: '',
-                        einv_cid: '',
-                        einv_secret: '',
-                        einvcr: 0,
-                        einvused: 0,
-                        cuser: cuser || null,
-                        cpass: cpass || null,
-                        apass: apass || null,
-                        auser: auser || null,
-                        apitype: cuser && cpass ? auser && apass ? 'A' : 'C' : 'A'  // If apitype is truthy, assign 'A', otherwise 'C'
+                    let existingAmc = await AMC_Transaction.findOne({
+                        where: {
+                            Amc_type: 7,
+                            Amc_custId: decoded.corpId,
+                            AMC_CorporateId: Gst
+                        }
                     });
+                    let NewAMC;
+                    if (existingAmc) {
+                        NewAMC = await AMC_Transaction.update({
+                            cuser: cuser || null,
+                            cpass: cpass || null,
+                            apass: apass || null,
+                            auser: auser || null,
+                            apitype: cuser && cpass ? auser && apass ? 'A' : 'C' : 'A'  // If apitype is truthy, assign 'A', otherwise 'C'
+                        }, {
+                            Amc_Id: existingAmc.Amc_Id
+                        });
+                    } else {
+                        // Creating the new AMC transaction without Amc_Id
+                        NewAMC = await AMC_Transaction.create({
+                            Amc_date: csDate[0],  // Properly formatted date for Amc_date
+                            Cust_Id,
+                            Amc_Start_date: csDate[0],  // Using the formatted date string
+                            Amc_End_date: ceDate[0],    // Using the formatted date string
+                            Amc_Type: 7,
+                            Amc_Amt: 0,
+                            Payment_Type: 0,
+                            Remarks: '',
+                            AMC_custid: decoded.corpId,  // Assuming decoded is a valid variable
+                            AMC_CorporateId: usrGST,
+                            AMC_UserID: null,
+                            AMC_URN: null,
+                            AMC_EntryDate: (new Date().toISOString().slice(0, 23).replace('T', ' ')).toString(),  // Current date-time in proper SQL Server format
+                            AMC_ModifiedDate: null,
+                            AMC_EntryBY: null,
+                            AMC_ReceivedBy: '',
+                            einv_cid: '',
+                            einv_secret: '',
+                            einvcr: 0,
+                            einvused: 0,
+                            cuser: cuser || null,
+                            cpass: cpass || null,
+                            apass: apass || null,
+                            auser: auser || null,
+                            apitype: cuser && cpass ? auser && apass ? 'A' : 'C' : 'A'  // If apitype is truthy, assign 'A', otherwise 'C'
+                        });
+                    }
                     if (NewAMC) {
                         response.message = 'Credentials added successfully';
                         const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
