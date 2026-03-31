@@ -155,8 +155,12 @@ class UpgradePlan {
                     return sendResponse('FAIL', 'Transaction not found');
                 }
 
-                if (additionalBranch > 0) {
-                    let numOfBrc = await PLRDBA01.findOne({ A01F03: corpId });
+                if (parseInt(additionalBranch) > 0) {
+                    let numOfBrc = await PLRDBA01.findOne({
+                        where: {
+                            A01F03: corpId
+                        }
+                    });
                     let totalBranch = parseInt(numOfBrc.A01BRC) + parseInt(additionalBranch);
                     await PLRDBA01.update({
                         A01BRC: totalBranch
@@ -167,8 +171,12 @@ class UpgradePlan {
                     });
                 }
 
-                if (additionalCompany > 0) {
-                    let numOfCmp = await PLRDBA01.findOne({ A01F03: corpId });
+                if (parseInt(additionalCompany) > 0) {
+                    let numOfCmp = await PLRDBA01.findOne({
+                        where: {
+                            A01F03: corpId
+                        }
+                    });
                     let totalCompany = parseInt(numOfCmp.A01CMP) + parseInt(additionalCompany);
                     await PLRDBA01.update({
                         A01CMP: totalCompany
@@ -179,8 +187,12 @@ class UpgradePlan {
                     });
                 }
 
-                if (additionalUser > 0) {
-                    let numOfUsr = await PLRDBA01.findOne({ A01F03: corpId });
+                if (parseInt(additionalUser) > 0) {
+                    let numOfUsr = await PLRDBA01.findOne({
+                        where: {
+                            A01F03: corpId
+                        }
+                    });
                     let totalUser = parseInt(numOfUsr.A01F10) + parseInt(additionalUser);
                     await PLRDBA01.update({
                         A01F10: totalUser
