@@ -450,7 +450,7 @@ class UpgradePlan {
                 for (let transaction of allTransaction) {
                     let matchingPlan = planRows.find(plan => plan.A02F01.toString().trim() === transaction.PYMT01.toString().trim());
                     transaction.dataValues.PYMTPNM = matchingPlan ? matchingPlan.A02F02 : null;
-                    transaction.dataValues.
+                    if(transaction.dataValues)
                         finalTransaction.push(transaction.dataValues);
                 }
                 return sendResponse('SUCCESS', 'Transactions fetched successfully', finalTransaction);
