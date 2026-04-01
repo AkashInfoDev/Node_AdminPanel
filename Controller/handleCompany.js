@@ -304,7 +304,7 @@ class handleCompany {
                             let existingCmp = (branch.BRCCOMP).split(',');
                             existingCmp = existingCmp.filter(item => item !== CmpNo.toString());
                             let UpdatedCmpList = await brc.update({
-                                BRCCOMP: existingCmp.joim(',')
+                                BRCCOMP: existingCmp.join(',')
                             },{
                                 BRCODE: branch.BRCODE
                             })
