@@ -94,7 +94,7 @@ class BRCController {
 
     async destroy(where) {
         try {
-            return await this.PLSDBBRC.destroy(where);
+            return await this.PLSDBBRC.destroy({where});
         } catch (error) {
             throw new Error(`Failed to destroy record: ${error.message}`);
         }
