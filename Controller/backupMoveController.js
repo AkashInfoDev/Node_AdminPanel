@@ -13,6 +13,7 @@ const unzipper = require("unzipper");
 const definePLSTATE = require('../Models/IDB/PLSTATE');
 const sequelizeIDB = db.getConnection('IDBAPI');
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01');
+const { sendEmailWithAttachment } = require("../Services/mailServices");
 const sequelizeRDB = db.getConnection("RDB");
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 
@@ -29,6 +30,15 @@ const oauth2Client = new google.auth.OAuth2(
 
 const drive = google.drive({ version: "v3", auth: oauth2Client });
 
+function validateEmails(emailArray) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    const invalidEmails = emailArray.filter(email => !emailRegex.test(email));
+
+    if (invalidEmails.length > 0) {
+        throw new Error(`Invalid email(s): ${invalidEmails.join(", ")}`);
+    }
+}
 async function getStates() {
     console.log("🌍 Fetching states from PLSTATE...");
 
@@ -185,9 +195,10 @@ const backupToDrive = async (req, res) => {
             decodeURIComponent(encryptor.decrypt(req.body.pa))
         );
 
-        const { companyID, action } = p1;
+        // const { companyID, action } = p1;
+        const { companyID, action, emails, smtp } = p1;
 
-        if (!action) throw new Error("Action is required (G or D)");
+        if (!action) throw new Error("Action is required (G or D or M)");
 
         /* ========= TOKEN ========= */
         const token = req.headers.authorization?.split(" ")[1];
@@ -210,6 +221,7 @@ const backupToDrive = async (req, res) => {
             password: process.env.FTP_PASS,
             secure: false
         });
+
 
         /* ========= BACKUP ========= */
         await sequelizeMASTER.query(`
@@ -352,6 +364,60 @@ const backupToDrive = async (req, res) => {
         //         console.log("🧹 Cleanup done after download");
         //     });
         // }
+        else if (action === "E") {
+
+            const fileName = path.basename(zipPath);
+
+            if (!emails) {
+                throw new Error("Emails are required for mail action");
+            }
+
+            let emailArray = Array.isArray(emails)
+                ? emails.map(e => e.trim())
+                : emails.split(",").map(e => e.trim());
+
+            validateEmails(emailArray);
+
+            const emailList = emailArray.join(",");
+
+            console.log("📧 Sending backup to:", emailList);
+
+            let mailError = null;
+
+            // ✅ TRY MAIL (but don't break flow)
+            try {
+                await sendEmailWithAttachment(
+                    emailList,
+                    zipPath,
+                    fileName,
+                    smtp
+                );
+            } catch (err) {
+                console.error("📧 Mail Failed:", err.message);
+                mailError = err;
+            }
+
+            // ✅ ALWAYS CLEANUP (IMPORTANT 🔥)
+            await deleteFromFTP();
+
+            [bakPath, jsonPath, zipPath].forEach(f => {
+                if (fs.existsSync(f)) fs.unlinkSync(f);
+            });
+
+            ftpClient.close();
+
+            // ✅ RESPONSE BASED ON MAIL STATUS
+            if (mailError) {
+                response.status = "PARTIAL_SUCCESS";
+                response.message = `Backup created but email failed: ${mailError.message}`;
+            } else {
+                response.status = "SUCCESS";
+                response.message = "Backup sent to provided emails";
+            }
+
+            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(200).json({ encryptedResponse });
+        }
         else if (action === "D") {
 
             res.setHeader(
@@ -790,7 +856,7 @@ const deleteFtpFile = async (req, res) => {
         await ftpClient.remove(remotePath);
 
         console.log("✅ File deleted:", remotePath);
-
+        response.status = "SUCCESS";
         response.message = "File deleted successfully";
         response.data = { fileName };
 

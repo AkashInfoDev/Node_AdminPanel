@@ -102,7 +102,15 @@ const getCorporateEmails = async (corporateID) => {
 
     return emails;
 };
+function validateEmails(emailArray) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+    const invalidEmails = emailArray.filter(email => !emailRegex.test(email));
+
+    if (invalidEmails.length > 0) {
+        throw new Error(`Invalid email(s): ${invalidEmails.join(", ")}`);
+    }
+}
 
 const backupZipToDrive = async (req, res) => {
     let response = { data: null, message: '', status: 'Success' };
@@ -128,7 +136,9 @@ const backupZipToDrive = async (req, res) => {
         const decodedParam = decodeURIComponent(parameterString);
         const p1 = JSON.parse(decodedParam);
 
-        const { companyID, yearNo, action } = p1;
+        // const { companyID, yearNo, action } = p1;
+        // const { companyID, yearNo, action, emails } = p1;
+        const { companyID, yearNo, action, emails, smtp } = p1;
 
         if (!companyID || !yearNo) {
             response.status = "FAIL";
@@ -327,26 +337,34 @@ const backupZipToDrive = async (req, res) => {
             if (fs.existsSync(backupFolder)) {
                 fs.rmSync(backupFolder, { recursive: true, force: true });
             }
-        } else if (action == 'M') {
-            // let fName = zipFilePath.split('/');
-            const fileName = path.basename(zipFilePath);
-            const emails = await getCorporateEmails(corporateID);
-            // let mailFile = await sendEmailWithAttachment('developmentoffice71@gmail.com', zipFilePath, fName[fName.length - 1]);
-            if (!emails || emails.length === 0) {
-                throw new Error("No admin email configured for this corporate");
-            }
-            for (const email of emails) {
-                await sendEmailWithAttachment(
-                    email,
-                    zipFilePath,
-                    // fName[fName.length - 1]
-                    fileName
-                );
-            }
-            /* ===============================
-           1️⃣3️⃣ CLEANUP LOCAL FILES
-        =============================== */
+        } else if (action === "E") {
 
+            const fileName = path.basename(zipFilePath);
+
+            if (!emails) {
+                throw new Error("Emails are required for mail action");
+            }
+
+            // ✅ Convert + validate
+            let emailArray = Array.isArray(emails)
+                ? emails.map(e => e.trim())
+                : emails.split(",").map(e => e.trim());
+
+            validateEmails(emailArray);
+
+            const emailList = emailArray.join(",");
+
+            console.log("📧 Sending backup to:", emailList);
+
+            // ✅ Send mail with SMTP support
+            await sendEmailWithAttachment(
+                emailList,
+                zipFilePath,
+                fileName,
+                smtp
+            );
+
+            /* CLEANUP */
             if (fs.existsSync(zipFilePath)) {
                 fs.unlinkSync(zipFilePath);
             }
@@ -354,6 +372,12 @@ const backupZipToDrive = async (req, res) => {
             if (fs.existsSync(backupFolder)) {
                 fs.rmSync(backupFolder, { recursive: true, force: true });
             }
+
+            response.status = "SUCCESS";
+            response.message = "Backup sent to provided emails";
+
+            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(200).json({ encryptedResponse });
         }
         else if (action === "D") {
 
@@ -432,8 +456,6 @@ const backupZipToDrive = async (req, res) => {
 
     // }
 };
-
-
 
 async function exportTableData(database, tableName, folderPath) {
 

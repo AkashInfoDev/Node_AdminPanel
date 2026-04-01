@@ -1,17 +1,31 @@
 const nodemailer = require('nodemailer');
 
-const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: 587,
-    secure: false,
-    auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-    }
-});
+// const transporter = nodemailer.createTransport({
+//     host: process.env.SMTP_HOST,
+//     port: 587,
+//     secure: false,
+//     auth: {
+//         user: process.env.SMTP_USER,
+//         pass: process.env.SMTP_PASS
+//     }
+// });
+function createTransporter(smtpConfig = {}) {
 
+    return nodemailer.createTransport({
+        host: smtpConfig.host || process.env.SMTP_HOST,
+        port: smtpConfig.port || process.env.SMTP_PORT || 587,
+        secure: false,
+        connectionTimeout: 10000, // 🔥 10 sec
+        greetingTimeout: 10000,
+        auth: {
+            user: smtpConfig.user || process.env.SMTP_USER,
+            pass: smtpConfig.pass || process.env.SMTP_PASS
+        }
+    });
+}
 
 async function sendAccountInfoMail({ to, corpId, userId, password1 }) {
+    const transporter = createTransporter();
     return transporter.sendMail({
         from: '"EPLUS Support" <demo@tcodes.in>',
         to,
@@ -72,6 +86,7 @@ async function sendAccountInfoMail({ to, corpId, userId, password1 }) {
 }
 
 async function sendResetMail({ to, corpId, otp }) {
+    const transporter = createTransporter();
     return transporter.sendMail({
         from: '"EPLUS Support" <demo@tcodes.in>',
         to,
@@ -121,6 +136,7 @@ async function sendResetMail({ to, corpId, otp }) {
     });
 }
 async function sendLogOutMail({ to, corpId, otp, subject }) {
+    const transporter = createTransporter();
     let isMail = await transporter.sendMail({
         from: '"EPLUS Support" <demo@tcodes.in>',
         to,
@@ -171,12 +187,13 @@ async function sendLogOutMail({ to, corpId, otp, subject }) {
     return;
 }
 
-const sendEmailWithAttachment = async (to, attachmentPath, filename) => {
-
+const sendEmailWithAttachment = async (to, attachmentPath, filename, smtpConfig = {}) => {
+    const transporter = createTransporter(smtpConfig);
     const mailOptions = {
-        from: '"EPLUS Support" <demo@tcodes.in>',
+        // from: '"EPLUS Support" <demo@tcodes.in>',
+        from: `"EPLUS Support" <${smtpConfig.user || process.env.SMTP_USER}>`,
         to: to,
-        subject: 'Financial Year Backup - EPLUS Cloud ERP',
+        subject: 'Backup - EPLUS Cloud ERP',
 
         html: `
     <div style="font-family: Arial, sans-serif; background:#f4f6f8; padding:20px;">
@@ -185,14 +202,14 @@ const sendEmailWithAttachment = async (to, attachmentPath, filename) => {
         <div style="background:#0d6efd; color:#ffffff; padding:20px; text-align:center;">
           <img src="E-Plus_Logo.jpg" alt="E-PLUS Logo" style="max-height:50px; vertical-align:middle; margin-right:10px;"/>
           <h2 style="margin:0; display:inline;">E-PLUS CLOUD ERP</h2>
-          <p style="margin:5px 0 0;">Financial Year Backup</p>
+          <p style="margin:5px 0 0;">Eplus Backup</p>
         </div>
 
         <div style="padding:25px; color:#333;">
           <p>Hello,</p>
 
           <p>
-            Your requested <strong>Financial Year backup</strong> has been successfully generated.
+            Your requested <strong>Eplus backup</strong> has been successfully generated.
           </p>
 
           <p>
@@ -212,7 +229,7 @@ const sendEmailWithAttachment = async (to, attachmentPath, filename) => {
 
           <p>
             If you did not request this backup or face any issues accessing the file,
-            please contact your system administrator.
+            please contact our system administrator.
           </p>
 
           <p style="color:#666;">
@@ -240,9 +257,36 @@ const sendEmailWithAttachment = async (to, attachmentPath, filename) => {
 
     try {
         const info = await transporter.sendMail(mailOptions);
-        console.log("Email sent:", info.response);
+        console.log("✅ Email sent:", info.response);
+
+        return info;
+
     } catch (error) {
-        console.log("Error sending email:", error);
+
+        console.error("❌ SMTP ERROR:", {
+            message: error.message,
+            code: error.code,
+            response: error.response
+        });
+
+        let customMessage = "Email sending failed";
+
+        if (error.code === 'EAUTH') {
+            customMessage = "SMTP Authentication failed Invalid EMIAL/PASS";
+        } else if (error.code === 'ECONNECTION') {
+            customMessage = "SMTP Connection failed (Check HOST/PORT)";
+        } else if (error.response && error.response.includes('535')) {
+            customMessage = "SMTP 535 Error (Authentication failed)";
+        } else if (error.code === 'ETIMEDOUT') {
+            customMessage = "SMTP Timeout (Server not reachable)";
+        } else {
+            customMessage = "Email sending failed: " + error.message;
+        }
+
+        const errObj = new Error(customMessage);
+        errObj.original = error;
+
+        throw errObj;
     }
 };
 
