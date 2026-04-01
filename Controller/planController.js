@@ -472,7 +472,7 @@ class UpgradePlan {
 
     // Helper function to construct payment data
     static constructPaymentData(transactionDetail, paymentMode, A02id, corpId, userId, description, paymentMethod) {
-        const tranInfo = (JSON.parse(transactionDetail?.RPAYF02)).payment.entity;
+        const tranInfo = transactionDetail ? (JSON.parse(transactionDetail?.RPAYF02)).payment.entity: null;
         let transactionId = ''
         const now = new Date();
         if (paymentMode == 'OFFLINE') {
