@@ -301,11 +301,13 @@ class handleCompany {
                         })
                         if (branch?.BRCCOMP) {
                             let cmplist = (branch.BRCCOMP).split(',');
-                            for (const cl of cmplist) {
-                                let existingCmp = (branch.BRCCOMP).split(',');
-                                if (existingCmp.includes(cl))
-                                    continue;
-                            }
+                            let existingCmp = (branch.BRCCOMP).split(',');
+                            existingCmp = existingCmp.filter(item => item !== CmpNo.toString());
+                            let UpdatedCmpList = await brc.update({
+                                BRCCOMP: existingCmp.joim(',')
+                            },{
+                                BRCODE: branch.BRCODE
+                            })
                         }
                         let isComapny = false;
                         let updtToDel;

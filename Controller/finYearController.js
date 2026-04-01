@@ -231,8 +231,8 @@ const backupZipToDrive = async (req, res) => {
         }
 
         /* ===============================
-   6️⃣ EXPORT TABLES TO SQL FILES
-=============================== */
+        6️⃣ EXPORT TABLES TO SQL FILES
+        =============================== */
 
         for (const row of tableData) {
 
@@ -286,7 +286,7 @@ const backupZipToDrive = async (req, res) => {
         }
 
         const zipFileName = path.basename(zipFilePath);
-        if (action == 'G') {
+        if (action === "G") {
             /* ===============================
                1️⃣1️⃣ DELETE OLD FILE FROM DRIVE
             =============================== */
@@ -347,10 +347,6 @@ const backupZipToDrive = async (req, res) => {
            1️⃣3️⃣ CLEANUP LOCAL FILES
         =============================== */
 
-            /* ===============================
-       1️⃣3️⃣ CLEANUP LOCAL FILES
-    =============================== */
-
             if (fs.existsSync(zipFilePath)) {
                 fs.unlinkSync(zipFilePath);
             }
@@ -358,6 +354,47 @@ const backupZipToDrive = async (req, res) => {
             if (fs.existsSync(backupFolder)) {
                 fs.rmSync(backupFolder, { recursive: true, force: true });
             }
+        }
+        else if (action === "D") {
+
+            const fileName = path.basename(zipFilePath);
+
+            // ✅ IMPORTANT: expose filename to frontend
+            res.setHeader(
+                "Content-Disposition",
+                `attachment; filename="${fileName}"`
+            );
+
+            res.setHeader(
+                "Access-Control-Expose-Headers",
+                "Content-Disposition"
+            );
+
+            return res.download(zipFilePath, fileName, async (err) => {
+
+                if (err) {
+                    console.error("Download error:", err);
+                }
+
+                /* ===============================
+                   CLEANUP AFTER DOWNLOAD
+                =============================== */
+
+                try {
+                    if (fs.existsSync(zipFilePath)) {
+                        fs.unlinkSync(zipFilePath);
+                    }
+
+                    if (fs.existsSync(backupFolder)) {
+                        fs.rmSync(backupFolder, { recursive: true, force: true });
+                    }
+
+                    console.log("🧹 Cleanup done after download");
+
+                } catch (cleanupErr) {
+                    console.error("Cleanup error:", cleanupErr);
+                }
+            });
         }
 
         /* ===============================
@@ -800,9 +837,7 @@ async function importBackupFromZip(req, res) {
     }
 }
 
-/**
- * Filters INSERT statements based on table rules
- */
+/*** Filters INSERT statements based on table rules*/
 function filterInsertStatements(sqlScript, tableName, dateTables, uniqueTables, startDate, endDate) {
     const insertStatements = sqlScript.split(/;\s*INSERT INTO/i)
         .map((stmt, i) => i === 0 ? stmt : 'INSERT INTO ' + stmt)

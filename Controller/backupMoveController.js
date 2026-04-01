@@ -168,6 +168,7 @@ async function getCompanyBranches(corporateID, companyID) {
 }
 
 /* ================= MAIN API ================= */
+
 const backupToDrive = async (req, res) => {
 
     console.log("🚀 API HIT");
@@ -180,13 +181,13 @@ const backupToDrive = async (req, res) => {
     try {
 
         /* ========= PAYLOAD ========= */
-        console.log("🔐 Decrypting payload...");
         const p1 = JSON.parse(
             decodeURIComponent(encryptor.decrypt(req.body.pa))
         );
 
-        const { companyID } = p1;
-        console.log("📥 Payload:", p1);
+        const { companyID, action } = p1;
+
+        if (!action) throw new Error("Action is required (G or D)");
 
         /* ========= TOKEN ========= */
         const token = req.headers.authorization?.split(" ")[1];
@@ -195,69 +196,38 @@ const backupToDrive = async (req, res) => {
         const decoded = await validateToken(token);
         const corporateID = decoded.corpId;
 
-        console.log("👤 CorporateID:", corporateID);
-
-        /* ========= FETCH GOOGLE TOKEN FROM DB ========= */
-        console.log("🔍 Fetching Google token from DB...");
-
-        const corpData = await PLRDBA01.findOne({
-            where: { A01F03: corporateID }
-        });
-
-        if (!corpData || !corpData.A01F18?.trim()) {
-            throw new Error("Google Drive token not found for this corporate");
-        }
-
-        const googledrive_token = corpData.A01F18.trim();
-
-        console.log("✅ Token fetched (length):", googledrive_token.length);
-
         /* ========= DB ========= */
         const databaseName = `A${corporateID.slice(-5)}CMP${companyID.toString().padStart(4, "0")}`;
         const fileName = `${databaseName}.bak`;
 
-        console.log("🗄 Database:", databaseName);
-
         const ftpFolderPath = `/html/eplus/`;
         const remoteBackupPath = `/var/www${ftpFolderPath}${fileName}`;
 
-        /* ========= GOOGLE AUTH ========= */
-        console.log("🔑 Setting Google token...");
-        oauth2Client.setCredentials({
-            refresh_token: googledrive_token
-        });
-
         /* ========= FTP ========= */
-        console.log("🌐 Connecting FTP...");
         await ftpClient.access({
             host: process.env.FTP_HOST,
             user: process.env.FTP_USER,
             password: process.env.FTP_PASS,
             secure: false
         });
-        console.log("✅ FTP Connected");
 
         /* ========= BACKUP ========= */
-        console.log("📦 Creating SQL Backup...");
         await sequelizeMASTER.query(`
             BACKUP DATABASE [${databaseName}]
             TO DISK = '${remoteBackupPath}'
             WITH FORMAT, INIT, COMPRESSION, COPY_ONLY
         `);
-        console.log("✅ Backup Created");
 
         /* ========= DOWNLOAD ========= */
+        // const localDir = path.join("/tmp", "downloads", fileName);
         const localDir = path.join("..", "..", "..", '/tmp', "downloads", fileName);
+
         await fs.promises.mkdir(localDir, { recursive: true });
 
         const bakPath = path.join(localDir, fileName);
-
-        console.log("⬇ Downloading BAK to:", bakPath);
         await ftpClient.downloadTo(bakPath, `${ftpFolderPath}${fileName}`);
-        console.log("✅ BAK Downloaded");
 
         /* ========= JSON ========= */
-        console.log("🧾 Creating JSON...");
         const branches = await getCompanyBranches(corporateID, companyID);
         const states = await getStates();
 
@@ -276,14 +246,8 @@ const backupToDrive = async (req, res) => {
 
         await fs.promises.writeFile(
             jsonPath,
-            JSON.stringify(
-                { corporateID, companyID, branches: enrichedBranches, states },
-                null,
-                2
-            )
+            JSON.stringify({ corporateID, companyID, branches: enrichedBranches, states }, null, 2)
         );
-
-        console.log("✅ JSON Created:", jsonPath);
 
         /* ========= ZIP ========= */
         const zipPath = path.join(localDir, `${databaseName}.zip`);
@@ -297,90 +261,141 @@ const backupToDrive = async (req, res) => {
             throw new Error("ZIP NOT CREATED");
         }
 
-        /* ========= DRIVE ========= */
-        console.log("☁️ Preparing Drive upload...");
+        /* ========= FTP DELETE FUNCTION ========= */
+        const deleteFromFTP = async () => {
+            try {
+                const list = await ftpClient.list(ftpFolderPath);
+                const exists = list.some(f => f.name === fileName);
 
-        const root = await getOrCreateFolder("eplus");
-        const corpFolderId = await getOrCreateFolder(corporateID, root);
-        const compFolderId = await getOrCreateFolder(companyID.toString(), corpFolderId);
-
-        /* ========= DELETE OLD ZIP ========= */
-        console.log("🗑 Checking existing ZIP on Drive...");
-
-        const existingFiles = await drive.files.list({
-            q: `name='${databaseName}.zip' and '${compFolderId}' in parents and trashed=false`,
-            fields: "files(id, name)"
-        });
-
-        for (const file of existingFiles.data.files) {
-            await drive.files.delete({ fileId: file.id });
-            console.log(`🗑 Deleted old ZIP: ${file.id}`);
-        }
-
-        /* ========= UPLOAD ========= */
-        console.log("🚀 Uploading ZIP...");
-        const uploaded = await drive.files.create({
-            requestBody: {
-                name: `${databaseName}.zip`,
-                parents: [compFolderId]
-            },
-            media: {
-                mimeType: "application/zip",
-                body: fs.createReadStream(zipPath)
-            }
-        });
-
-        console.log("✅ Uploaded File ID:", uploaded.data.id);
-
-        /* ========= CLEANUP ========= */
-        console.log("🧹 Cleaning up...");
-
-        const deleteFromFTP = async (retries = 3) => {
-            for (let i = 1; i <= retries; i++) {
-                try {
-                    console.log(`🗑 Attempt ${i} to delete BAK from FTP...`);
-
-                    await new Promise(r => setTimeout(r, 2000));
-
-                    const list = await ftpClient.list(ftpFolderPath);
-                    const exists = list.some(f => f.name === fileName);
-
-                    if (!exists) {
-                        console.log("⚠ File already removed from FTP");
-                        return;
-                    }
-
+                if (exists) {
                     await ftpClient.remove(`${ftpFolderPath}${fileName}`);
-                    console.log("✅ FTP BAK deleted successfully");
-                    return;
-
-                } catch (err) {
-                    console.error(`❌ Delete attempt ${i} failed:`, err.message);
-
-                    if (i === retries) {
-                        console.error("🚨 FINAL: Unable to delete BAK from FTP");
-                    }
+                    console.log("✅ FTP file deleted");
                 }
+            } catch (err) {
+                console.log("⚠ FTP cleanup failed:", err.message);
             }
         };
 
-        await deleteFromFTP();
+        /* ========= GOOGLE FLOW ========= */
+        if (action === "G") {
 
-        [bakPath, jsonPath, zipPath].forEach(f => {
-            if (fs.existsSync(f)) fs.unlinkSync(f);
-        });
+            const corpData = await PLRDBA01.findOne({
+                where: { A01F03: corporateID }
+            });
 
-        console.log("✅ Cleanup done");
+            if (!corpData || !corpData.A01F18?.trim()) {
+                throw new Error("Google Drive token not found");
+            }
 
-        response.status = "SUCCESS";
-        response.message = "Backup ZIP uploaded successfully";
+            const refresh_token = corpData.A01F18.trim();
 
-        encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-        return res.status(200).json({ encryptedResponse });
+            oauth2Client.setCredentials({ refresh_token });
+
+            const root = await getOrCreateFolder("eplus");
+            const corpFolder = await getOrCreateFolder(corporateID, root);
+            const compFolder = await getOrCreateFolder(companyID.toString(), corpFolder);
+
+            const existing = await drive.files.list({
+                q: `name='${databaseName}.zip' and '${compFolder}' in parents and trashed=false`,
+                fields: "files(id)"
+            });
+
+            for (const f of existing.data.files) {
+                await drive.files.delete({ fileId: f.id });
+            }
+
+            await drive.files.create({
+                requestBody: {
+                    name: `${databaseName}.zip`,
+                    parents: [compFolder]
+                },
+                media: {
+                    mimeType: "application/zip",
+                    body: fs.createReadStream(zipPath)
+                }
+            });
+
+            await deleteFromFTP();
+            ftpClient.close();
+
+            [bakPath, jsonPath, zipPath].forEach(f => {
+                if (fs.existsSync(f)) fs.unlinkSync(f);
+            });
+
+            response.status = "SUCCESS";
+            response.message = "Backup uploaded to Drive";
+
+            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(200).json({ encryptedResponse });
+        }
+
+        /* ========= DOWNLOAD FLOW ========= */
+        // else if (action === "D") {
+
+        //     res.setHeader(
+        //         "Content-Disposition",
+        //         `attachment; filename="${databaseName}.zip"`
+        //     );
+
+        //     res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
+
+        //     return res.download(zipPath);
+
+        //     return res.download(zipPath, `${databaseName}.zip`, async () => {
+
+        //         await deleteFromFTP();
+
+        //         [bakPath, jsonPath, zipPath].forEach(f => {
+        //             if (fs.existsSync(f)) fs.unlinkSync(f);
+        //         });
+
+        //         console.log("🧹 Cleanup done after download");
+        //     });
+        // }
+        else if (action === "D") {
+
+            res.setHeader(
+                "Content-Disposition",
+                `attachment; filename="${databaseName}.zip"`
+            );
+
+            res.setHeader(
+                "Access-Control-Expose-Headers",
+                "Content-Disposition"
+            );
+
+            return res.download(zipPath, `${databaseName}.zip`, async (err) => {
+
+                if (err) {
+                    console.error("Download error:", err);
+                    ftpClient.close(); // still close
+                    return;
+                }
+
+                try {
+                    await deleteFromFTP(); // ✅ delete FTP file
+
+                    [bakPath, jsonPath, zipPath].forEach(f => {
+                        if (fs.existsSync(f)) fs.unlinkSync(f);
+                    });
+
+                    console.log("🧹 Cleanup done after download");
+
+                } catch (cleanupErr) {
+                    console.error("Cleanup error:", cleanupErr);
+                } finally {
+                    ftpClient.close(); // ✅ close AFTER everything
+                }
+            });
+        }
+
+        else {
+            throw new Error("Invalid action type");
+        }
 
     } catch (err) {
 
-        console.error("❌ FULL ERROR:", err);
+        console.error("❌ ERROR:", err.message);
 
         response.status = "FAIL";
         response.message = err.message;
@@ -388,11 +403,12 @@ const backupToDrive = async (req, res) => {
         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
         return res.status(500).json({ encryptedResponse });
 
-    } finally {
-        console.log("🔚 Closing FTP");
-        ftpClient.close();
     }
+    // finally {
+    //     ftpClient.close();
+    // }
 };
+
 const restoreBak = async (req, res) => {
 
     let response = { status: "SUCCESS", message: "", data: null };
