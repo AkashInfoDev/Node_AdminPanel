@@ -310,7 +310,7 @@ class BranchController {
 
                 const branchRow = await tblbrc.findOne({ BRCODE: BRCODE });
 
-                if (branchRow.BRCCOMP != null) {
+                if (branchRow.BRCCOMP.split(',').length != 0 && branchRow.BRCCOMP != '') {
                     response.message = 'Branch is already assigned to Company'
                     response.status = 'FAIL'
                     encryptedResponse = encryptor.encrypt(JSON.stringify(response));
