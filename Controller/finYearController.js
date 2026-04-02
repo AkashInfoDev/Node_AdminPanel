@@ -681,8 +681,11 @@ async function importBackupFromZip(req, res) {
         return res.status(400).json({ error: 'Uploaded file is not a .zip file' });
     }
 
-    const zipPath = path.join(__dirname, "..", "downloads", file.originalname);
-    const extractPath = path.join(__dirname, "..", "downloads", file.originalname.replace('.zip', ''));
+
+    const tempDir = "/tmp";
+
+    const zipPath = path.join(tempDir, file.originalname);
+    const extractPath = path.join(tempDir, file.originalname.replace('.zip', ''));
 
     // Postfix table lists
     const datePostfixTables = ['T07', 'T02', 'T05', 'T11', 'T50', 'T82', 'T17', 'T06', 'T01', 'T41'];
@@ -855,7 +858,12 @@ async function importBackupFromZip(req, res) {
 
     } catch (error) {
         console.error('Error processing ZIP file:', error);
-        return res.status(500).json({ error: `Error processing the ZIP file: ${error.message}` });
+        const response = { status: 'FAIL', message: "Error processing the ZIP file" };
+        res.message = error;
+        const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+        res.status(500).json({ encryptedResponse });
+        console.error('Error processing the ZIP file:', error);
+        throw error;
     }
 }
 
