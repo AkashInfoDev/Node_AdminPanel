@@ -249,7 +249,7 @@ class PricingPlanController {
                         where: {
                             Amc_type: 7,
                             Amc_custId: decoded.corpId,
-                            AMC_CorporateId: Gst
+                            AMC_CorporateId: usrGST
                         }
                     });
                     let NewAMC;
@@ -261,7 +261,7 @@ class PricingPlanController {
                             auser: auser || null,
                             apitype: cuser && cpass ? auser && apass ? 'A' : 'C' : 'A'  // If apitype is truthy, assign 'A', otherwise 'C'
                         }, {
-                            Amc_Id: existingAmc.Amc_Id
+                            where: { Amc_Id: existingAmc.Amc_Id }
                         });
                     } else {
                         // Creating the new AMC transaction without Amc_Id
