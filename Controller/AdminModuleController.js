@@ -15,10 +15,12 @@ function validateComboModule(ModuleType, ModuleCode) {
     if (!ModuleCode)
         return 'Combo module requires at least 2 module IDs';
 
-    const ids = ModuleCode
-        .split(',')
-        .map(v => v.trim())
-        .filter(v => v.length);
+    // const ids = ModuleCode
+    //     .split(',')
+    //     .map(v => v.trim())
+    //     .filter(v => v.length);
+
+    const ids = extractSetupIds(ModuleCode);
 
     if (ids.length < 2)
         return 'Combo module must contain minimum 2 module IDs';
@@ -50,24 +52,8 @@ function extractSetupIds(value) {
 }
 async function checkDuplicate(ModuleType, ModuleCode) {
 
-    // const rows = await ModuleRepo.findAll();
+    const rows = await ModuleRepo.findAll();
 
-    async function checkDuplicate(ModuleType, ModuleCode) {
-
-        const existing = await ModuleRepo.findOne({
-            RELF03: ModuleType,
-            RELF01: ModuleCode.trim()
-        });
-
-        return !!existing;
-    }
-    /* ---------- MENU + SETUP ---------- */
-    // if (ModuleType === 'M' || ModuleType === 'S') {
-    //     return rows.some(r =>
-    //         r.RELF03 === ModuleType &&
-    //         r.RELF01.trim() === ModuleCode.trim()
-    //     );
-    // }
     if (ModuleType === 'M') {
         return rows.some(r =>
             r.RELF03 === ModuleType &&
@@ -75,15 +61,12 @@ async function checkDuplicate(ModuleType, ModuleCode) {
         );
     }
 
-
-    /* ---------- COMBO ---------- */
     if (ModuleType === 'C') {
 
-        const normalize = str =>
-            str.split(',')
-                .map(v => v.trim())
-                .sort()
-                .join(',');
+        const normalize = str => {
+            const ids = extractSetupIds(str);
+            return ids.sort().join(',');
+        };
 
         const newCombo = normalize(ModuleCode);
 
@@ -188,6 +171,7 @@ class AdminModuleController {
                     });
 
                     // 3️⃣ Final response
+                    response.status = 'SUCCESS';
                     response.message = 'Module details fetched successfully';
                     response.data = {
                         menuDetails: {
@@ -206,80 +190,6 @@ class AdminModuleController {
 
                     return AdminModuleController.send(res, response);
                 }
-                //                 case 'G': {
-
-                //                     const records = await sequelizeRDB.query(`
-                //     SELECT 
-                //         R.RELF00,
-                //         R.RELF01,
-                //         R.RELF02,
-                //         R.RELF03,
-                //         S.F02F03E AS setupName
-                //     FROM RDB.dbo.PLRDBPLREL R
-                //     LEFT JOIN IDBAPI.dbo.PLSYSF02 S
-                //         ON R.RELF03 = 'S'
-                //         AND R.RELF01 = S.F02F01
-                //     ORDER BY R.RELF03 ASC, R.RELF00 ASC
-                // `);
-
-                //                     const rows = records[0];
-
-                //                     const menuDetails = [];
-                //                     const comboMenuDetails = [];
-                //                     const setupDetails = [];
-
-                //                     rows.forEach(row => {
-
-                //                         const mapped = {
-                //                             moduleID: row.RELF00,
-                //                             ModuleCode: row.RELF01,
-                //                             price: row.RELF02,
-                //                             ModuleType: row.RELF03,
-                //                             setupName: row.RELF03 === 'S' ? row.setupName : null
-                //                         };
-
-                //                         switch (row.RELF03) {
-                //                             case 'M':
-                //                                 menuDetails.push(mapped);
-                //                                 break;
-
-                //                             case 'C':
-                //                                 comboMenuDetails.push(mapped);
-                //                                 break;
-
-                //                             case 'S':
-                //                                 setupDetails.push(mapped);
-                //                                 break;
-                //                         }
-                //                     });
-
-                //                     response.message = 'Module details fetched successfully';
-                //                     response.data = {
-                //                         menuDetails: { ModuleType: 'M', data: menuDetails },
-                //                         comboMenuDetails: { ModuleType: 'C', data: comboMenuDetails },
-                //                         setupDetails: { ModuleType: 'S', data: setupDetails }
-                //                     };
-
-                //                     return AdminModuleController.send(res, response);
-                //                 }
-
-
-                // case 'S': {
-
-                //     const setups = await sequelizeRDB.query(`
-                //         SELECT 
-                //         F02F03E + ' - ' + F02F01 AS label
-                //         FROM IDBAPI.dbo.PLSYSF02
-                //     ORDER BY F02F01
-                //  `);
-
-                //     response.message = 'Setup list fetched successfully';
-                //     response.data = setups[0];
-
-                //     return AdminModuleController.send(res, response);
-                // }
-
-
 
                 case 'A': {
 
@@ -307,28 +217,6 @@ class AdminModuleController {
                         return AdminModuleController.send(res, response, 400);
                     }
 
-                    /* =========================
-                       Setup Module Handling
-                       ========================= */
-                    //             if (ModuleType === 'S') {
-
-                    //                 // extract only code for master table update
-                    //                 let codeOnly = ModuleCode;
-
-                    //                 if (ModuleCode.includes('-'))
-                    //                     codeOnly = ModuleCode.split('-').pop().trim();
-                    //                 else
-                    //                     codeOnly = ModuleCode.trim();
-
-                    //                 await sequelizeRDB.query(`
-                    //     UPDATE IDBAPI.dbo.PLSYSF02
-                    //     SET F02PYBL = 'Y'
-                    //     WHERE F02F01 = :code
-                    //     AND F02PYBL <> 'Y'
-                    // `, {
-                    //                     replacements: { code: codeOnly }
-                    //                 });
-                    //             }
 
                     if (ModuleType === 'S') {
 
@@ -373,53 +261,7 @@ class AdminModuleController {
 
 
 
-                /* =========================
-                 * E → EDIT
-                 * ========================= */
-
-                // case 'E': {
-
-                //     if (!moduleID) {
-                //         response.status = 'FAIL';
-                //         response.message = 'moduleID is required';
-                //         return AdminModuleController.send(res, response, 400);
-                //     }
-
-                //     // 🔍 First fetch existing record
-                //     const existing = await ModuleRepo.findOne({ RELF00: moduleID });
-
-                //     if (!existing) {
-                //         response.status = 'FAIL';
-                //         response.message = 'Module not found';
-                //         return AdminModuleController.send(res, response, 404);
-                //     }
-
-                //     let relf04Value = existing.RELF04;
-
-                //     if (existing.RELF03 === 'S') {
-                //         if (pa.menuId) {
-                //             relf04Value = pa.menuId
-                //                 .split(',')
-                //                 .map(id => id.trim())
-                //                 .filter(id => id.length)
-                //                 .sort()
-                //                 .join(',');
-                //         } else {
-                //             relf04Value = null;
-                //         }
-                //     }
-
-                //     const affected = await ModuleRepo.update(
-                //         {
-                //             RELF02: price,
-                //             RELF04: relf04Value
-                //         },
-                //         { RELF00: moduleID }
-                //     );
-
-                //     response.message = 'Module updated successfully';
-                //     return AdminModuleController.send(res, response);
-                // }
+                
                 case 'E': {
 
                     if (!moduleID) {
@@ -502,28 +344,7 @@ class AdminModuleController {
                     response.message = 'Module updated successfully';
                     return AdminModuleController.send(res, response);
                 }
-                /* =========================
-                 * D → DELETE
-                 * ========================= */
-                // case 'D': {
-                //     if (!moduleID) {
-                //         response.status = 'FAIL';
-                //         response.message = 'moduleID is required';
-                //         return AdminModuleController.send(res, response, 400);
-                //     }
-
-                //     const deleted = await ModuleRepo.destroy({ RELF00: moduleID });
-
-                //     if (!deleted) {
-                //         response.status = 'FAIL';
-                //         response.message = 'Module not found';
-                //         return AdminModuleController.send(res, response, 404);
-                //     }
-                //     response.status = 'SUCCESS';
-                //     response.message = 'Module deleted successfully';
-                //     return AdminModuleController.send(res, response);
-                // }
-
+                
                 case 'D': {
 
                     if (!moduleID) {
