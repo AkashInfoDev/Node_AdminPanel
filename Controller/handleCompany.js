@@ -573,7 +573,7 @@ class handleCompany {
                             return res.status(400).json({ encryptedResponse: encryptedResponse });
                         }
                     }
-                    let saveCmp = await cMaster.SaveCompany(decoded.corpId, '', '', false, '');
+                    let saveCmp = await cMaster.SaveCompany(decoded.corpId, '', '', false, '',true);
                     cSData = JSON.parse(cSData);
                     if (!saveCmp.result) {
                         // let BRCOntroller = new BranchController(false, 'A', '', `${saveCmp.CmpNum}-HOME-BRC`, cSData["M00"]._16, '', decoded.corpId, 'Y', saveCmp.CmpNum)

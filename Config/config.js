@@ -42,7 +42,7 @@ class Database {
                 dialectOptions: {
                     options: {
                         encrypt: false,
-                        requestTimeOut: 30000,
+                        requestTimeOut: 300000,
                         enableArithAbort: true,
                         // instanceName: 'sqlexpress',
                         trustServerCertificate: true
@@ -104,7 +104,7 @@ class Database {
                 dialectOptions: {
                     options: {
                         encrypt: false,
-                        requestTimeOut: 30000,
+                        requestTimeOut: 300000,
                         enableArithAbort: true,
                         // instanceName: 'sqlexpress',
                         trustServerCertificate: true

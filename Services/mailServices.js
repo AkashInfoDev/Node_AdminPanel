@@ -1,14 +1,41 @@
 const nodemailer = require('nodemailer');
 
-// const transporter = nodemailer.createTransport({
-//     host: process.env.SMTP_HOST,
-//     port: 587,
-//     secure: false,
-//     auth: {
-//         user: process.env.SMTP_USER,
-//         pass: process.env.SMTP_PASS
-//     }
-// });
+const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: 587,
+    secure: false,
+    auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+    }
+});
+
+
+
+async function sendMail({ smtpConfig, to, subject, html, attachments = [] }) {
+
+    if (!smtpConfig || !smtpConfig._EMFROM || !smtpConfig._EMPASSWD) {
+        throw new Error("Invalid SMTP Config");
+    }
+
+    const transporter = createTransporter1(smtpConfig);
+
+    const mailOptions = {
+        from: `"ERP System" <${smtpConfig._EMFROM}>`,
+        to,
+        subject,
+        html,
+        attachments
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+
+    console.log("✅ Email sent:", info.response);
+
+    return info;
+}
+
+module.exports = { sendMail };
 function createTransporter(smtpConfig = {}) {
 
     return nodemailer.createTransport({
@@ -188,10 +215,18 @@ async function sendLogOutMail({ to, corpId, otp, subject }) {
 }
 
 const sendEmailWithAttachment = async (to, attachmentPath, filename, smtpConfig = {}) => {
-    const transporter = createTransporter(smtpConfig);
+    const transporter = nodemailer.createTransport({
+    host: smtpConfig._EMSERVER,
+    port: smtpConfig._PORTNO,
+    secure: smtpConfig._PORTNO == 465,
+    auth: {
+        user: smtpConfig._EMFROM,
+        pass: smtpConfig._EMPASSWD
+    }
+});
     const mailOptions = {
         // from: '"EPLUS Support" <demo@tcodes.in>',
-        from: `"EPLUS Support" <${smtpConfig.user || process.env.SMTP_USER}>`,
+        from: `"EPLUS Support" <${smtpConfig._EMFROM}>`,
         to: to,
         subject: 'Backup - EPLUS Cloud ERP',
 

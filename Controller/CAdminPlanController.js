@@ -601,60 +601,60 @@ class CAdminPlanController {
                 });
             }
 
-            /* 2️⃣ MODULE ACTIVATION (NO DUPLICATES) */
-            if (moduleId) {
+            /* 2️⃣ NORMALIZE INPUT (IMPORTANT) */
 
-                // Split incoming modules
-                let newModules = String(moduleId).includes(',')
-                    ? String(moduleId).split(',')
-                    : [moduleId];
+            const modules = String(moduleId || '')
+                .split(',')
+                .map(m => m.trim())
+                .filter(Boolean);
 
-                // Existing modules
+            const uniqueModules = [...new Set(modules)];
+
+            const setups = String(setUpId || '')
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
+
+            const uniqueSetups = [...new Set(setups)];
+
+            /* 3️⃣ MODULE ACTIVATION */
+
+            if (uniqueModules.length > 0) {
+
                 let existingModules = superUser.ADMIMOD
-                    ? superUser.ADMIMOD.split(',')
+                    ? superUser.ADMIMOD.split(',').map(m => m.trim())
                     : [];
 
-                // Normalize existing
-                existingModules = existingModules.map(m => m.trim());
-
-                // Add without duplicates
-                for (let mod of newModules) {
-
-                    mod = String(mod).trim();
-
-                    if (!existingModules.includes(mod)) {
-                        existingModules.push(mod);
-                    }
-                }
+                const updatedModules = [...new Set([...existingModules, ...uniqueModules])];
 
                 await admi.update(
-                    { ADMIMOD: existingModules.join(',') },
+                    { ADMIMOD: updatedModules.join(',') },
                     { ADMIF00: superUser.ADMIF00 }
                 );
             }
 
-            /* 3️⃣ SETUP ACTIVATION (NO DUPLICATES) */
-            if (setUpId) {
+            /* 4️⃣ SETUP ACTIVATION */
+
+            if (uniqueSetups.length > 0) {
 
                 const m81Row = await m81.findOne({
                     M81UNQ: superUser.ADMIF00.toString()
                 });
 
                 let existingSetups = m81Row?.M81SID
-                    ? m81Row.M81SID.split(',')
+                    ? m81Row.M81SID.split(',').map(s => s.trim())
                     : [];
 
-                if (!existingSetups.includes(setUpId)) {
-                    existingSetups.push(setUpId);
-                }
+                const updatedSetups = [...new Set([...existingSetups, ...uniqueSetups])];
 
                 await m81.update(
-                    { M81SID: existingSetups.join(',') },
+                    { M81SID: updatedSetups.join(',') },
                     { M81UNQ: superUser.ADMIF00.toString() }
                 );
             }
 
-            /* 4️⃣ PAYMENT ENTRY */
+            /* 5️⃣ PAYMENT ENTRY */
+
             await PLRDBPYMT.create({
                 PYMT01: corporateId,
                 PYMT02: 0,
@@ -663,7 +663,7 @@ class CAdminPlanController {
                 PYMT05: parseFloat(amount || 0),
                 PYMT06: 'SUCCESS',
                 PYMT07: paymentMethod || 'CASH',
-                PYMT09: description || 'Module Activation',
+                PYMT09: description || `Modules: ${uniqueModules.join(',') || 'None'} | Setups: ${uniqueSetups.join(',') || 'None'}`,
                 PYMT10: corp.A01F13 || null
             }, { transaction });
 
@@ -874,6 +874,167 @@ class CAdminPlanController {
     /* ===================================================== */
     /* MODULE DEACTIVATION                                  */
     /* ===================================================== */
+    // static async moduleDeactivation(pa, response, res) {
+
+    //     const {
+    //         corporateId,
+    //         moduleId,
+    //         setUpId,
+    //         amount,
+    //         description,
+    //         paymentMethod,
+    //         referenceNo
+    //     } = pa;
+
+    //     const transaction = await sequelizeRDB.transaction();
+
+    //     try {
+
+    //         const corp = await PLRDBA01.findOne({
+    //             where: { A01F03: corporateId },
+    //             transaction
+    //         });
+
+    //         if (!corp) {
+    //             response.status = 'FAIL';
+    //             response.message = 'Corporate not found';
+    //             await transaction.rollback();
+
+    //             return res.status(404).json({
+    //                 encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+    //             });
+    //         }
+
+    //         const corpUnq = String(corp.A01F01).trim();
+
+    //         const parts = corporateId.split('-');
+
+    //         let sdbName =
+    //             parts.length === 3
+    //                 ? `${parts[0]}${parts[1]}${parts[2]}SDB`
+    //                 : `${parts[0]}${parts[1]}SDB`;
+
+    //         if (sdbName === 'PLP00001SDB')
+    //             sdbName = 'A00001SDB';
+
+    //         const admi = new ADMIController(sdbName);
+    //         const m81 = new M81Controller(sdbName);
+
+    //         /* ============================ */
+    //         /* 1️⃣ GET SUPER USER           */
+    //         /* ============================ */
+
+    //         const superUser = await admi.findOne({
+    //             ADMIF06: 2,
+    //             ADMICORP: corpUnq
+    //         });
+
+    //         if (!superUser) {
+    //             response.status = 'FAIL';
+    //             response.message = 'Super user not found';
+    //             await transaction.rollback();
+
+    //             return res.status(400).json({
+    //                 encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+    //             });
+    //         }
+
+    //         /* ============================ */
+    //         /* 2️⃣ MODULE DEACTIVATION      */
+    //         /* ============================ */
+
+    //         if (moduleId) {
+
+    //             // Convert incoming modules to array
+    //             let removeModules = String(moduleId).includes(',')
+    //                 ? String(moduleId).split(',')
+    //                 : [moduleId];
+
+    //             removeModules = removeModules.map(m => m.trim());
+
+    //             // Existing modules
+    //             let existingModules = superUser.ADMIMOD
+    //                 ? superUser.ADMIMOD.split(',')
+    //                 : [];
+
+    //             existingModules = existingModules.map(m => m.trim());
+
+    //             // Remove modules
+    //             const updatedModules = existingModules.filter(
+    //                 mod => !removeModules.includes(mod)
+    //             );
+
+    //             await admi.update(
+    //                 { ADMIMOD: updatedModules.join(',') },
+    //                 { ADMIF00: superUser.ADMIF00 }
+    //             );
+    //         }
+
+    //         /* ============================ */
+    //         /* 3️⃣ SETUP DEACTIVATION       */
+    //         /* ============================ */
+
+    //         if (setUpId) {
+
+    //             const m81Row = await m81.findOne({
+    //                 M81UNQ: superUser.ADMIF00.toString()
+    //             });
+
+    //             if (m81Row) {
+
+    //                 let existingSetups = m81Row.M81SID
+    //                     ? m81Row.M81SID.split(',')
+    //                     : [];
+
+    //                 existingSetups = existingSetups
+    //                     .filter(id => id !== setUpId);
+
+    //                 await m81.update(
+    //                     { M81SID: existingSetups.join(',') },
+    //                     { M81UNQ: superUser.ADMIF00.toString() }
+    //                 );
+    //             }
+    //         }
+
+    //         /* ============================ */
+    //         /* 4️⃣ PAYMENT / AUDIT ENTRY    */
+    //         /* ============================ */
+
+    //         await PLRDBPYMT.create({
+    //             PYMT01: corporateId,
+    //             PYMT02: 0,
+    //             PYMT03: referenceNo || ('ADMIN_DEMOD_' + Date.now()),
+    //             PYMT04: 'OFFLINE',
+    //             PYMT05: parseFloat(amount || 0),
+    //             PYMT06: 'SUCCESS',
+    //             PYMT07: paymentMethod || 'CASH',
+    //             PYMT09: description || 'Module Deactivation',
+    //             PYMT10: corp.A01F13 || null
+    //         }, { transaction });
+
+    //         await transaction.commit();
+
+    //         response.status = 'SUCCESS';
+    //         response.message = 'Module / Setup deactivated successfully';
+
+    //         return res.status(200).json({
+    //             encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+    //         });
+
+    //     } catch (err) {
+
+    //         await transaction.rollback();
+
+    //         console.error(err);
+
+    //         response.status = 'FAIL';
+    //         response.message = 'Failed to deactivate module';
+
+    //         return res.status(500).json({
+    //             encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+    //         });
+    //     }
+    // }
     static async moduleDeactivation(pa, response, res) {
 
         const {
@@ -940,28 +1101,35 @@ class CAdminPlanController {
             }
 
             /* ============================ */
-            /* 2️⃣ MODULE DEACTIVATION      */
+            /* 2️⃣ NORMALIZE INPUT          */
             /* ============================ */
 
-            if (moduleId) {
+            const removeModules = String(moduleId || '')
+                .split(',')
+                .map(m => m.trim())
+                .filter(Boolean);
 
-                // Convert incoming modules to array
-                let removeModules = String(moduleId).includes(',')
-                    ? String(moduleId).split(',')
-                    : [moduleId];
+            const uniqueRemoveModules = [...new Set(removeModules)];
 
-                removeModules = removeModules.map(m => m.trim());
+            const removeSetups = String(setUpId || '')
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
 
-                // Existing modules
+            const uniqueRemoveSetups = [...new Set(removeSetups)];
+
+            /* ============================ */
+            /* 3️⃣ MODULE DEACTIVATION      */
+            /* ============================ */
+
+            if (uniqueRemoveModules.length > 0) {
+
                 let existingModules = superUser.ADMIMOD
-                    ? superUser.ADMIMOD.split(',')
+                    ? superUser.ADMIMOD.split(',').map(m => m.trim())
                     : [];
 
-                existingModules = existingModules.map(m => m.trim());
-
-                // Remove modules
                 const updatedModules = existingModules.filter(
-                    mod => !removeModules.includes(mod)
+                    mod => !uniqueRemoveModules.includes(mod)
                 );
 
                 await admi.update(
@@ -971,10 +1139,10 @@ class CAdminPlanController {
             }
 
             /* ============================ */
-            /* 3️⃣ SETUP DEACTIVATION       */
+            /* 4️⃣ SETUP DEACTIVATION       */
             /* ============================ */
 
-            if (setUpId) {
+            if (uniqueRemoveSetups.length > 0) {
 
                 const m81Row = await m81.findOne({
                     M81UNQ: superUser.ADMIF00.toString()
@@ -983,21 +1151,22 @@ class CAdminPlanController {
                 if (m81Row) {
 
                     let existingSetups = m81Row.M81SID
-                        ? m81Row.M81SID.split(',')
+                        ? m81Row.M81SID.split(',').map(s => s.trim())
                         : [];
 
-                    existingSetups = existingSetups
-                        .filter(id => id !== setUpId);
+                    const updatedSetups = existingSetups.filter(
+                        s => !uniqueRemoveSetups.includes(s)
+                    );
 
                     await m81.update(
-                        { M81SID: existingSetups.join(',') },
+                        { M81SID: updatedSetups.join(',') },
                         { M81UNQ: superUser.ADMIF00.toString() }
                     );
                 }
             }
 
             /* ============================ */
-            /* 4️⃣ PAYMENT / AUDIT ENTRY    */
+            /* 5️⃣ PAYMENT / AUDIT ENTRY    */
             /* ============================ */
 
             await PLRDBPYMT.create({
@@ -1008,7 +1177,7 @@ class CAdminPlanController {
                 PYMT05: parseFloat(amount || 0),
                 PYMT06: 'SUCCESS',
                 PYMT07: paymentMethod || 'CASH',
-                PYMT09: description || 'Module Deactivation',
+                PYMT09: description || `Removed Modules: ${uniqueRemoveModules.join(',') || 'None'} | Removed Setups: ${uniqueRemoveSetups.join(',') || 'None'}`,
                 PYMT10: corp.A01F13 || null
             }, { transaction });
 

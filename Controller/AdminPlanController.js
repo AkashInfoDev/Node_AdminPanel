@@ -86,7 +86,7 @@ class AdminPlanController {
                         else if (r.A02F13 === 2) generalAddOns.push(r);
                         else if (r.A02F13 === 3) companyAddOns.push(r);
                     });
-
+                    response.status = 'SUCCESS';
                     response.message = 'Plan master details fetched successfully';
                     response.data = {
                         planDetails: {
@@ -137,7 +137,7 @@ class AdminPlanController {
                         A02F13: planCategory,
                         A02F14: planValue || 0
                     });
-
+                    response.status = 'SUCCESS';
                     response.message = 'Record created successfully';
                     response.data = created;
                     return AdminPlanController.send(res, response, 201);
@@ -208,6 +208,7 @@ class AdminPlanController {
                     }
 
                     await planRepo.update({ A02F09: 1 }, { A02F01: planId });
+                    response.status = 'SUCCESS';
                     response.message = 'Record restored successfully';
                     return AdminPlanController.send(res, response);
                 }
@@ -228,7 +229,7 @@ class AdminPlanController {
                         response.message = 'Record not found';
                         return AdminPlanController.send(res, response, 404);
                     }
-
+                    response.status = 'SUCCESS';
                     response.message = 'Record permanently deleted';
                     return AdminPlanController.send(res, response);
                 }
