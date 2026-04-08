@@ -386,11 +386,24 @@ const backupToDrive = async (req, res) => {
 
             // ✅ TRY MAIL (but don't break flow)
             try {
+                // ✅ Normalize SMTP config (Controller layer fix)
+                const normalizedSMTP = {
+                    _EMSERVER: smtp?._EMSERVER || smtp?.host,
+                    _PORTNO: Number(smtp?._PORTNO || smtp?.port),
+                    _EMFROM: smtp?._EMFROM || smtp?.user,
+                    _EMPASSWD: smtp?._EMPASSWD || smtp?.pass
+                };
+
+                // 🔍 Validation (important)
+                if (!normalizedSMTP._EMSERVER || !normalizedSMTP._EMFROM || !normalizedSMTP._EMPASSWD) {
+                    throw new Error("Invalid SMTP configuration");
+                }
+
                 await sendEmailWithAttachment(
                     emailList,
                     zipPath,
                     fileName,
-                    smtp
+                    normalizedSMTP
                 );
             } catch (err) {
                 console.error("📧 Mail Failed:", err.message);
