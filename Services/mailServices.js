@@ -216,17 +216,20 @@ async function sendLogOutMail({ to, corpId, otp, subject }) {
 
 const sendEmailWithAttachment = async (to, attachmentPath, filename, smtpConfig = {}) => {
     const transporter = nodemailer.createTransport({
-    host: smtpConfig._EMSERVER,
-    port: smtpConfig._PORTNO,
-    secure: smtpConfig._PORTNO == 465,
-    auth: {
-        user: smtpConfig._EMFROM,
-        pass: smtpConfig._EMPASSWD
-    }
-});
+        host: smtpConfig.host, // not _EMSERVER
+        port: Number(smtpConfig.port), // ensure it's a number
+        secure: Number(smtpConfig.port) === 465, //secure: smtpConfig.port == 587 ? false : true,//Number(smtpConfig.port) === 465, // SSL for 465
+        auth: {
+            user: smtpConfig.user, // not _EMFROM
+            pass: smtpConfig.pass  // not _EMPASSWD
+        },
+        tls: {
+            rejectUnauthorized: false // optional
+        }
+    });
     const mailOptions = {
         // from: '"EPLUS Support" <demo@tcodes.in>',
-        from: `"EPLUS Support" <${smtpConfig._EMFROM}>`,
+        from: `"EPLUS Support" <${smtpConfig._EMFROM ? smtpConfig._EMFROM : smtpConfig.user}>`,
         to: to,
         subject: 'Backup - EPLUS Cloud ERP',
 
@@ -292,12 +295,11 @@ const sendEmailWithAttachment = async (to, attachmentPath, filename, smtpConfig 
 
     try {
         const info = await transporter.sendMail(mailOptions);
-        console.log("✅ Email sent:", info.response);
+        // console.log("✅ Email sent:", info.response);
 
         return info;
 
     } catch (error) {
-
         console.error("❌ SMTP ERROR:", {
             message: error.message,
             code: error.code,

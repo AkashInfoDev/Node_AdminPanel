@@ -465,6 +465,8 @@ const backupZipToDrive = async (req, res) => {
                 fs.rmSync(backupFolder, { recursive: true, force: true });
             }
 
+            let response = {};
+
             response.status = "SUCCESS";
             response.message = "Backup sent to provided emails";
 
