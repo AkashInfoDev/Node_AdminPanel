@@ -43,7 +43,7 @@ class RDBUserController {
                     encryptedResponse: encryptor.encrypt(JSON.stringify(response))
                 });
             }
-            const decoded = await TokenService.validateAdminToken(token);
+            const decoded = await TokenService.validateToken(token);
 
             const roleId = Number(decoded.roleId);
 
@@ -765,7 +765,7 @@ class RDBUserController {
                 });
             }
 
-            const decoded = await TokenService.validateAdminToken(token);
+            const decoded = await TokenService.validateToken(token);
 
             const roleId = Number(decoded.roleId);
             const loginUserId = decoded.Id;

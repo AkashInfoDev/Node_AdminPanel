@@ -10,189 +10,153 @@ class TokenService {
 
         const encryptor = new Encryptor();
 
-        // If token is not provided, throw an error
-        if (!token) throw new Error('Token not provided');
-
-        let decodedToken;
-        try {
-            // Attempt to verify and decode the token
-            decodedToken = jwt.verify(token, process.env.JWT_SECRET_KEY);
-        } catch (err) {
-            if (isCron) {
-                return false;
-            }
-            // Throw an error if the token is invalid or expired
-            return returnRes = false;
-            // throw new Error('Invalid or expired token');
-        }
-
-        // Decrypt adminId if necessary (only if encrypted in the token)
-        let adminId, password
-        const safeDecrypt = (val) => {
-            if (!val) return null;
-            return encryptor.decrypt(val);
-        };
-
-        if (decodedToken.roleId == 1) {
-            adminId = safeDecrypt(decodedToken.adminId);
-            password = safeDecrypt(decodedToken.password);
-        } else {
-            adminId = safeDecrypt(decodedToken.userId);
-            password = safeDecrypt(decodedToken.password);
-        }
-
-        try {
-            // Find user by adminId and password in the database
-            let sdbdbname;
-            if (decodedToken.roleId == '1') {
-                sdbdbname = 'A00001SDB';
-            } else {
-                let sdbSeq = (decodedToken.corpId).split('-');
-                sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
-            }
-            let admi = new ADMIController(sdbdbname);
-            const existingAdmin = await admi.findAll(
-                {}, [],
-                ['ADMIF01', 'ADMIF05', 'ADMIF06']
-            );
-            let admin;
-            for (let i of existingAdmin) {
-                const decrypted = encryptor.decrypt(i.ADMIF01);
-                const decryptedpass = encryptor.decrypt(i.ADMIF05)
-                if (decrypted == adminId && decryptedpass == password) {
-                    admin = i;
-                }
-            }
-
-            // If no user is found or password doesn't match, throw an unauthorized error
-            if (!admin) {
-                throw new Error('Unauthorized: User not found or invalid credentials');
-            }
-        } catch (err) {
-            console.error(err);
-            throw new Error('Error querying the database: ' + err.message);
-        }
-
-        // Return the decoded token if valid
-        return decodedToken;
-    }
-
-        static async validateAdminToken(token, isCron, returnRes) {
-
-        const encryptor = new Encryptor();
-
         if (!token) throw new Error('Token not provided');
 
         let decodedToken;
 
-        /* =========================
-           🔐 VERIFY TOKEN
-        ========================= */
         try {
             decodedToken = jwt.verify(token, process.env.JWT_SECRET_KEY);
         } catch (err) {
             if (isCron) return false;
-            return false;
+            return returnRes = false;
         }
+
+        const safeDecrypt = (val) => {
+            if (!val) return null;
+            try {
+                return encryptor.decrypt(val);
+            } catch {
+                return val;
+            }
+        };
 
         try {
 
-            /* =========================
-               🏢 RESOLVE RDB
-            ========================= */
-
-            let userDbName;
+            /* =====================================================
+               🧠 CONDITION BASED FLOW
+            ===================================================== */
 
             if (decodedToken.corpId) {
-                const parts = decodedToken.corpId.split('-');
 
-                userDbName = parts.length === 3
-                    ? parts[0] + parts[1] + parts[2] + 'RDB'
-                    : parts[0] + parts[1] + 'RDB';
+                /* =====================================================
+                   🏢 ADMI FLOW (YOUR OLD validateToken)
+                ===================================================== */
+
+                let adminId, password;
+
+                if (decodedToken.roleId == 1) {
+                    adminId = safeDecrypt(decodedToken.adminId);
+                    password = safeDecrypt(decodedToken.password);
+                } else {
+                    adminId = safeDecrypt(decodedToken.userId);
+                    password = safeDecrypt(decodedToken.password);
+                }
+
+                let sdbdbname;
+
+                if (decodedToken.roleId == '1') {
+                    sdbdbname = 'A00001SDB';
+                } else {
+                    let sdbSeq = decodedToken.corpId.split('-');
+                    sdbdbname = sdbSeq.length == 3
+                        ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB'
+                        : sdbSeq[0] + sdbSeq[1] + 'SDB';
+                }
+
+                let admi = new ADMIController(sdbdbname);
+
+                const existingAdmin = await admi.findAll(
+                    {}, [],
+                    ['ADMIF01', 'ADMIF05', 'ADMIF06']
+                );
+
+                let admin;
+
+                for (let i of existingAdmin) {
+
+                    let decrypted = safeDecrypt(i.ADMIF01);
+                    let decryptedpass = safeDecrypt(i.ADMIF05);
+
+                    if (String(decrypted) === String(adminId) &&
+                        String(decryptedpass) === String(password)) {
+                        admin = i;
+                        break;
+                    }
+                }
+
+                if (!admin) {
+                    throw new Error('Unauthorized Admin');
+                }
+
             } else {
-                userDbName = 'RDB';
-            }
 
-            const userCtrl = new EP_USERController(userDbName);
+                /* =====================================================
+                   👤 EP_USER FLOW (validateAdminToken)
+                ===================================================== */
 
-            /* =========================
-               🔍 FETCH USERS
-            ========================= */
+                let userDbName = 'RDB';
 
-            const users = await userCtrl.findAll({
-                UTF07: 'N'
-            });
+                const userCtrl = new EP_USERController(userDbName);
 
-            let user = null;
+                const users = await userCtrl.findAll({
+                    UTF07: 'N'
+                });
 
-            /* =========================
-               🔥 NORMALIZE TOKEN USER ID
-            ========================= */
+                let user = null;
 
-            let tokenUserId;
-
-            try {
-                tokenUserId = encryptor.decrypt(decodedToken.userId);
-            } catch {
-                tokenUserId = decodedToken.userId;
-            }
-
-            /* =========================
-               🔍 FIND USER
-            ========================= */
-
-            for (let u of users) {
-
-                let decryptedId;
+                let tokenUserId;
 
                 try {
-                    decryptedId = encryptor.decrypt(u.UTF04);
+                    tokenUserId = encryptor.decrypt(decodedToken.userId);
                 } catch {
-                    decryptedId = u.UTF04;
+                    tokenUserId = decodedToken.userId;
                 }
 
-                if (String(decryptedId) === String(tokenUserId)) {
-                    user = u;
-                    break;
-                }
-            }
+                for (let u of users) {
 
-            if (!user) {
-                throw new Error('Unauthorized User');
-            }
+                    let decryptedId;
 
-            /* =========================
-               🚫 ACTIVE CHECK
-            ========================= */
+                    try {
+                        decryptedId = encryptor.decrypt(u.UTF04);
+                    } catch {
+                        decryptedId = u.UTF04;
+                    }
 
-            if (user.UTF06 !== 'Y') {
-                throw new Error('User is inactive');
-            }
-
-            /* =========================
-               🔐 OPTIONAL PASSWORD CHECK
-            ========================= */
-
-            if (decodedToken.password) {
-
-                let tokenPassword;
-
-                try {
-                    tokenPassword = encryptor.decrypt(decodedToken.password);
-                } catch {
-                    tokenPassword = decodedToken.password;
+                    if (String(decryptedId) === String(tokenUserId)) {
+                        user = u;
+                        break;
+                    }
                 }
 
-                let dbPassword;
-
-                try {
-                    dbPassword = encryptor.decrypt(user.UTF05);
-                } catch {
-                    dbPassword = user.UTF05;
+                if (!user) {
+                    throw new Error('Unauthorized User');
                 }
 
-                if (String(dbPassword) !== String(tokenPassword)) {
-                    throw new Error('Invalid token credentials');
+                if (user.UTF06 !== 'Y') {
+                    throw new Error('User is inactive');
+                }
+
+                if (decodedToken.password) {
+
+                    let tokenPassword;
+
+                    try {
+                        tokenPassword = encryptor.decrypt(decodedToken.password);
+                    } catch {
+                        tokenPassword = decodedToken.password;
+                    }
+
+                    let dbPassword;
+
+                    try {
+                        dbPassword = encryptor.decrypt(user.UTF05);
+                    } catch {
+                        dbPassword = user.UTF05;
+                    }
+
+                    if (String(dbPassword) !== String(tokenPassword)) {
+                        throw new Error('Invalid token credentials');
+                    }
                 }
             }
 

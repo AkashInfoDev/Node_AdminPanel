@@ -88,7 +88,7 @@ class AdminModuleController {
                 return AdminModuleController.send(res, response, 401);
             }
 
-            const decoded = await TokenService.validateAdminToken(token);
+            const decoded = await TokenService.validateToken(token);
             // Allow all roles to READ
             if (![1, 2, 3, 4].includes(decoded.roleId)) {
                 response.status = 'FAIL';

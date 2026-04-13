@@ -34,7 +34,7 @@ class AdminDashboardController {
                 });
             }
 
-            const decoded = await TokenService.validateAdminToken(token);
+            const decoded = await TokenService.validateToken(token);
 
 
             // allow all roles
@@ -195,7 +195,7 @@ class AdminDashboardController {
                 return res.status(401).json({ encryptedResponse });
             }
 
-            const decoded = await TokenService.validateAdminToken(token);
+            const decoded = await TokenService.validateToken(token);
 
             const roleId = Number(decoded.roleId);
 
@@ -495,7 +495,7 @@ class AdminDashboardController {
     //             return res.status(401).json({ encryptedResponse });
     //         }
 
-    //         const decoded = await TokenService.validateAdminToken(token);
+    //         const decoded = await TokenService.validateToken(token);
 
     //         const roleId = Number(decoded.roleId);
 
@@ -631,7 +631,7 @@ class AdminDashboardController {
                 return res.status(401).json({ encryptedResponse });
             }
 
-            const decoded = await TokenService.validateAdminToken(token);
+            const decoded = await TokenService.validateToken(token);
             const roleId = Number(decoded.roleId);
 
             if (![1, 2,3].includes(roleId)) {

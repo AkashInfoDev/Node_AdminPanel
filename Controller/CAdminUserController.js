@@ -37,7 +37,7 @@ class CAdminUserController {
                 });
             }
 
-            const decoded = await TokenService.validateAdminToken(token);
+            const decoded = await TokenService.validateToken(token);
 
 
             const roleId = Number(decoded.roleId);

@@ -23,7 +23,7 @@ class AdminPlanController {
                 return AdminPlanController.send(res, response, 401);
             }
 
-            const decoded = await TokenService.validateAdminToken(token);
+            const decoded = await TokenService.validateToken(token);
             if (![1, 2].includes(decoded.roleId)) {
                 response.status = 'FAIL';
                 response.message = 'Access denied';

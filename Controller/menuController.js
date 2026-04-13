@@ -162,7 +162,7 @@ class MenuController {
 
         // 🔥 FALLBACK TO NEW TOKEN
         try {
-          decoded = await TokenService.validateAdminToken(token);
+          decoded = await TokenService.validateToken(token);
         } catch (err2) {
           return res.status(401).json({
             encryptedResponse: encryptor.encrypt(JSON.stringify({
