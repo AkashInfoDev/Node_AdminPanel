@@ -38,7 +38,7 @@ class CompanyService {
         const parameterString = encryptor.decrypt(req.query.pa);
         let decodedParam = decodeURIComponent(parameterString);
         let pa = querystring.parse(decodedParam);
-        let { firstName, middleName, lastName, dob, gender, email, password, roleId, address, base64Image, GUaction, rpname, corpId, cusRole, CmpList, BrcList, userId, companyName, softSubType, softType, dbVersion, webVer, noOfUser, regDate, subStrtDate, subEndDate, cancelDate, subDomainDelDate, cnclRes, SBDdbType, srverIP, serverUserName, serverPassword, A02id, phoneNumber, cSData, ExistingcorpId, GSTNumber } = pa
+        let { firstName, middleName, lastName, dob, gender, email, password, roleId, address, base64Image, GUaction, rpname, corpId, cusRole, CmpList, BrcList, userId, companyName, softSubType, softType, dbVersion, webVer, noOfUser, regDate, subStrtDate, subEndDate, cancelDate, subDomainDelDate, cnclRes, SBDdbType, srverIP, serverUserName, serverPassword, A02id, phoneNumber, cSData, ExistingcorpId, GSTNumber, Installby } = pa
         let response = {
             status: true,
             message: '',
@@ -173,6 +173,7 @@ class CompanyService {
                 FTPPATH: 'https://s01.lyfexplore.com/eplus/',
                 A02F01: A02id,
                 A01CHLD: '',
+                A01F19: Installby
             });
 
             if (createCMP) {

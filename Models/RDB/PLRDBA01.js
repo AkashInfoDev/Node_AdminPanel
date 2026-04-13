@@ -105,6 +105,9 @@ module.exports = (sequelize) => {
             type: DataTypes.TEXT, // because NVARCHAR(MAX)
             allowNull: true
         },
+        A01F19: {
+            type: DataTypes.STRING(100)
+        }
     }, {
         tableName: 'PLRDBA01',
         timestamps: false,

@@ -22,21 +22,51 @@ class Encryptor {
     return iv.toString('hex') + ':' + encrypted.toString('hex');
   }
 
+  // decrypt(encryptedText) {
+  //   const [ivHex, encryptedHex] = encryptedText.split(':');
+
+  //   if (!ivHex || !encryptedHex) {
+  //     throw new Error('Invalid encrypted format');
+  //   }
+
+  //   const iv = Buffer.from(ivHex, 'hex');
+  //   const encryptedBuffer = Buffer.from(encryptedHex, 'hex');
+
+  //   const decipher = crypto.createDecipheriv(this.algorithm, this.key, iv);
+  //   const decrypted = Buffer.concat([decipher.update(encryptedBuffer), decipher.final()]);
+
+  //   return decrypted.toString('utf8');
+  // }
   decrypt(encryptedText) {
-    const [ivHex, encryptedHex] = encryptedText.split(':');
 
-    if (!ivHex || !encryptedHex) {
-      throw new Error('Invalid encrypted format');
+    // ✅ handle undefined / null
+    if (!encryptedText) return encryptedText;
+
+    // ✅ handle non-string
+    if (typeof encryptedText !== 'string') return encryptedText;
+
+    // ✅ handle plain text (not encrypted)
+    if (!encryptedText.includes(':')) return encryptedText;
+
+    try {
+      const [ivHex, encryptedHex] = encryptedText.split(':');
+
+      const iv = Buffer.from(ivHex, 'hex');
+      const encryptedBuffer = Buffer.from(encryptedHex, 'hex');
+
+      const decipher = crypto.createDecipheriv(this.algorithm, this.key, iv);
+      const decrypted = Buffer.concat([
+        decipher.update(encryptedBuffer),
+        decipher.final()
+      ]);
+
+      return decrypted.toString('utf8');
+    } catch (err) {
+      console.warn('Decrypt fallback:', err.message);
+      return encryptedText;
     }
-
-    const iv = Buffer.from(ivHex, 'hex');
-    const encryptedBuffer = Buffer.from(encryptedHex, 'hex');
-
-    const decipher = crypto.createDecipheriv(this.algorithm, this.key, iv);
-    const decrypted = Buffer.concat([decipher.update(encryptedBuffer), decipher.final()]);
-
-    return decrypted.toString('utf8');
   }
+
 }
 
 module.exports = Encryptor;

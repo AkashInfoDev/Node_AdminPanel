@@ -12,6 +12,7 @@ const PLRDBA02 = definePLRDBA02(sequelizeRDB);
 const definePLRDBPLREL = require('../Models/RDB/PLRDBPLREL'); // Model factory
 const PLRDBPLREL = definePLRDBPLREL(sequelizeRDB);
 const definePLRDBPYMT = require('../Models/RDB/PLRDBPYMT');
+const EP_USERController = require('./EP_USERController');
 const PLRDBPYMT = definePLRDBPYMT(sequelizeRDB);
 
 
@@ -33,16 +34,19 @@ class AdminDashboardController {
                 });
             }
 
-            const decoded = await TokenService.validateToken(token);
+            const decoded = await TokenService.validateAdminToken(token);
 
-            if (decoded.roleId != 1) {
+
+            // allow all roles
+            const roleId = Number(decoded.roleId);
+
+            if (![1,2,3].includes(roleId)) {
                 response.status = 'FAIL';
                 response.message = 'Access denied';
                 return res.status(403).json({
                     encryptedResponse: encryptor.encrypt(JSON.stringify(response))
                 });
             }
-
             /* 🔓 DECRYPT QUERY */
             if (!req.query.pa) {
                 response.status = 'FAIL';
@@ -176,7 +180,7 @@ class AdminDashboardController {
             });
         }
     }
-    //Dashboard Data
+
     static async dashboardCounts(req, res) {
         let response = { status: 'SUCCESS', message: '', data: null };
         let encryptedResponse;
@@ -191,51 +195,130 @@ class AdminDashboardController {
                 return res.status(401).json({ encryptedResponse });
             }
 
-            const decoded = await TokenService.validateToken(token);
+            const decoded = await TokenService.validateAdminToken(token);
 
-            // 🔐 2. Only SUPER ADMIN
-            if (decoded.roleId != 1) {
+            const roleId = Number(decoded.roleId);
+
+            if (![1, 2, 3, 4].includes(roleId)) {
                 response.status = 'FAIL';
                 response.message = 'Access denied';
-                encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-                return res.status(403).json({ encryptedResponse });
+                return res.status(403).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                });
             }
+
+            /* =========================
+               🔥 ROLE-BASED FILTER
+            ========================= */
+
+            let whereCondition = {};
+
+            if (![1, 2].includes(roleId)) {
+
+                // 👤 Get User_Id from UserTable
+                const userCtrl = new EP_USERController('RDB');
+
+                const users = await userCtrl.findAll({
+                    UTF07: 'N'
+                });
+
+                let loggedUser = null;
+
+                for (let u of users) {
+                    let decryptedId;
+
+                    try {
+                        decryptedId = encryptor.decrypt(u.UTF04);
+                    } catch {
+                        decryptedId = u.UTF04;
+                    }
+
+                    let tokenUserId;
+
+                    try {
+                        tokenUserId = encryptor.decrypt(decoded.userId);
+                    } catch {
+                        tokenUserId = decoded.userId;
+                    }
+
+                    if (String(decryptedId) === String(tokenUserId)) {
+                        loggedUser = u;
+                        break;
+                    }
+                }
+
+                if (!loggedUser) {
+                    throw new Error('User not found');
+                }
+
+                // 🔥 MAIN FILTER
+                whereCondition.A01F19 = loggedUser.UTF01;
+            }
+
+            /* =========================
+               📅 DATE SETUP
+            ========================= */
 
             const today = new Date();
             const next7Days = new Date();
             next7Days.setDate(today.getDate() + 7);
 
-            // 🏢 Corporate counts
-            const totalCorporates = await PLRDBA01.count();
+            /* =========================
+               🏢 CORPORATE COUNTS
+            ========================= */
+
+            const totalCorporates = await PLRDBA01.count({
+                where: whereCondition
+            });
 
             const activeCorporates = await PLRDBA01.count({
-                where: { A01F08: 'A' }
+                where: {
+                    ...whereCondition,
+                    A01F08: 'A'
+                }
             });
 
             const inactiveCorporates = await PLRDBA01.count({
-                where: { A01F08: 'D' }
+                where: {
+                    ...whereCondition,
+                    A01F08: 'D'
+                }
             });
 
-            // 📅 Subscription counts
+            /* =========================
+               📅 SUBSCRIPTIONS
+            ========================= */
+
             const activeSubscriptions = await PLRDBA01.count({
-                where: { A01F13: { [Op.gte]: today } }
+                where: {
+                    ...whereCondition,
+                    A01F13: { [Op.gte]: today }
+                }
             });
 
             const expiredSubscriptions = await PLRDBA01.count({
-                where: { A01F13: { [Op.lt]: today } }
+                where: {
+                    ...whereCondition,
+                    A01F13: { [Op.lt]: today }
+                }
             });
 
             const expiringSoon = await PLRDBA01.count({
                 where: {
+                    ...whereCondition,
                     A01F13: { [Op.between]: [today, next7Days] }
                 }
             });
 
-            // 💰 Payment counts
+            /* =========================
+               💰 PAYMENTS
+            ========================= */
+
             const paymentDone = activeSubscriptions;
 
             const paymentPending = await PLRDBA01.count({
                 where: {
+                    ...whereCondition,
                     [Op.or]: [
                         { A01F13: { [Op.lt]: today } },
                         { A01F08: 'D' }
@@ -243,7 +326,9 @@ class AdminDashboardController {
                 }
             });
 
-            // 📊 Plan usage statistics (ACTIVE subscriptions only)
+            /* =========================
+               📊 PLAN STATS
+            ========================= */
 
             const planUsage = await PLRDBA01.findAll({
                 attributes: [
@@ -251,6 +336,7 @@ class AdminDashboardController {
                     [fn('COUNT', col('A02F01')), 'totalUsers']
                 ],
                 where: {
+                    ...whereCondition,
                     A02F01: { [Op.in]: [2, 6, 7] },
                     A01F13: { [Op.gte]: today }
                 },
@@ -264,7 +350,6 @@ class AdminDashboardController {
             };
 
             planUsage.forEach(row => {
-
                 const planId = row.A02F01;
                 const count = parseInt(row.get('totalUsers'));
 
@@ -273,13 +358,16 @@ class AdminDashboardController {
                 if (planId === 7) planStats.standard = count;
             });
 
-            // 📈 Daily Corporate Growth
+            /* =========================
+               📈 GROWTH
+            ========================= */
 
             const newUsersDaily = await PLRDBA01.findAll({
                 attributes: [
                     [literal('CAST(A01F12 AS DATE)'), 'date'],
                     [fn('COUNT', col('A01F12')), 'totalUsers']
                 ],
+                where: whereCondition,
                 group: [literal('CAST(A01F12 AS DATE)')],
                 order: [[literal('CAST(A01F12 AS DATE)'), 'ASC']]
             });
@@ -289,15 +377,33 @@ class AdminDashboardController {
                 totalUsers: parseInt(row.get('totalUsers'))
             }));
 
+            /* =========================
+               💳 RECENT TXN (optional filter later)
+            ========================= */
+            let corporateIds = [];
+
+            if (![1, 2].includes(roleId)) {
+
+                const corporates = await PLRDBA01.findAll({
+                    attributes: ['A01F03'],
+                    where: whereCondition
+                });
+
+                corporateIds = corporates.map(c => c.A01F03?.trim());
+            }
+
+
+            const txnWhere = {};
+
+            if (![1, 2].includes(roleId)) {
+                txnWhere.PYMT01 = {
+                    [Op.in]: corporateIds
+                };
+            }
 
             const recentTransactions = await PLRDBPYMT.findAll({
-                attributes: [
-                    'PYMT01',
-                    'PYMT05',
-                    'PYMT06',
-                    'PYMT03',
-                    'PYMT08'
-                ],
+                attributes: ['PYMT01', 'PYMT05', 'PYMT06', 'PYMT03', 'PYMT08'],
+                where: txnWhere,
                 order: [['PYMT08', 'DESC']],
                 limit: 7
             });
@@ -310,6 +416,10 @@ class AdminDashboardController {
                 date: txn.PYMT08
             }));
 
+            /* =========================
+               💰 WEEKLY REVENUE
+            ========================= */
+
             const last7Days = new Date();
             last7Days.setDate(last7Days.getDate() - 7);
 
@@ -318,14 +428,20 @@ class AdminDashboardController {
                     [fn('SUM', col('PYMT05')), 'weeklyRevenue']
                 ],
                 where: {
+                    ...txnWhere,
                     PYMT06: 'SUCCESS',
                     PYMT08: { [Op.gte]: last7Days }
                 },
                 raw: true
             });
+
             const weeklyRevenue =
                 parseFloat(weeklyRevenueResult[0]?.weeklyRevenue) || 0;
-            // ✅ FINAL ENCRYPTED RESPONSE
+
+            /* =========================
+               ✅ FINAL RESPONSE
+            ========================= */
+
             response.data = {
                 corporateStats: {
                     total: totalCorporates,
@@ -341,7 +457,6 @@ class AdminDashboardController {
                     paymentDone,
                     paymentPending
                 },
-
                 planStats,
                 newUsersGrowth,
                 recentTransactions: recentTxnList,
@@ -356,12 +471,149 @@ class AdminDashboardController {
 
             response.status = 'FAIL';
             response.message = 'Dashboard load failed';
-            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
 
+            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
             return res.status(500).json({ encryptedResponse });
         }
     }
-    //All corporate ID
+
+
+    // static async getAllCorporateUsers(req, res) {
+    //     let response = { status: 'SUCCESS', message: '', data: null };
+    //     let encryptedResponse;
+
+    //     try {
+    //         /* ------------------------------
+    //          * 1. TOKEN VALIDATION
+    //          * ---------------------------- */
+    //         const token = req.headers['authorization']?.split(' ')[1];
+
+    //         if (!token) {
+    //             response.status = 'FAIL';
+    //             response.message = 'Authorization token missing';
+    //             encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+    //             return res.status(401).json({ encryptedResponse });
+    //         }
+
+    //         const decoded = await TokenService.validateAdminToken(token);
+
+    //         const roleId = Number(decoded.roleId);
+
+    //         if (![1, 2, 3, 4].includes(roleId)) {
+    //             response.status = 'FAIL';
+    //             response.message = 'Access denied';
+    //             return res.status(403).json({
+    //                 encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+    //             });
+    //         }
+
+    //         /* ------------------------------
+    //          * 🔥 ROLE-BASED FILTER
+    //          * ---------------------------- */
+
+    //         let whereCondition = {};
+
+    //         if (![1, 2].includes(roleId)) {
+
+    //             const userCtrl = new EP_USERController('RDB');
+
+    //             const users = await userCtrl.findAll({
+    //                 UTF07: 'N'
+    //             });
+
+    //             let loggedUser = null;
+
+    //             for (let u of users) {
+    //                 let decryptedId;
+
+    //                 try {
+    //                     decryptedId = encryptor.decrypt(u.UTF04);
+    //                 } catch {
+    //                     decryptedId = u.UTF04;
+    //                 }
+
+    //                 if (decryptedId === decoded.userId) {
+    //                     loggedUser = u;
+    //                     break;
+    //                 }
+    //             }
+
+    //             if (!loggedUser) {
+    //                 throw new Error('User not found');
+    //             }
+
+    //             // 🔥 FILTER BY OWNER
+    //             whereCondition.A01F19 = loggedUser.UTF01;
+    //         }
+
+    //         /* ------------------------------
+    //          * 2. FETCH CORPORATES
+    //          * ---------------------------- */
+    //         const userCtrl = new EP_USERController('RDB');
+
+    //         const users = await userCtrl.findAll({
+    //             UTF07: 'N'
+    //         });
+
+    //         // Create lookup map → O(1) access (VERY IMPORTANT 🔥)
+    //         const userMap = {};
+
+    //         for (let u of users) {
+    //             userMap[u.UTF01] = {
+    //                 role: u.UTF03,
+    //                 name: u.UTF02
+    //             };
+    //         }
+
+    //         const corporates = await PLRDBA01.findAll({
+    //             attributes: [
+    //                 'A01F01',
+    //                 'A01F02',
+    //                 'A01F03',
+    //                 'A01F08',
+    //                 'A01F12',
+    //                 'A01F13',
+    //                 'A01F10',
+    //                 'A01F19'
+
+    //             ],
+    //             where: whereCondition,
+    //             order: [['A01F03', 'ASC']]
+    //         });
+
+    //         /* ------------------------------
+    //          * 3. MAP RESPONSE
+    //          * ---------------------------- */
+
+    //         response.data = corporates.map(row => ({
+    //             corpUnq: row.A01F01?.trim() || null,
+    //             corporateId: row.A01F03?.trim() || null,
+    //             companyName: row.A01F02?.trim() || null,
+    //             status: row.A01F08 === 'A' ? 'ACTIVE' : 'INACTIVE',
+    //             subscription: {
+    //                 startDate: row.A01F12,
+    //                 endDate: row.A01F13
+    //             },
+    //             licensedUsers: row.A01F10 || 0
+    //         }));
+
+    //         /* ------------------------------
+    //          * 4. ENCRYPT RESPONSE
+    //          * ---------------------------- */
+
+    //         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+    //         return res.status(200).json({ encryptedResponse });
+
+    //     } catch (err) {
+    //         console.error('getAllCorporateUsers error:', err.message);
+
+    //         response.status = 'FAIL';
+    //         response.message = 'Failed to load corporate list';
+
+    //         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+    //         return res.status(500).json({ encryptedResponse });
+    //     }
+    // }
     static async getAllCorporateUsers(req, res) {
         let response = { status: 'SUCCESS', message: '', data: null };
         let encryptedResponse;
@@ -371,6 +623,7 @@ class AdminDashboardController {
              * 1. TOKEN VALIDATION
              * ---------------------------- */
             const token = req.headers['authorization']?.split(' ')[1];
+
             if (!token) {
                 response.status = 'FAIL';
                 response.message = 'Authorization token missing';
@@ -378,50 +631,126 @@ class AdminDashboardController {
                 return res.status(401).json({ encryptedResponse });
             }
 
-            const decoded = await TokenService.validateToken(token);
+            const decoded = await TokenService.validateAdminToken(token);
+            const roleId = Number(decoded.roleId);
 
-            // SUPER ADMIN ONLY
-            if (decoded.roleId != 1) {
+            if (![1, 2,3].includes(roleId)) {
                 response.status = 'FAIL';
                 response.message = 'Access denied';
-                encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-                return res.status(403).json({ encryptedResponse });
+                return res.status(403).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                });
             }
 
             /* ------------------------------
-             * 2. FETCH CORPORATES (RDB ONLY)
+             * 2. FETCH USERS ONCE (🔥 IMPORTANT)
+             * ---------------------------- */
+            const userCtrl = new EP_USERController('RDB');
+
+            const users = await userCtrl.findAll({
+                UTF07: 'N'
+            });
+
+            // 🔥 Create lookup map (O(1))
+            const userMap = {};
+
+            for (let u of users) {
+                userMap[u.UTF01] = {
+                    role: u.UTF03,
+                    name: u.UTF02,
+                    encryptedId: u.UTF04
+                };
+            }
+
+            /* ------------------------------
+             * 3. ROLE-BASED FILTER
+             * ---------------------------- */
+            let whereCondition = {};
+
+            if (![1, 2].includes(roleId)) {
+
+                let loggedUser = null;
+
+                for (let u of users) {
+                    let decryptedId;
+
+                    try {
+                        decryptedId = encryptor.decrypt(u.UTF04);
+                    } catch {
+                        decryptedId = u.UTF04;
+                    }
+
+                    // if (decryptedId === decoded.userId) {
+                    //     loggedUser = u;
+                    //     break;
+                    // }
+                    let tokenUserId;
+
+                    try {
+                        tokenUserId = encryptor.decrypt(decoded.userId);
+                    } catch {
+                        tokenUserId = decoded.userId;
+                    }
+
+                    if (String(decryptedId) === String(tokenUserId)) {
+                        loggedUser = u;
+                        break;
+                    }
+                }
+
+                if (!loggedUser) {
+                    throw new Error('User not found');
+                }
+
+                // 🔥 Filter corporates by owner
+                whereCondition.A01F19 = loggedUser.UTF01;
+            }
+
+            /* ------------------------------
+             * 4. FETCH CORPORATES
              * ---------------------------- */
             const corporates = await PLRDBA01.findAll({
                 attributes: [
-                    'A01F01', // Corporate Unique ID
-                    'A01F02', // Company Name
-                    'A01F03', // Corporate ID
-                    'A01F08', // Status (A / D)
-                    'A01F12', // Subscription Start Date
-                    'A01F13', // Subscription End Date
-                    'A01F10'  // Licensed Users
+                    'A01F01',
+                    'A01F02',
+                    'A01F03',
+                    'A01F08',
+                    'A01F12',
+                    'A01F13',
+                    'A01F10',
+                    'A01F19' // internal use only
                 ],
+                where: whereCondition,
                 order: [['A01F03', 'ASC']]
             });
 
             /* ------------------------------
-             * 3. MAP RESPONSE (CLEAN DTO)
+             * 5. MAP RESPONSE (🔥 FINAL LOGIC)
              * ---------------------------- */
-            response.data = corporates.map(row => ({
-                corpUnq: row.A01F01?.trim() || null,
-                corporateId: row.A01F03?.trim() || null,
-                companyName: row.A01F02?.trim() || null,
-                status: row.A01F08 === 'A' ? 'ACTIVE' : 'INACTIVE',
-                subscription: {
-                    startDate: row.A01F12,
-                    endDate: row.A01F13
-                },
-                licensedUsers: row.A01F10 || 0
-            }));
+            response.data = corporates.map(row => {
 
+                const ownerId = row.A01F19;
+                const ownerDetails = userMap[ownerId] || {};
+
+                return {
+                    corpUnq: row.A01F01?.trim() || null,
+                    corporateId: row.A01F03?.trim() || null,
+                    companyName: row.A01F02?.trim() || null,
+                    status: row.A01F08 === 'A' ? 'ACTIVE' : 'INACTIVE',
+                    subscription: {
+                        startDate: row.A01F12,
+                        endDate: row.A01F13
+                    },
+                    licensedUsers: row.A01F10 || 0,
+
+                    // ✅ Instead of exposing A01F19
+                    ownerRole: ownerDetails.role || null,
+                    ownerName: ownerDetails.name || null
+                };
+            });
 
             /* ------------------------------
-             * 4. ENCRYPT RESPONSE
+             * 6. ENCRYPT RESPONSE
              * ---------------------------- */
             encryptedResponse = encryptor.encrypt(JSON.stringify(response));
             return res.status(200).json({ encryptedResponse });
@@ -431,13 +760,12 @@ class AdminDashboardController {
 
             response.status = 'FAIL';
             response.message = 'Failed to load corporate list';
-            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
 
+            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
             return res.status(500).json({ encryptedResponse });
         }
     }
 
-    //Corporate ID users
     static async getCorporateUserList(corporateId, response, res) {
         try {
             const corpId = corporateId.trim().toUpperCase();

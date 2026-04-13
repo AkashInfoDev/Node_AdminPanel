@@ -10,6 +10,7 @@ const Encryptor = require('../Services/encryptor');
 const definePLRDBGAO = require('../Models/RDB/PLRDBGAO'); // Model factory
 const ADMIController = require('./ADMIController');
 const M81Controller = require('./M81Controller');
+const EP_USERController = require('./EP_USERController');
 
 const sequelizeRDB = db.getConnection('RDB');
 
@@ -22,11 +23,115 @@ const PLRDBGAO = definePLRDBGAO(sequelizeRDB);
 
 const encryptor = new Encryptor();
 
+function getPrefix(roleId) {
+    switch (Number(roleId)) {
+        case 1: return 'ADMIN';
+        case 2: return 'CMPUSER';
+        case 3: return 'DEALER';
+        case 4: return 'RESELLER';
+        default: return 'UNKNOWN';
+    }
+}
 class CAdminPlanController {
+    // static async getLoggedInUser(decoded) {
 
+    //     const encryptor = new Encryptor();
+
+    //     // 🔥 Resolve RDB dynamically
+    //     let rdbName;
+
+    //     if (decoded.corpId) {
+    //         const parts = decoded.corpId.split('-');
+
+    //         rdbName = parts.length === 3
+    //             ? parts[0] + parts[1] + parts[2] + 'RDB'
+    //             : parts[0] + parts[1] + 'RDB';
+    //     } else {
+    //         rdbName = 'RDB';
+    //     }
+
+    //     const userCtrl = new EP_USERController(rdbName);
+
+    //     const users = await userCtrl.findAll({
+    //         User_IsDeleted: 'N'
+    //     });
+
+    //     for (let u of users) {
+
+    //         let decryptedId;
+
+    //         try {
+    //             decryptedId = encryptor.decrypt(u.UserID);
+    //         } catch {
+    //             decryptedId = u.UserID;
+    //         }
+
+    //         if (decryptedId === decoded.userId) {
+    //             return u;
+    //         }
+    //     }
+
+    //     return null;
+    // }
+    static async getLoggedInUser(decoded) {
+
+        const encryptor = new Encryptor();
+
+        /* =========================
+           🔥 RESOLVE RDB NAME
+        ========================= */
+
+        let rdbName;
+
+        if (decoded.corpId) {
+            const parts = decoded.corpId.split('-');
+
+            rdbName = parts.length === 3
+                ? parts[0] + parts[1] + parts[2] + 'RDB'
+                : parts[0] + parts[1] + 'RDB';
+        } else {
+            rdbName = 'RDB';
+        }
+
+        /* =========================
+           🔌 CONNECT USER DB
+        ========================= */
+
+        const userCtrl = new EP_USERController(rdbName);
+
+        /* =========================
+           🔍 FETCH USERS (NOT DELETED)
+        ========================= */
+
+        const users = await userCtrl.findAll({
+            UTF07: 'N'   // ✅ FIXED
+        });
+
+        /* =========================
+           🔐 MATCH USER
+        ========================= */
+
+        for (let u of users) {
+
+            let decryptedId;
+
+            try {
+                decryptedId = encryptor.decrypt(u.UTF04); // ✅ FIXED
+            } catch {
+                decryptedId = u.UTF04; // fallback
+            }
+
+            if (decryptedId === decoded.userId) {
+                return u; // ✅ FOUND USER
+            }
+        }
+
+        return null; // ❌ NOT FOUND
+    }
     /* ===================================================== */
     /* MAIN ROUTER */
     /* ===================================================== */
+
     static async handlePlan(req, res) {
 
         let response = { status: 'SUCCESS', message: '', data: null };
@@ -44,9 +149,12 @@ class CAdminPlanController {
                 });
             }
 
-            const decoded = await TokenService.validateToken(token);
+            const decoded = await TokenService.validateAdminToken(token);
 
-            if (decoded.roleId != 1) {
+
+            const roleId = Number(decoded.roleId);
+
+            if (![1, 2, 3, 4].includes(roleId)) {
                 response.status = 'FAIL';
                 response.message = 'Access denied';
                 return res.status(403).json({
@@ -68,6 +176,65 @@ class CAdminPlanController {
 
             const action = pa.action;
             const corporateId = pa.corporateId;
+            /* =========================
+   🔥 ROLE-BASED ACCESS CHECK
+========================= */
+
+            // if (roleId !== 1 && corporateId) {
+
+            //     const loggedUser = await CAdminPlanController.getLoggedInUser(decoded);
+
+            //     if (!loggedUser) {
+            //         response.status = 'FAIL';
+            //         response.message = 'User not found';
+            //         return res.status(403).json({
+            //             encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+            //         });
+            //     }
+
+            //     const corp = await PLRDBA01.findOne({
+            //         where: {
+            //             A01F03: corporateId,
+            //             // A01F19: loggedUser.User_Id
+            //             A01F19: loggedUser.UTF01
+            //         }
+            //     });
+
+            //     if (!corp) {
+            //         response.status = 'FAIL';
+            //         response.message = 'Access denied for this corporate';
+            //         return res.status(403).json({
+            //             encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+            //         });
+            //     }
+            // }
+            if (![1, 2].includes && corporateId) {
+
+                const loggedUser = await CAdminPlanController.getLoggedInUser(decoded);
+
+                if (!loggedUser) {
+                    response.status = 'FAIL';
+                    response.message = 'User not found';
+                    return res.status(403).json({
+                        encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                    });
+                }
+
+                const corp = await PLRDBA01.findOne({
+                    where: {
+                        A01F03: corporateId,
+                        A01F19: loggedUser.UTF01   // ✅ FIXED
+                    }
+                });
+
+                if (!corp) {
+                    response.status = 'FAIL';
+                    response.message = 'Access denied for this corporate';
+                    return res.status(403).json({
+                        encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                    });
+                }
+            }
 
             /* 🎯 ACTION ROUTER */
             switch (action) {
@@ -85,7 +252,8 @@ class CAdminPlanController {
                         });
                     }
 
-                    return CAdminPlanController.planRenewal(pa, response, res);
+                    // return CAdminPlanController.planRenewal(pa, response, res);
+                    return CAdminPlanController.planRenewal(pa, response, res, decoded);
 
 
                 /* ========================== */
@@ -101,8 +269,8 @@ class CAdminPlanController {
                         });
                     }
 
-                    return CAdminPlanController.limitIncrease(pa, response, res);
-
+                    // return CAdminPlanController.limitIncrease(pa, response, res);
+                    return CAdminPlanController.limitIncrease(pa, response, res, decoded);
 
                 /* ========================== */
                 /* M → MODULE ACTIVATION      */
@@ -117,7 +285,8 @@ class CAdminPlanController {
                         });
                     }
 
-                    return CAdminPlanController.moduleActivation(pa, response, res);
+                    // return CAdminPlanController.moduleActivation(pa, response, res);
+                    return CAdminPlanController.moduleActivation(pa, response, res, decoded);
 
 
                 /* ========================== */
@@ -157,7 +326,8 @@ class CAdminPlanController {
                         });
                     }
 
-                    return CAdminPlanController.moduleDeactivation(pa, response, res);
+                    // return CAdminPlanController.moduleDeactivation(pa, response, res);
+                    return CAdminPlanController.moduleDeactivation(pa, response, res, decoded);
 
                 default:
                     response.status = 'FAIL';
@@ -183,7 +353,7 @@ class CAdminPlanController {
     /* ===================================================== */
     /* PLAN RENEWAL                                         */
     /* ===================================================== */
-    static async planRenewal(pa, response, res) {
+    static async planRenewal(pa, response, res, decoded) {
 
         const {
             corporateId,
@@ -281,13 +451,15 @@ class CAdminPlanController {
                 transaction
             });
 
+            const prefix = getPrefix(decoded.roleId);
             // ==============================
             // CREATE PAYMENT ENTRY
             // ==============================
             await PLRDBPYMT.create({
                 PYMT01: corporateId,
                 PYMT02: 0,
-                PYMT03: referenceNo || ('ADMIN_' + Date.now()),
+                // PYMT03: referenceNo || ('ADMIN_' + Date.now()),
+                PYMT03: referenceNo || (`${prefix}_${Date.now()}`),
                 PYMT04: 'OFFLINE',
                 PYMT05: parseFloat(amount || 0),
                 PYMT06: 'SUCCESS',
@@ -322,7 +494,7 @@ class CAdminPlanController {
     /* ===================================================== */
     /* LIMIT INCREASE                                       */
     /* ===================================================== */
-    static async limitIncrease(pa, response, res) {
+    static async limitIncrease(pa, response, res, decoded) {
 
         const {
             corporateId,
@@ -464,11 +636,12 @@ class CAdminPlanController {
             // ==============================
             // 3️⃣ CREATE PAYMENT ENTRY
             // ==============================
-
+            const prefix = getPrefix(decoded.roleId);
             await PLRDBPYMT.create({
                 PYMT01: corporateId,
                 PYMT02: paymentEntity,   // 🔥 company if single, else 0
-                PYMT03: referenceNo || ('ADMIN_' + Date.now()),
+                // PYMT03: referenceNo || ('ADMIN_' + Date.now()),
+                PYMT03: referenceNo || (`${prefix}_${Date.now()}`),
                 PYMT04: 'OFFLINE',
                 PYMT05: Number(amount || 0),
                 PYMT06: 'SUCCESS',
@@ -500,27 +673,112 @@ class CAdminPlanController {
     /* ===================================================== */
     /* GET TRANSACTIONS                                     */
     /* ===================================================== */
+    // static async getTransactions(pa, response, res) {
+    //     try {
+
+    //         // 1️⃣ Fetch all transactions (no corporate filter)
+    //         const rows = await PLRDBPYMT.findAll({
+    //             order: [['PYMT08', 'DESC']]
+    //         });
+
+
+    //         // 2️⃣ Group by Corporate ID
+    //         const groupedData = {};
+
+    //         for (let txn of rows) {
+
+    //             const corpId = txn.PYMT01;
+
+    //             if (!groupedData[corpId]) {
+    //                 groupedData[corpId] = [];
+    //             }
+
+    //             groupedData[corpId].push(txn);
+    //         }
+
+    //         response.data = groupedData;
+    //         response.status = 'SUCCESS';
+    //         response.message = 'All corporate transactions fetched successfully';
+
+    //         return res.status(200).json({
+    //             encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+    //         });
+
+    //     } catch (err) {
+
+    //         console.error(err);
+
+    //         response.status = 'FAIL';
+    //         response.message = 'Failed to load transactions';
+
+    //         return res.status(500).json({
+    //             encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+    //         });
+    //     }
+    // }
     static async getTransactions(pa, response, res) {
         try {
 
-            // 1️⃣ Fetch all transactions (no corporate filter)
-            const rows = await PLRDBPYMT.findAll({
-                order: [['PYMT08', 'DESC']]
+            const { Sequelize } = require('sequelize');
+
+            /* =========================
+               1️⃣ JOIN QUERY
+            ========================= */
+            const rows = await sequelizeRDB.query(`
+            SELECT 
+                p.*,
+                c.A01F02 AS companyName,
+                u.UTF02 AS dealerName,
+                u.UTF17 AS gstNumber
+            FROM PLRDBPYMT p
+            LEFT JOIN PLRDBA01 c 
+                ON p.PYMT01 = LTRIM(RTRIM(c.A01F03))
+            LEFT JOIN EP_USER u 
+                ON c.A01F19 = u.UTF01
+            ORDER BY p.PYMT08 DESC
+        `, {
+                type: Sequelize.QueryTypes.SELECT
             });
 
-            // 2️⃣ Group by Corporate ID
+            /* =========================
+               2️⃣ GROUP DATA (KEEP EXISTING)
+            ========================= */
+
             const groupedData = {};
 
             for (let txn of rows) {
 
-                const corpId = txn.PYMT01;
+                const corpId = txn.PYMT01?.trim();
 
                 if (!groupedData[corpId]) {
                     groupedData[corpId] = [];
                 }
 
-                groupedData[corpId].push(txn);
+                groupedData[corpId].push({
+
+                    // ✅ KEEP EXISTING FIELDS (same as DB)
+                    PYMT00: txn.PYMT00,
+                    PYMT01: txn.PYMT01,
+                    PYMT02: txn.PYMT02,
+                    PYMT03: txn.PYMT03,
+                    PYMT04: txn.PYMT04,
+                    PYMT05: txn.PYMT05,
+                    PYMT06: txn.PYMT06,
+                    PYMT07: txn.PYMT07,
+                    PYMT08: txn.PYMT08,
+                    PYMT09: txn.PYMT09,
+                    PYMT10: txn.PYMT10,
+
+                    // ➕ NEW FIELDS (ADDED ONLY)
+                    customerName: txn.companyName || null,
+                    dealerName: txn.dealerName || null,
+                    gstNumber: txn.gstNumber || null
+                });
             }
+
+            /* =========================
+               3️⃣ RESPONSE
+            ========================= */
 
             response.data = groupedData;
             response.status = 'SUCCESS';
@@ -542,7 +800,7 @@ class CAdminPlanController {
             });
         }
     }
-    static async moduleActivation(pa, response, res) {
+    static async moduleActivation(pa, response, res, decoded) {
 
         const {
             corporateId,
@@ -654,11 +912,12 @@ class CAdminPlanController {
             }
 
             /* 5️⃣ PAYMENT ENTRY */
-
+            const prefix = getPrefix(decoded.roleId);
             await PLRDBPYMT.create({
                 PYMT01: corporateId,
                 PYMT02: 0,
-                PYMT03: referenceNo || ('ADMIN_MOD_' + Date.now()),
+                // PYMT03: referenceNo || ('ADMIN_MOD_' + Date.now()),
+                PYMT03: referenceNo || (`${prefix}_${Date.now()}`),
                 PYMT04: 'OFFLINE',
                 PYMT05: parseFloat(amount || 0),
                 PYMT06: 'SUCCESS',
@@ -1035,7 +1294,7 @@ class CAdminPlanController {
     //         });
     //     }
     // }
-    static async moduleDeactivation(pa, response, res) {
+    static async moduleDeactivation(pa, response, res, decoded) {
 
         const {
             corporateId,
@@ -1168,11 +1427,11 @@ class CAdminPlanController {
             /* ============================ */
             /* 5️⃣ PAYMENT / AUDIT ENTRY    */
             /* ============================ */
-
+            const prefix = getPrefix(decoded.roleId);
             await PLRDBPYMT.create({
                 PYMT01: corporateId,
                 PYMT02: 0,
-                PYMT03: referenceNo || ('ADMIN_DEMOD_' + Date.now()),
+                PYMT03: referenceNo || (`${prefix}_DEMOD_${Date.now()}`),
                 PYMT04: 'OFFLINE',
                 PYMT05: parseFloat(amount || 0),
                 PYMT06: 'SUCCESS',

@@ -50,11 +50,11 @@ class MenuController {
         // Recursively process the children
         this.assignPermissionsToMenus(item.children, allRoles); // Recursive call for the children
       }
-  
+
       // Now, process the permissions for each child in the item
       if (item.children && item.children.length > 0) {
         item.children = item.children.map(child => {
-          
+
           // Assign permissions based on the role (assuming child.S01F02 is the role ID)
           if (allRoles.USRF02.includes(child.S01F02)) {
             child.l_Add = 1; // Grant Add permission
@@ -74,18 +74,18 @@ class MenuController {
           if (allRoles.USRF07.includes(child.S01F02)) {
             child.l_UserField = 1; // Grant UserField permission
           }
-          
+
           return child; // Return the updated child
         });
       }
-  
+
       // Return the updated menu item
       return item;
     });
-  
+
     return menuTree; // Return the menu tree with updated permissions
-  } 
-  
+  }
+
   // Static method to remove '&' from menu names
   static removeAmpersand(menuName) {
     return menuName.replace(/&/g, ''); // Removes all '&' characters
@@ -152,11 +152,31 @@ class MenuController {
         const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
         return res.status(401).json({ encryptedResponse });
       }
-      let decoded = await TokenService.validateToken(token);
+      // let decoded = await TokenService.validateToken(token);
+      let decoded;
+
+      // 🔥 TRY OLD TOKEN
+      try {
+        decoded = await TokenService.validateToken(token);
+      } catch (err) {
+
+        // 🔥 FALLBACK TO NEW TOKEN
+        try {
+          decoded = await TokenService.validateAdminToken(token);
+        } catch (err2) {
+          return res.status(401).json({
+            encryptedResponse: encryptor.encrypt(JSON.stringify({
+              status: 'FAIL',
+              message: 'Invalid token',
+              data: null
+            }))
+          });
+        }
+      }
 
       // Build the menu tree from the fetched menus
       const menuTree = MenuController.buildMenuTree(menus);
-      
+
       // Prepare response data
       response.data = menuTree;
       response.message = ""

@@ -80,9 +80,13 @@ class AdminController {
                 return AdminController.editAdmin(userId, firstName, middleName, lastName, dob, gender, email, password, parseInt(roleId), address, phoneNumber, base64Image, res);
             }
 
+            // if (action === 'G') {
+            //     return AdminController.loginAdmin(userId, password, res);
+            // }
             if (action === 'L') {
                 return AdminController.loginAdmin(userId, password, res);
             }
+
 
             return res.status(400).json({ message: 'Invalid action parameter' });
 
@@ -210,88 +214,278 @@ class AdminController {
         }
     }
 
+    // static async loginAdmin(userId, password, res) {
+    //     try {
+    //         let response = {
+    //             status: 'SUCCESS',
+    //             message: null
+    //         }
+    //         let admin = encryptor.encrypt(userId);
+    //         const existingAdmin = await PLSDBADMI.findAll({
+    //             attributes: ['ADMIF01', 'ADMIF05', 'ADMIF06']
+    //             // where: { ADMIF01: encrypted } 
+    //         });
+    //         for (let i of existingAdmin) {
+    //             const decrypted = encryptor.decrypt(i.ADMIF01)
+    //             if (decrypted == userId) {
+    //                 if (i.ADMIF06 == 1) {
+    //                     admin = i;
+    //                     response = {
+    //                         message: 'User ID valid'
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //         if (!admin) {
+    //             response = {
+    //                 message: 'Invalid UserId'
+    //             }
+    //             let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+    //             return res.status(400).json({ encryptedResponse: encryptedResponse });
+    //         }
+
+    //         let pwd = encryptor.decrypt(admin.ADMIF05);
+    //         const isPasswordValid = pwd == password;
+    //         if (!isPasswordValid) {
+    //             response = {
+    //                 message: 'Invalid Credentials'
+    //             }
+    //             let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+    //             return res.status(400).json({ encryptedResponse: encryptedResponse });
+    //         }
+
+    //         let planInfo = await PLRDBA02.findAll({
+    //             where: {
+    //                 A02F13: 1
+    //             }
+    //         });
+
+    //         let oCmp = new Company();
+    //         CmpMaster.oYear = new Year(oCmp);
+    //         let dbconn = db.createPool('A00001CMP0031');
+    //         let oDic = await dbconn.query('SELECT * FROM CMPM00', {
+    //             type: QueryTypes.SELECT
+    //         });
+    //         let oEntD = {};
+    //         oEntD["M00"] = oDic[0]
+    //         let oM00 = new CmpMaster('', '', LangType, 'G', oEntD);
+    //         oDic = await oM00.GetDictionary(null, 'A00001CMP0031', LangType, '0000');
+
+    //         const token = jwt.sign(
+    //             { adminId: admin.ADMIF01, password: admin.ADMIF05, roleId: admin.ADMIF06, corpId: 'A0-0-001' },
+    //             process.env.JWT_SECRET_KEY,
+    //             { expiresIn: process.env.JWT_EXPIRATION }
+    //         );
+
+    //         response = {
+    //             data: { planInfo, csData: oDic["M00"] },
+    //             message: 'Login successful',
+    //             token
+    //         }
+    //         let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+    //         return res.status(200).json({ encryptedResponse: encryptedResponse });
+    //     } catch (error) {
+    //         console.error(error);
+    //         let response = {
+    //             status: 'FAIL',
+    //             message: 'Invalid Credentials'
+    //         }
+    //         let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+    //         return res.status(500).json({ encryptedResponse: encryptedResponse });
+    //     }
+    // }
+
     static async loginAdmin(userId, password, res) {
+
         try {
-            let response = {
-                status: 'SUCCESS',
-                message: null
-            }
-            let admin = encryptor.encrypt(userId);
-            const existingAdmin = await PLSDBADMI.findAll({
-                attributes: ['ADMIF01', 'ADMIF05', 'ADMIF06']
-                // where: { ADMIF01: encrypted } 
-            });
-            for (let i of existingAdmin) {
-                const decrypted = encryptor.decrypt(i.ADMIF01)
-                if (decrypted == userId) {
-                    if (i.ADMIF06 == 1) {
-                        admin = i;
-                        response = {
-                            message: 'User ID valid'
-                        }
-                    }
-                }
-            }
-            if (!admin) {
-                response = {
-                    message: 'Invalid UserId'
-                }
-                let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
-                return res.status(400).json({ encryptedResponse: encryptedResponse });
-            }
 
-            let pwd = encryptor.decrypt(admin.ADMIF05);
-            const isPasswordValid = pwd == password;
-            if (!isPasswordValid) {
-                response = {
-                    message: 'Invalid Credentials'
-                }
-                let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
-                return res.status(400).json({ encryptedResponse: encryptedResponse });
-            }
+            /* ========================= */
+            /* 👤 STEP 1: FIND USER */
+            /* ========================= */
 
-            let planInfo = await PLRDBA02.findAll({
-                where: {
-                    A02F13: 1
-                }
+            const users = await EPUser.findAll({
+                where: { UTF07: 'N' } // not deleted
             });
 
-            let oCmp = new Company();
-            CmpMaster.oYear = new Year(oCmp);
-            let dbconn = db.createPool('A00001CMP0031');
-            let oDic = await dbconn.query('SELECT * FROM CMPM00', {
-                type: QueryTypes.SELECT
-            });
-            let oEntD = {};
-            oEntD["M00"] = oDic[0]
-            let oM00 = new CmpMaster('', '', LangType, 'G', oEntD);
-            oDic = await oM00.GetDictionary(null, 'A00001CMP0031', LangType, '0000');
+            let user = null;
+
+            for (let u of users) {
+
+                let decryptedId;
+
+                try {
+                    decryptedId = encryptor.decrypt(u.UTF04);
+                } catch {
+                    decryptedId = u.UTF04;
+                }
+
+                if (decryptedId === userId) {
+                    user = u;
+                    break;
+                }
+            }
+
+            if (!user) {
+                return res.status(400).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        response: { message: 'Invalid user' }
+                    }))
+                });
+            }
+
+            /* ========================= */
+            /* 🔐 PASSWORD CHECK */
+            /* ========================= */
+
+            const decryptedPassword = encryptor.decrypt(user.UTF05);
+
+            if (decryptedPassword !== password) {
+                return res.status(400).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        response: { message: 'Invalid password' }
+                    }))
+                });
+            }
+
+            /* ========================= */
+            /* 🚫 ACTIVE CHECK */
+            /* ========================= */
+
+            if (user.UTF06 !== 'Y') {
+                return res.status(403).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        response: { message: 'User is inactive' }
+                    }))
+                });
+            }
+
+            /* ========================= */
+            /* 🔐 TOKEN */
+            /* ========================= */
 
             const token = jwt.sign(
-                { adminId: admin.ADMIF01, password: admin.ADMIF05, roleId: admin.ADMIF06, corpId: 'A0-0-001' },
+                {
+                    Id: user.UTF01,
+                    // userId: encryptor.decrypt(user.UTF04),
+                    userId: user.UTF04,   // 🔐 keep encrypted
+                    password: user.UTF05,
+                    roleId: Number(user.UTF03)   // 🔥 role from EP_USER
+                },
                 process.env.JWT_SECRET_KEY,
                 { expiresIn: process.env.JWT_EXPIRATION }
             );
 
-            response = {
-                data: { planInfo, csData: oDic["M00"] },
-                message: 'Login successful',
-                token
+            /* ========================= */
+            /* 📊 COMMON DATA */
+            /* ========================= */
+
+            let planInfo = await PLRDBA02.findAll({
+                where: { A02F13: 1 }
+            });
+
+            let oCmp = new Company();
+            CmpMaster.oYear = new Year(oCmp);
+
+            let dbconn = db.createPool('A00001CMP0031');
+            let oDic = await dbconn.query('SELECT * FROM CMPM00', {
+                type: QueryTypes.SELECT
+            });
+
+            let oEntD = { M00: oDic[0] };
+
+            let oM00 = new CmpMaster('', '', LangType, 'G', oEntD);
+            oDic = await oM00.GetDictionary(null, 'A00001CMP0031', LangType, '0000');
+            const loginUser = {
+                id: user.UTF01,
+                name: user.UTF02,
+                role: Number(user.UTF03),
+                phoneNumber: user.UTF09,
+                email: user.UTF10,
+                dealerCode: user.UTF08,
+                commission: user.UTF12
+            };
+
+            let ibDetail;
+
+            const roleId = Number(user.UTF03);
+
+            /* =========================
+               🧑‍💼 ROLE-BASED ibDetail
+               ========================= */
+
+            if ([1, 2].includes(roleId)) {
+                // Admin or User → themselves + all dealers and resellers
+                const allDealersAndResellers = await EPUser.findAll({
+                    where: {
+                        UTF07: 'N',
+                        UTF03: [3, 4] // dealer and reseller
+                    }
+                });
+
+                ibDetail = [
+                    {
+                        id: user.UTF01,
+                        name: user.UTF02,
+                        role: roleId
+                    },
+                    ...allDealersAndResellers.map(u => ({
+                        id: u.UTF01,
+                        name: u.UTF02,
+                        role: Number(u.UTF03)
+                    }))
+                ];
+            } else if ([3, 4].includes(roleId)) {
+                // Dealer/Reseller → only themselves
+                ibDetail = [{
+                    id: user.UTF01,
+                    name: user.UTF02,
+                    role: roleId
+                }];
             }
-            let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
-            return res.status(200).json({ encryptedResponse: encryptedResponse });
+
+            /* =========================
+               👤 DEALER / RESELLER (3,4)
+               ========================= */
+
+            else {
+
+                ibDetail = [{
+                    id: user.UTF01,
+                    name: user.UTF02,
+                    role: roleId
+                }];
+            }
+
+            /* ========================= */
+            /* 📦 RESPONSE */
+            /* ========================= */
+            return res.status(200).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    response: {
+                        data: {
+                            planInfo,
+                            csData: oDic["M00"],
+                            ibDetail,     // 🔥 array always
+                            loginUser     // 🔥 separate object
+                        },
+                        message: 'Login successful',
+                        token
+                    }
+                }))
+            });
+
         } catch (error) {
-            console.error(error);
-            let response = {
-                status: 'FAIL',
-                message: 'Invalid Credentials'
-            }
-            let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
-            return res.status(500).json({ encryptedResponse: encryptedResponse });
+
+            console.error("Unified Login Error:", error.message);
+
+            return res.status(500).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    response: { message: 'Login failed' }
+                }))
+            });
         }
     }
 }
-
 class UserController {
     // Handle user actions: Register (R), Edit (E), Login (L)
     static async manageUser(req, res) {

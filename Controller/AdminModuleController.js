@@ -28,16 +28,7 @@ function validateComboModule(ModuleType, ModuleCode) {
     return null;
 }
 
-// function extractSetupCode(value) {
-//     if (!value) return value;
 
-//     // if string contains dash → take last part
-//     if (value.includes('-')) {
-//         return value.split('-').pop().trim();
-//     }
-
-//     return value.trim();
-// }
 function extractSetupIds(value) {
     if (!value) return [];
 
@@ -97,8 +88,9 @@ class AdminModuleController {
                 return AdminModuleController.send(res, response, 401);
             }
 
-            const decoded = await TokenService.validateToken(token);
-            if (decoded.roleId !== 1) {
+            const decoded = await TokenService.validateAdminToken(token);
+            // Allow all roles to READ
+            if (![1, 2, 3, 4].includes(decoded.roleId)) {
                 response.status = 'FAIL';
                 response.message = 'Access denied';
                 return AdminModuleController.send(res, response, 403);
@@ -259,9 +251,6 @@ class AdminModuleController {
                     return AdminModuleController.send(res, response, 201);
                 }
 
-
-
-                
                 case 'E': {
 
                     if (!moduleID) {
@@ -344,7 +333,7 @@ class AdminModuleController {
                     response.message = 'Module updated successfully';
                     return AdminModuleController.send(res, response);
                 }
-                
+
                 case 'D': {
 
                     if (!moduleID) {

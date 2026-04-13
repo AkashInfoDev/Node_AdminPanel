@@ -37,7 +37,18 @@ class CAdminUserController {
                 });
             }
 
-            const decoded = await TokenService.validateToken(token);
+            const decoded = await TokenService.validateAdminToken(token);
+
+
+            const roleId = Number(decoded.roleId);
+
+            if (![1, 2, 3, 4].includes(roleId)) {
+                response.status = 'FAIL';
+                response.message = 'Access denied';
+                return res.status(403).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                });
+            }
 
             /* 🔓 DECRYPT PARAM */
             if (!req.query.pa) {
