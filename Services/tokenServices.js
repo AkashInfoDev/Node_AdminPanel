@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const Encryptor = require('./encryptor'); // Assuming this is for decrypting adminId
 const ADMIController = require('../Controller/ADMIController');
+const EP_USERController = require('../Controller/EP_USERController');
 
 
 class TokenService {
@@ -27,12 +28,17 @@ class TokenService {
 
         // Decrypt adminId if necessary (only if encrypted in the token)
         let adminId, password
+        const safeDecrypt = (val) => {
+            if (!val) return null;
+            return encryptor.decrypt(val);
+        };
+
         if (decodedToken.roleId == 1) {
-            adminId = encryptor.decrypt(decodedToken.adminId); // Assuming Encryptor is used for adminId decryption
-            password = encryptor.decrypt(decodedToken.password); // Assuming the token has a password field
+            adminId = safeDecrypt(decodedToken.adminId);
+            password = safeDecrypt(decodedToken.password);
         } else {
-            adminId = encryptor.decrypt(decodedToken.userId)
-            password = encryptor.decrypt(decodedToken.password)
+            adminId = safeDecrypt(decodedToken.userId);
+            password = safeDecrypt(decodedToken.password);
         }
 
         try {
