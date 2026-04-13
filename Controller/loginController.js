@@ -10,6 +10,7 @@ const definePLRDBA01 = require('../Models/RDB/PLRDBA01'); // Model factory
 const definePLRDBA02 = require('../Models/RDB/PLRDBA02'); // Model factory
 const definePLRDBOTP = require('../Models/RDB/PLRDBOTP');
 const definePLRDBGAO = require('../Models/RDB/PLRDBGAO');
+const defineEP_USER = require('../Models/RDB/EP_USER');
 const Encryptor = require('../Services/encryptor');
 const { Op, QueryTypes, Sequelize } = require('sequelize');
 // const PLRDBA01 = require('../Models/RDB/PLRDBA01');
@@ -41,6 +42,7 @@ const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 const PLRDBA02 = definePLRDBA02(sequelizeRDB);
 const PLRDBOTP = definePLRDBOTP(sequelizeRDB);
 const PLRDBGAO = definePLRDBGAO(sequelizeRDB);
+const EP_USER = defineEP_USER(sequelizeRDB);
 const encryptor = new Encryptor();
 // let response = { data: null, Status: "SUCCESS", message: null }
 
@@ -303,7 +305,7 @@ class AdminController {
             /* 👤 STEP 1: FIND USER */
             /* ========================= */
 
-            const users = await EPUser.findAll({
+            const users = await EP_USER.findAll({
                 where: { UTF07: 'N' } // not deleted
             });
 
@@ -415,7 +417,7 @@ class AdminController {
 
             if ([1, 2].includes(roleId)) {
                 // Admin or User → themselves + all dealers and resellers
-                const allDealersAndResellers = await EPUser.findAll({
+                const allDealersAndResellers = await EP_USER.findAll({
                     where: {
                         UTF07: 'N',
                         UTF03: [3, 4] // dealer and reseller
