@@ -117,29 +117,40 @@ async function executeSQLInBatches(dbConn, tableName, sqlScript) {
             if (uniqueColumn) {
 
                 bulkQuery = `
-        INSERT INTO [${tableName}] (${columnList})
-        SELECT *
-        FROM (VALUES ${valuesList.join(",\n")}) AS v(${columnList})
-        WHERE NOT EXISTS (
-            SELECT 1 
-            FROM [${tableName}] t
-            WHERE t.${uniqueColumn} = v.${uniqueColumn}
-        );
-    `;
+                INSERT INTO [${tableName}] (${columnList})
+                SELECT *
+                FROM (VALUES ${valuesList.join(",\n")}) AS v(${columnList})
+                WHERE NOT EXISTS (
+                SELECT 1 
+                FROM [${tableName}] t
+                WHERE t.${uniqueColumn} = v.${uniqueColumn}
+                );`;
 
             } else {
 
                 // fallback normal insert
                 bulkQuery = `
-        INSERT INTO [${tableName}] (${columnList})
-        VALUES ${valuesList.join(",\n")};
-    `;
+                INSERT INTO [${tableName}] (${columnList})
+                VALUES ${valuesList.join(",\n")};
+                `;
             }
 
             console.log(`🚀 Bulk Batch ${i / BATCH_SIZE + 1}`);
 
-            await dbConn.query(bulkQuery, { transaction });
+            try {
+                await dbConn.query(bulkQuery, { transaction });
+            } catch (err) {
+                console.log("MAIN ERROR:", err.message);
 
+                // 👇 THIS is what you are missing
+                if (err.parent && err.parent.errors) {
+                    err.parent.errors.forEach((e, i) => {
+                        console.log(`ERROR ${i + 1}:`, e.message);
+                    });
+                } else {
+                    console.log(err);
+                }
+            }
             await transaction.commit();
 
         } catch (err) {
