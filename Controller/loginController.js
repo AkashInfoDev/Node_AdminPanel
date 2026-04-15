@@ -265,14 +265,14 @@ class AdminController {
 
     //         let oCmp = new Company();
     //         CmpMaster.oYear = new Year(oCmp);
-    //         let dbconn = db.createPool('A00001CMP0031');
+    //         let dbconn = db.createPool('MULTITAX');
     //         let oDic = await dbconn.query('SELECT * FROM CMPM00', {
     //             type: QueryTypes.SELECT
     //         });
     //         let oEntD = {};
     //         oEntD["M00"] = oDic[0]
     //         let oM00 = new CmpMaster('', '', LangType, 'G', oEntD);
-    //         oDic = await oM00.GetDictionary(null, 'A00001CMP0031', LangType, '0000');
+    //         oDic = await oM00.GetDictionary(null, 'MULTITAX', LangType, '0000');
 
     //         const token = jwt.sign(
     //             { adminId: admin.ADMIF01, password: admin.ADMIF05, roleId: admin.ADMIF06, corpId: 'A0-0-001' },
@@ -389,7 +389,7 @@ class AdminController {
             let oCmp = new Company();
             CmpMaster.oYear = new Year(oCmp);
 
-            let dbconn = db.createPool('A00001CMP0031');
+            let dbconn = db.createPool('MULTITAX');
             let oDic = await dbconn.query('SELECT * FROM CMPM00', {
                 type: QueryTypes.SELECT
             });
@@ -397,7 +397,7 @@ class AdminController {
             let oEntD = { M00: oDic[0] };
 
             let oM00 = new CmpMaster('', '', LangType, 'G', oEntD);
-            oDic = await oM00.GetDictionary(null, 'A00001CMP0031', LangType, '0000');
+            oDic = await oM00.GetDictionary(null, 'MULTITAX', LangType, '0000');
             const loginUser = {
                 id: user.UTF01,
                 name: user.UTF02,

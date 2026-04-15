@@ -185,7 +185,7 @@ class CmpMaster extends PlusInfo {
                 this.oEntDict["M00"].FIELD03 = await MApp.NextNumber(null, "", "", 20, "", ""); // Company GUID
 
                 // Clone DB
-                const sourceDbName = 'A00001CMP0031';
+                const sourceDbName = 'MULTITAX';
                 const corpNum = parseInt(nextCorpId.split('-')[2]);
                 let startsDate;
                 let endDate;

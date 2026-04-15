@@ -205,8 +205,8 @@ class CompanyService {
             let encryuser = userId.includes(':') ? userId : encryptor.encrypt(userId);
             let cMaster = new CmpMaster(encryuser, ExistingcorpId, LangType, 'A', null, null, SDBdbname);
             if (!cSData) {
-                // CmpMaster.oCmp = new Company('A00001CMP0031');
-                let compCon = db.createPool('A00001CMP0031');
+                // CmpMaster.oCmp = new Company('MULTITAX');
+                let compCon = db.createPool('MULTITAX');
                 let oent = await compCon.query(`SELECT TOP 1 * FROM CMPM00`, { type: QueryTypes.SELECT })
                 cMaster.oEntDict["M00"] = oent[0];
             } else {

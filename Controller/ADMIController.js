@@ -6,7 +6,7 @@ class ADMIController {
         this.connection = db.createPool(dbName);
         this.PLSDBADMI = definePLSDBADMI(this.connection);
     }
-    async create(encryptedUserId, firstName, middleName, lastName, hashedPassword, roleId, email, dob, gender, address, phoneNumber, base64Image, BrcList, CmpList, menuList, cusRole, corpId, lAudit) {
+    async create(encryptedUserId, firstName, middleName, lastName, hashedPassword, roleId, email, dob, gender, address, phoneNumber, base64Image, BrcList, CmpList, menuList, cusRole, corpId, lAudit = 'N') {
         return await this.PLSDBADMI.create({
             ADMIF01: encryptedUserId,
             ADMIF02: firstName,
