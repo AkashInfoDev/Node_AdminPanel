@@ -38,7 +38,7 @@ class CompanyService {
         const parameterString = encryptor.decrypt(req.query.pa);
         let decodedParam = decodeURIComponent(parameterString);
         let pa = querystring.parse(decodedParam);
-        let { firstName, middleName, lastName, dob, gender, email, password, roleId, address, base64Image, GUaction, rpname, corpId, cusRole, CmpList, BrcList, userId, companyName, softSubType, softType, dbVersion, webVer, noOfUser, regDate, subStrtDate, subEndDate, cancelDate, subDomainDelDate, cnclRes, SBDdbType, srverIP, serverUserName, serverPassword, A02id, phoneNumber, cSData, ExistingcorpId, GSTNumber, Installby } = pa
+        let { firstName, middleName, lastName, dob, gender, email, password, roleId, address, base64Image, GUaction, rpname, corpId, cusRole, CmpList, BrcList, userId, companyName, softSubType, softType, dbVersion, webVer, noOfUser, regDate, subStrtDate, subEndDate, cancelDate, subDomainDelDate, cnclRes, SBDdbType, srverIP, serverUserName, serverPassword, A02id, phoneNumber, cSData, ExistingcorpId, GSTNumber, Installby, lAudit } = pa
         let response = {
             status: true,
             message: '',
@@ -121,7 +121,7 @@ class CompanyService {
             const encryptedUserId = encryptor.encrypt(userId);
             const hashedPassword = encryptor.encrypt(password);
             A02id
-            const newUser = await admi.create(encryptedUserId, firstName, middleName, lastName, hashedPassword, roleId, email, dob, gender, address, phoneNumber, base64Image, BrcList, CmpList);
+            const newUser = await admi.create(encryptedUserId, firstName, middleName, lastName, hashedPassword, roleId, email, dob, gender, address, phoneNumber, base64Image, BrcList, CmpList, '', '', '', lAudit);
             let m81 = new M81Controller(SDBdbname)
             let m81row = await m81.create('U', 'U0000000', firstName + lastName, userId, password, '', 'ADMIN', phoneNumber, '', '', '', 'A', '', newUser.ADMIF00);
             let rel = new RELController(SDBdbname)

@@ -87,6 +87,10 @@ module.exports = (sequelize) => {
         ADMICOMP: {
             type: DataTypes.STRING(4000),
             allowNull: true
+        },
+        ADMIF15: {
+            type: DataTypes.SMALLINT,
+            allowNull: true
         }
     }, {
         tableName: 'PLSDBADMI',

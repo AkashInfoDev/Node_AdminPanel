@@ -141,14 +141,14 @@ class CmpMaster extends PlusInfo {
             if (this.decoded) {
                 let cNum = this.decoded.corpId.split('-');
                 nextCorpId = this.decoded.corpId;
-                cNum.length == 3 ? targetDbName = 'A' + cNum[2].toString().padStart(5, '0') + 'CMP' + this.cmpNum.toString().padStart(4, '0') : targetDbName = 'A' + cNum[1].toString().padStart(5, '0') + 'CMP' + this.cmpNum.toString().padStart(4, '0');
+                cNum.length == 3 ? targetDbName = cNum.join('') + 'CMP' + this.cmpNum.toString().padStart(4, '0') : targetDbName = cNum.join('') + 'CMP' + this.cmpNum.toString().padStart(4, '0');
                 this.targDB = targetDbName;
             } else {
                 // let corpNumbers = corpids.map(item => parseInt(item.A01F03.slice(5))).filter(Number.isFinite);
                 // let nextCorpNum = (corpNumbers.length > 0 ? Math.max(...corpNumbers) : 0) + 1;
                 // nextCorpId = 'PL-P-' + nextCorpNum.toString().padStart(5, '0');
                 let nextCorpNum = nextCorpId.split('-')
-                nextCorpNum.length == 3 ? targetDbName = 'A' + nextCorpNum[2].toString().padStart(5, '0') + 'CMP' + this.cmpNum.toString().padStart(4, '0') : targetDbName = 'A' + nextCorpNum[1].toString().padStart(5, '0') + 'CMP' + this.cmpNum.toString().padStart(4, '0');
+                nextCorpNum.length == 3 ? targetDbName = nextCorpNum.join('') + 'CMP' + this.cmpNum.toString().padStart(4, '0') : targetDbName = nextCorpNum.join('') + 'CMP' + this.cmpNum.toString().padStart(4, '0');
                 this.targDB = targetDbName;
             }
 

@@ -98,7 +98,7 @@ class AdminController {
         }
     }
 
-    static async registerAdmin(userId, firstName, middleName, lastName, dob, gender, email, password, roleId, address, phoneNumber, base64Image, res) {
+    static async registerAdmin(userId, firstName, middleName, lastName, dob, gender, email, password, roleId, address, phoneNumber, base64Image, lAudit, res) {
         try {
             let response = {
                 status: 'SUCCESS',
@@ -135,6 +135,7 @@ class AdminController {
                 ADMIF12: address,
                 ADMIF13: phoneNumber,
                 ADMIF14: base64Image,
+                ADMIF15: lAudit
                 // isActive will be 1 when new use registered
             });
             const admin = await PLSDBADMI.findOne({ where: { ADMIF01: encrypted } });
@@ -497,7 +498,7 @@ class UserController {
         let response = { data: null, status: "SUCCESS", message: '' };
 
         pa.isPassword = pa.isPassword === "true";
-        let { action, corpId, userId, firstName, middleName, lastName, dob, gender, email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, isPassword, cusRole, CmpList, BrcList, cAction
+        let { action, corpId, userId, firstName, middleName, lastName, dob, gender, email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, isPassword, cusRole, CmpList, BrcList, cAction, lAudit
             // , companyName, softSubType, softType, dbVersion, webVer, noOfUser, regDate, subStrtDate, subEndDate, cancelDate, subDomainDelDate, cnclRes, SBDdbType, srverIP, serverUserName, serverPassword, A02id 
         } = pa;
 
@@ -537,12 +538,12 @@ class UserController {
             if (action === 'A') {
                 return UserController.registerUser({
                     userId, firstName, middleName, lastName, dob, gender,
-                    email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, corpId, cusRole, decoded, req, CmpList, BrcList
+                    email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, corpId, cusRole, decoded, req, CmpList, BrcList, lAudit
                 }, res);
             } else if (action === 'E') {
                 return UserController.updateUser({
                     userId, firstName, middleName, lastName, dob, gender,
-                    email, password, isPassword, roleId, address, phoneNumber, base64Image, cusRole, CmpList, BrcList, decoded
+                    email, password, isPassword, roleId, address, phoneNumber, base64Image, cusRole, CmpList, BrcList, lAudit, decoded
                 }, res);
             } else if (action === 'L') {
                 return UserController.loginUser(corpId, userId, password, res, req);
@@ -563,7 +564,7 @@ class UserController {
 
     static async registerUser({
         userId, firstName, middleName, lastName, dob, gender,
-        email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, corpId, cusRole, req, decoded, CmpList, BrcList
+        email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, corpId, cusRole, lAudit, req, decoded, CmpList, BrcList
     }, res) {
         try {
             if (roleId == '2') {
@@ -814,7 +815,7 @@ class UserController {
                 });
 
                 const hashedPassword = encryptor.encrypt(password);
-                const newUser = await admi.create(encryptedUserId, firstName, middleName, lastName, hashedPassword, roleId, email, (dob.toString()) ? dob.toString() : null, gender, address, phoneNumber, base64Image, BrcList, CmpList, '', cusRole, superUserDetails.ADMICORP
+                const newUser = await admi.create(encryptedUserId, firstName, middleName, lastName, hashedPassword, roleId, email, (dob.toString()) ? dob.toString() : null, gender, address, phoneNumber, base64Image, BrcList, CmpList, '', cusRole, superUserDetails.ADMICORP, lAudit
                 );
 
                 let superUsrCorpDtl = await PLRDBA01.findOne({
@@ -977,7 +978,7 @@ class UserController {
 
     static async updateUser({
         userId, updatedUserId, firstName, middleName, lastName, dob, gender,
-        email, password, isPassword, roleId, address, phoneNumber, base64Image, cusRole, CmpList, BrcList, decoded
+        email, password, isPassword, roleId, address, phoneNumber, base64Image, cusRole, CmpList, BrcList, decoded, lAudit
     }, res) {
         try {
             let corpId = decoded.corpId.toUpperCase();
@@ -1032,7 +1033,8 @@ class UserController {
                     ADMIF14: base64Image || existingUser.ADMIF14, // Base64 Image
                     ADMIROL: cusRole,
                     ADMIBRC: BrcList,
-                    ADMICOMP: CmpList
+                    ADMICOMP: CmpList,
+                    ADMIF15: lAudit
                 };
                 await m81.update({
                     M81F04: password
@@ -1053,7 +1055,8 @@ class UserController {
                     ADMIF14: base64Image || existingUser.ADMIF14, // Base64 Image
                     ADMIROL: cusRole,
                     ADMIBRC: BrcList,
-                    ADMICOMP: CmpList
+                    ADMICOMP: CmpList,
+                    ADMIF15: lAudit
                 };
             }
 
@@ -1489,7 +1492,8 @@ class UserController {
                     cmpList: cmplist.CompList,
                     purchasedSetUpIds: M81Row[0].M81SID,
                     isActive: inputDate < today ? false : true,
-                    userMail: user.ADMIF07
+                    userMail: user.ADMIF07,
+                    lAudit: user.ADMIF15
                 };
                 // let currentTime = new Date();
                 // let newLogin = await m83.create(userId, formatDate(currentTime), '', '', '', token);
