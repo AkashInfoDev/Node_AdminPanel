@@ -129,9 +129,10 @@ class CmpMaster extends PlusInfo {
             let lastCompanyNumber = cmpNumbers.length > 0 ? cmpNumbers[0].M82F02 : 0
             const companyNumbers = cmpNumbers.map(row => row.M82F02);
             if (companyNumbers.length != 0) {
-                for (let i = 1; i <= lastCompanyNumber; i++) {
+                const max = Math.max(...companyNumbers);
+                for (let i = 1; i <= max; i++) {
                     if (!companyNumbers.includes(i)) {
-                        this.cmpNum = i;
+                        this.cmpNum = i.toString();
                         break;
                     }
                 }
