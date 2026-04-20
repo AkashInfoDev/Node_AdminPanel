@@ -700,7 +700,7 @@ class UserController {
                         let m82 = new M82Controller(companyResult.SDBdbname);
                         await m82.create(cUserID, parseInt(companyResult.CmpNum), '', '', '', '', '', '', '', 'Y', (new Date().getFullYear() % 100).toString(), 'A');
                         let cmp = new CMPController(companyResult.SDBdbname);
-                        await cmp.create(parseInt(companyResult.CmpNum), companyName, 'SQL', 'No Group', cUserID, formatDate(new Date()), '94.176.235.105', 'aipharma_aakash', 'Aipharma@360', 'DATA', null);
+                        await cmp.create(parseInt(companyResult.CmpNum), companyName, 'SQL', 'No Group', cUserID, formatDate(new Date()), '45.195.159.72', 'aiAdmin', 'aaBC@#23', 'DATA', null);
                         // Fetch user info based on company name
                         let userInfo = await PLRDBA01.findOne({
                             where: { A01F02: companyName }
@@ -1103,6 +1103,22 @@ class UserController {
                 response.message = 'Invalid Credentials';
                 const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                 return res.status(400).json({ encryptedResponse: encryptedResponse });
+            }
+            if (corpexi) {
+                if (corpexi[0].A01F12 < Date.now()) {
+                    if (corpexi[0].A02A01 == 2) {
+                        response.status = 'FAIL';
+                        response.message = 'Your Trial Plan has be completed';
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                        return res.status(400).json({ encryptedResponse: encryptedResponse });
+                    }
+                    if (corpexi[0].A02A01 == 7) {
+                        response.status = 'FAIL';
+                        response.message = 'Your Package time has been due';
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                        return res.status(400).json({ encryptedResponse: encryptedResponse });
+                    }
+                }
             }
             let sdbSeq = corpId.split('-');
             let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';

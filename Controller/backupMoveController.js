@@ -14,6 +14,7 @@ const definePLSTATE = require('../Models/IDB/PLSTATE');
 const sequelizeIDB = db.getConnection('IDBAPI');
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01');
 const { sendEmailWithAttachment } = require("../Services/mailServices");
+const { generateDatabaseName } = require("../Services/queryService");
 const sequelizeRDB = db.getConnection("RDB");
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 
@@ -208,7 +209,7 @@ const backupToDrive = async (req, res) => {
         const corporateID = decoded.corpId;
 
         /* ========= DB ========= */
-        const databaseName = `A${corporateID.slice(-5)}CMP${companyID.toString().padStart(4, "0")}`;
+        const databaseName = generateDatabaseName(corporateID, companyID); //`A${corporateID.slice(-5)}CMP${companyID.toString().padStart(4, "0")}`;
         const fileName = `${databaseName}.bak`;
 
         const ftpFolderPath = `/html/eplus/`;

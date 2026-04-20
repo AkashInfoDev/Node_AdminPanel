@@ -622,7 +622,7 @@ class handleCompany {
                         await rel.create(admin.ADMICORP, admin.ADMIF01, parseInt(saveCmp.CmpNum), '');
                         await m82.create(cUserID, parseInt(saveCmp.CmpNum), '', '', '', '', '', '', '', 'N', (new Date().getFullYear() % 100).toString(), 'A'
                         );
-                        await cmp.create(parseInt(saveCmp.CmpNum), cSData['M00'].FIELD02, 'SQL', cSData['M00'].FIELD11, cUserID, formatDate(new Date()), '94.176.235.105', 'aipharma_aakash', 'Aipharma@360', 'DATA', null
+                        await cmp.create(parseInt(saveCmp.CmpNum), cSData['M00'].FIELD02, 'SQL', cSData['M00'].FIELD11, cUserID, formatDate(new Date()), '45.195.159.72', 'aiAdmin', 'aaBC@#23', 'DATA', null
                         );
                         await PLRDBGAO.create({
                             GAOF01: decoded.corpId,
