@@ -77,7 +77,7 @@ module.exports = (sequelize) => {
             type: DataTypes.STRING(10)
         },
         A01UNQ: {
-            type: DataTypes.STRING(10),
+            type: DataTypes.INTEGER,
             autoIncrement: true
         },
         FTPURL: {
@@ -107,6 +107,11 @@ module.exports = (sequelize) => {
         },
         A01F19: {
             type: DataTypes.STRING(100)
+        },
+        A01F20: {
+            type: DataTypes.CHAR(1),
+            defaultValue: 'P', // Pending
+            allowNull: false
         }
     }, {
         tableName: 'PLRDBA01',

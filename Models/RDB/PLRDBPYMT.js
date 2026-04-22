@@ -8,11 +8,11 @@ module.exports = (sequelize) => {
     return sequelize.define('PLRDBPYMT', {
         PYMT00: { //-- Payment ID (Auto Increment)
             type: DataTypes.INTEGER,
-            primaryKey: true,
             autoIncrement: true,
         },
         PYMT01: { // Corporation ID
             type: DataTypes.STRING(15),
+            primaryKey: true,
             allowNull: false,
         },
         PYMT02: { // User ID

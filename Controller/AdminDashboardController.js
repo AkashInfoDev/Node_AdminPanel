@@ -3,7 +3,7 @@ const db = require('../Config/config');
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01');
 const TokenService = require('../Services/tokenServices');
 const Encryptor = require('../Services/encryptor');
-const { Op } = require('sequelize');
+const { Op, QueryTypes, Sequelize } = require('sequelize');
 const { fn, col, literal } = require('sequelize');
 const sequelizeRDB = db.getConnection('RDB');
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
@@ -13,13 +13,31 @@ const definePLRDBPLREL = require('../Models/RDB/PLRDBPLREL'); // Model factory
 const PLRDBPLREL = definePLRDBPLREL(sequelizeRDB);
 const definePLRDBPYMT = require('../Models/RDB/PLRDBPYMT');
 const EP_USERController = require('./EP_USERController');
+const defineEP_USER = require('../Models/RDB/EP_USER');
+const Company = require('../PlusData/Class/CmpYrCls/Company');
+const Year = require('../PlusData/Class/CmpYrCls/Year');
+const CmpMaster = require('../PlusData/Class/CmpYrCls/CmpMaster');
+const { LangType } = require('../PlusData/commonClass/plusCommon');
 const PLRDBPYMT = definePLRDBPYMT(sequelizeRDB);
+const EP_USER = defineEP_USER(sequelizeRDB);
+const defineUserTypes = require('../Models/RDB/EP_USERTPYES');
+const UserTypes = defineUserTypes(sequelizeRDB, require('sequelize').DataTypes);
 
 
 const encryptor = new Encryptor();
 
 class AdminDashboardController {
 
+    static async checkRoleAccess(roleId) {
+        const roles = await UserTypes.findAll({
+            attributes: ['ID'],
+            raw: true
+        });
+
+        const allowedRoleIds = roles.map(r => Number(r.ID));
+
+        return allowedRoleIds.includes(Number(roleId));
+    }
     static async manageDashboard(req, res) {
         let response = { status: 'SUCCESS', message: '', data: null };
 
@@ -40,7 +58,9 @@ class AdminDashboardController {
             // allow all roles
             const roleId = Number(decoded.roleId);
 
-            if (![1,2,3].includes(roleId)) {
+            const isAllowed = await AdminDashboardController.checkRoleAccess(roleId);
+
+            if (!isAllowed) {
                 response.status = 'FAIL';
                 response.message = 'Access denied';
                 return res.status(403).json({
@@ -163,6 +183,22 @@ class AdminDashboardController {
                         res
                     );
 
+                case 'S':
+                    if (!corporateId || !pa.status) {
+                        response.status = 'FAIL';
+                        response.message = 'corporateId and status required';
+                        return res.status(400).json({
+                            encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                        });
+                    }
+
+                    return AdminDashboardController.updateCorporateStatus(
+                        corporateId,
+                        pa.status,
+                        req,
+                        response,
+                        res
+                    );
                 default:
                     response.status = 'FAIL';
                     response.message = 'Invalid action';
@@ -186,8 +222,11 @@ class AdminDashboardController {
         let encryptedResponse;
 
         try {
-            // 🔐 1. Token
+            /* =========================
+               🔐 TOKEN
+            ========================= */
             const token = req.headers['authorization']?.split(' ')[1];
+
             if (!token) {
                 response.status = 'FAIL';
                 response.message = 'Token missing';
@@ -196,10 +235,11 @@ class AdminDashboardController {
             }
 
             const decoded = await TokenService.validateToken(token);
-
             const roleId = Number(decoded.roleId);
 
-            if (![1, 2, 3, 4].includes(roleId)) {
+            const isAllowed = await AdminDashboardController.checkRoleAccess(roleId);
+
+            if (!isAllowed) {
                 response.status = 'FAIL';
                 response.message = 'Access denied';
                 return res.status(403).json({
@@ -208,55 +248,119 @@ class AdminDashboardController {
             }
 
             /* =========================
-               🔥 ROLE-BASED FILTER
+               👤 GET USER
+            ========================= */
+
+            const userCtrl = new EP_USERController('RDB');
+            const users = await userCtrl.findAll({ UTF07: 'N' });
+
+            let user = null;
+
+            for (let u of users) {
+                let decryptedId;
+                try {
+                    decryptedId = encryptor.decrypt(u.UTF04);
+                } catch {
+                    decryptedId = u.UTF04;
+                }
+
+                let tokenUserId;
+                try {
+                    tokenUserId = encryptor.decrypt(decoded.userId);
+                } catch {
+                    tokenUserId = decoded.userId;
+                }
+
+                if (String(decryptedId) === String(tokenUserId)) {
+                    user = u;
+                    break;
+                }
+            }
+
+            if (!user) throw new Error('User not found');
+
+            /* =========================
+               👤 LOGIN USER
+            ========================= */
+
+            const loginUser = {
+                id: user.UTF01,
+                name: user.UTF02,
+                role: Number(user.UTF03),
+                phoneNumber: user.UTF09,
+                email: user.UTF10,
+                dealerCode: user.UTF08,
+                commission: user.UTF12
+            };
+
+            /* =========================
+               🧑‍💼 ibDetail
+            ========================= */
+
+            let ibDetail;
+
+            if ([1, 2, 5].includes(roleId)) {
+                const allUsers = await userCtrl.findAll({
+                    UTF07: 'N',
+                    UTF03: [3, 4]
+                });
+
+                ibDetail = [
+                    {
+                        id: user.UTF01,
+                        name: user.UTF02,
+                        role: roleId
+                    },
+                    ...allUsers.map(u => ({
+                        id: u.UTF01,
+                        name: u.UTF02,
+                        role: Number(u.UTF03)
+                    }))
+                ];
+            } else {
+                ibDetail = [{
+                    id: user.UTF01,
+                    name: user.UTF02,
+                    role: roleId
+                }];
+            }
+
+            /* =========================
+               📊 PLAN INFO + csData
+            ========================= */
+
+            let planInfo = await PLRDBA02.findAll({
+                where: { A02F13: 1 }
+            });
+
+            let oCmp = new Company();
+            CmpMaster.oYear = new Year(oCmp);
+
+            let dbconn = db.getConnection('MULTITAX');
+
+            let oDic = await dbconn.query('SELECT * FROM CMPM00', {
+                type: QueryTypes.SELECT
+            });
+
+            let oEntD = { M00: oDic[0] };
+
+            let oM00 = new CmpMaster('', '', LangType, 'G', oEntD);
+            oDic = await oM00.GetDictionary(null, 'MULTITAX', LangType, '0000');
+
+            const csData = oDic["M00"];
+
+            /* =========================
+               🔥 ROLE FILTER
             ========================= */
 
             let whereCondition = {};
 
-            if (![1, 2].includes(roleId)) {
-
-                // 👤 Get User_Id from UserTable
-                const userCtrl = new EP_USERController('RDB');
-
-                const users = await userCtrl.findAll({
-                    UTF07: 'N'
-                });
-
-                let loggedUser = null;
-
-                for (let u of users) {
-                    let decryptedId;
-
-                    try {
-                        decryptedId = encryptor.decrypt(u.UTF04);
-                    } catch {
-                        decryptedId = u.UTF04;
-                    }
-
-                    let tokenUserId;
-
-                    try {
-                        tokenUserId = encryptor.decrypt(decoded.userId);
-                    } catch {
-                        tokenUserId = decoded.userId;
-                    }
-
-                    if (String(decryptedId) === String(tokenUserId)) {
-                        loggedUser = u;
-                        break;
-                    }
-                }
-
-                if (!loggedUser) {
-                    throw new Error('User not found');
-                }
-
-                // 🔥 MAIN FILTER
-                whereCondition.A01F19 = loggedUser.UTF01;
+            if (![1, 2, 5].includes(roleId)) {
+                whereCondition.A01F19 = user.UTF01;
             }
 
             /* =========================
-               📅 DATE SETUP
+               📅 DATE
             ========================= */
 
             const today = new Date();
@@ -264,44 +368,25 @@ class AdminDashboardController {
             next7Days.setDate(today.getDate() + 7);
 
             /* =========================
-               🏢 CORPORATE COUNTS
+               🏢 CORPORATE STATS
             ========================= */
 
-            const totalCorporates = await PLRDBA01.count({
-                where: whereCondition
-            });
+            const totalCorporates = await PLRDBA01.count({ where: whereCondition });
 
             const activeCorporates = await PLRDBA01.count({
-                where: {
-                    ...whereCondition,
-                    A01F08: 'A'
-                }
+                where: { ...whereCondition, A01F13: { [Op.gte]: today } }
             });
 
             const inactiveCorporates = await PLRDBA01.count({
-                where: {
-                    ...whereCondition,
-                    A01F08: 'D'
-                }
+                where: { ...whereCondition, A01F13: { [Op.lt]: today } }
             });
 
             /* =========================
                📅 SUBSCRIPTIONS
             ========================= */
 
-            const activeSubscriptions = await PLRDBA01.count({
-                where: {
-                    ...whereCondition,
-                    A01F13: { [Op.gte]: today }
-                }
-            });
-
-            const expiredSubscriptions = await PLRDBA01.count({
-                where: {
-                    ...whereCondition,
-                    A01F13: { [Op.lt]: today }
-                }
-            });
+            const activeSubscriptions = activeCorporates;
+            const expiredSubscriptions = inactiveCorporates;
 
             const expiringSoon = await PLRDBA01.count({
                 where: {
@@ -333,7 +418,7 @@ class AdminDashboardController {
             const planUsage = await PLRDBA01.findAll({
                 attributes: [
                     'A02F01',
-                    [fn('COUNT', col('A02F01')), 'totalUsers']
+                    [Sequelize.fn('COUNT', Sequelize.col('A02F01')), 'totalUsers']
                 ],
                 where: {
                     ...whereCondition,
@@ -343,11 +428,7 @@ class AdminDashboardController {
                 group: ['A02F01']
             });
 
-            const planStats = {
-                trial: 0,
-                default: 0,
-                standard: 0
-            };
+            const planStats = { trial: 0, default: 0, standard: 0 };
 
             planUsage.forEach(row => {
                 const planId = row.A02F01;
@@ -364,12 +445,12 @@ class AdminDashboardController {
 
             const newUsersDaily = await PLRDBA01.findAll({
                 attributes: [
-                    [literal('CAST(A01F12 AS DATE)'), 'date'],
-                    [fn('COUNT', col('A01F12')), 'totalUsers']
+                    [Sequelize.literal('CAST(A01F12 AS DATE)'), 'date'],
+                    [Sequelize.fn('COUNT', Sequelize.col('A01F12')), 'totalUsers']
                 ],
                 where: whereCondition,
-                group: [literal('CAST(A01F12 AS DATE)')],
-                order: [[literal('CAST(A01F12 AS DATE)'), 'ASC']]
+                group: [Sequelize.literal('CAST(A01F12 AS DATE)')],
+                order: [[Sequelize.literal('CAST(A01F12 AS DATE)'), 'ASC']]
             });
 
             const newUsersGrowth = newUsersDaily.map(row => ({
@@ -378,26 +459,19 @@ class AdminDashboardController {
             }));
 
             /* =========================
-               💳 RECENT TXN (optional filter later)
+               💳 RECENT TXN
             ========================= */
-            let corporateIds = [];
 
-            if (![1, 2].includes(roleId)) {
+            let txnWhere = {};
 
+            if (![1, 2, 5].includes(roleId)) {
                 const corporates = await PLRDBA01.findAll({
                     attributes: ['A01F03'],
                     where: whereCondition
                 });
 
-                corporateIds = corporates.map(c => c.A01F03?.trim());
-            }
-
-
-            const txnWhere = {};
-
-            if (![1, 2].includes(roleId)) {
                 txnWhere.PYMT01 = {
-                    [Op.in]: corporateIds
+                    [Op.in]: corporates.map(c => c.A01F03?.trim())
                 };
             }
 
@@ -425,7 +499,7 @@ class AdminDashboardController {
 
             const weeklyRevenueResult = await PLRDBPYMT.findAll({
                 attributes: [
-                    [fn('SUM', col('PYMT05')), 'weeklyRevenue']
+                    [Sequelize.fn('SUM', Sequelize.col('PYMT05')), 'weeklyRevenue']
                 ],
                 where: {
                     ...txnWhere,
@@ -460,7 +534,14 @@ class AdminDashboardController {
                 planStats,
                 newUsersGrowth,
                 recentTransactions: recentTxnList,
-                weeklyRevenue
+                weeklyRevenue,
+
+                userContext: {
+                    planInfo,
+                    csData,
+                    ibDetail,
+                    loginUser
+                }
             };
 
             encryptedResponse = encryptor.encrypt(JSON.stringify(response));
@@ -476,144 +557,6 @@ class AdminDashboardController {
             return res.status(500).json({ encryptedResponse });
         }
     }
-
-
-    // static async getAllCorporateUsers(req, res) {
-    //     let response = { status: 'SUCCESS', message: '', data: null };
-    //     let encryptedResponse;
-
-    //     try {
-    //         /* ------------------------------
-    //          * 1. TOKEN VALIDATION
-    //          * ---------------------------- */
-    //         const token = req.headers['authorization']?.split(' ')[1];
-
-    //         if (!token) {
-    //             response.status = 'FAIL';
-    //             response.message = 'Authorization token missing';
-    //             encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-    //             return res.status(401).json({ encryptedResponse });
-    //         }
-
-    //         const decoded = await TokenService.validateToken(token);
-
-    //         const roleId = Number(decoded.roleId);
-
-    //         if (![1, 2, 3, 4].includes(roleId)) {
-    //             response.status = 'FAIL';
-    //             response.message = 'Access denied';
-    //             return res.status(403).json({
-    //                 encryptedResponse: encryptor.encrypt(JSON.stringify(response))
-    //             });
-    //         }
-
-    //         /* ------------------------------
-    //          * 🔥 ROLE-BASED FILTER
-    //          * ---------------------------- */
-
-    //         let whereCondition = {};
-
-    //         if (![1, 2].includes(roleId)) {
-
-    //             const userCtrl = new EP_USERController('RDB');
-
-    //             const users = await userCtrl.findAll({
-    //                 UTF07: 'N'
-    //             });
-
-    //             let loggedUser = null;
-
-    //             for (let u of users) {
-    //                 let decryptedId;
-
-    //                 try {
-    //                     decryptedId = encryptor.decrypt(u.UTF04);
-    //                 } catch {
-    //                     decryptedId = u.UTF04;
-    //                 }
-
-    //                 if (decryptedId === decoded.userId) {
-    //                     loggedUser = u;
-    //                     break;
-    //                 }
-    //             }
-
-    //             if (!loggedUser) {
-    //                 throw new Error('User not found');
-    //             }
-
-    //             // 🔥 FILTER BY OWNER
-    //             whereCondition.A01F19 = loggedUser.UTF01;
-    //         }
-
-    //         /* ------------------------------
-    //          * 2. FETCH CORPORATES
-    //          * ---------------------------- */
-    //         const userCtrl = new EP_USERController('RDB');
-
-    //         const users = await userCtrl.findAll({
-    //             UTF07: 'N'
-    //         });
-
-    //         // Create lookup map → O(1) access (VERY IMPORTANT 🔥)
-    //         const userMap = {};
-
-    //         for (let u of users) {
-    //             userMap[u.UTF01] = {
-    //                 role: u.UTF03,
-    //                 name: u.UTF02
-    //             };
-    //         }
-
-    //         const corporates = await PLRDBA01.findAll({
-    //             attributes: [
-    //                 'A01F01',
-    //                 'A01F02',
-    //                 'A01F03',
-    //                 'A01F08',
-    //                 'A01F12',
-    //                 'A01F13',
-    //                 'A01F10',
-    //                 'A01F19'
-
-    //             ],
-    //             where: whereCondition,
-    //             order: [['A01F03', 'ASC']]
-    //         });
-
-    //         /* ------------------------------
-    //          * 3. MAP RESPONSE
-    //          * ---------------------------- */
-
-    //         response.data = corporates.map(row => ({
-    //             corpUnq: row.A01F01?.trim() || null,
-    //             corporateId: row.A01F03?.trim() || null,
-    //             companyName: row.A01F02?.trim() || null,
-    //             status: row.A01F08 === 'A' ? 'ACTIVE' : 'INACTIVE',
-    //             subscription: {
-    //                 startDate: row.A01F12,
-    //                 endDate: row.A01F13
-    //             },
-    //             licensedUsers: row.A01F10 || 0
-    //         }));
-
-    //         /* ------------------------------
-    //          * 4. ENCRYPT RESPONSE
-    //          * ---------------------------- */
-
-    //         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-    //         return res.status(200).json({ encryptedResponse });
-
-    //     } catch (err) {
-    //         console.error('getAllCorporateUsers error:', err.message);
-
-    //         response.status = 'FAIL';
-    //         response.message = 'Failed to load corporate list';
-
-    //         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-    //         return res.status(500).json({ encryptedResponse });
-    //     }
-    // }
     static async getAllCorporateUsers(req, res) {
         let response = { status: 'SUCCESS', message: '', data: null };
         let encryptedResponse;
@@ -634,7 +577,16 @@ class AdminDashboardController {
             const decoded = await TokenService.validateToken(token);
             const roleId = Number(decoded.roleId);
 
-            if (![1, 2,3].includes(roleId)) {
+            // if (![1, 2, 3, 5].includes(roleId)) {
+            //     response.status = 'FAIL';
+            //     response.message = 'Access denied';
+            //     return res.status(403).json({
+            //         encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+            //     });
+            // }
+            const isAllowed = await AdminDashboardController.checkRoleAccess(roleId);
+
+            if (!isAllowed) {
                 response.status = 'FAIL';
                 response.message = 'Access denied';
                 return res.status(403).json({
@@ -667,7 +619,7 @@ class AdminDashboardController {
              * ---------------------------- */
             let whereCondition = {};
 
-            if (![1, 2].includes(roleId)) {
+            if (![1, 2, 5].includes(roleId)) {
 
                 let loggedUser = null;
 
@@ -718,7 +670,8 @@ class AdminDashboardController {
                     'A01F12',
                     'A01F13',
                     'A01F10',
-                    'A01F19' // internal use only
+                    'A01F19',
+                    'A01F20'
                 ],
                 where: whereCondition,
                 order: [['A01F03', 'ASC']]
@@ -736,7 +689,7 @@ class AdminDashboardController {
                     corpUnq: row.A01F01?.trim() || null,
                     corporateId: row.A01F03?.trim() || null,
                     companyName: row.A01F02?.trim() || null,
-                    status: row.A01F08 === 'A' ? 'ACTIVE' : 'INACTIVE',
+                    status: row.A01F20 === 'P' ? 'P' : 'A',
                     subscription: {
                         startDate: row.A01F12,
                         endDate: row.A01F13
@@ -1371,6 +1324,65 @@ class AdminDashboardController {
 
             response.status = 'FAIL';
             response.message = 'Failed to load data';
+
+            return res.status(500).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+            });
+        }
+    }
+    static async updateCorporateStatus(corporateId, status, req, response, res) {
+        try {
+            const token = req.headers['authorization']?.split(' ')[1];
+            const decoded = await TokenService.validateToken(token);
+
+            const roleId = Number(decoded.roleId);
+
+            // 🔥 ONLY ACCOUNTANT CAN DO THIS
+            // if (roleId !== 5) {
+            //     response.status = 'FAIL';
+            //     response.message = 'Only accountant can approve corporates';
+            //     return res.status(403).json({
+            //         encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+            //     });
+            // }
+
+            // Validate status
+            if (!['A', 'R'].includes(status)) {
+                response.status = 'FAIL';
+                response.message = 'Invalid status';
+                return res.status(400).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                });
+            }
+
+            // Update
+            const updated = await PLRDBA01.update(
+                { A01F20: status },
+                { where: { A01F03: corporateId } }
+            );
+
+            if (!updated || updated[0] === 0) {
+                response.status = 'FAIL';
+                response.message = 'Corporate not found or not updated';
+                return res.status(404).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                });
+            }
+
+            response.status = 'SUCCESS';
+            response.message = status === 'A'
+                ? 'Corporate Activated Successfully'
+                : 'Corporate Rejected';
+
+            return res.status(200).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+            });
+
+        } catch (err) {
+            console.error(err);
+
+            response.status = 'FAIL';
+            response.message = 'Status update failed';
 
             return res.status(500).json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify(response))

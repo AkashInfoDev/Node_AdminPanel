@@ -145,8 +145,7 @@ class CAdminUserController {
             BrcList,
             cusRole,
             dob,
-            gender,
-            lAudit
+            gender
         } = pa;
 
         const sequelize = db.getConnection(sdbName);
@@ -242,8 +241,7 @@ class CAdminUserController {
                 CmpList || '',                    // ADMICOMP
                 '',                               // ADMIMOD
                 cusRole || '',                    // ADMIROL
-                corp.A01F01,                       // ADMICORP
-                lAudit
+                corp.A01F01                       // ADMICORP
             );
             // Generate next system user code
             let lastUser = await m81.findOne(

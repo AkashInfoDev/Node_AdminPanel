@@ -1,5 +1,9 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const upload = multer({
+    limits: { fileSize: 2 * 1024 * 1024 }
+});
 const dashboardController = require('../Controller/userDashBoardController');
 const AdminPanel = require('../Controller/adminPanelController');
 const AdminDashboardController = require('../Controller/AdminDashboardController');
@@ -7,9 +11,10 @@ const AdminPlanController = require('../Controller/AdminPlanController');
 const AdminModuleController = require('../Controller/AdminModuleController');
 const CAdminPlanController = require('../Controller/CAdminPlanController');
 const CAdminUserController = require('../Controller/CAdminUserController');
+const WalletController = require('../Controller/WalletController');
+const UserTypeController = require('../Controller/UserTypeController');
 
 // In your express route:
-router.get('/dashboardData',dashboardController.dashboardData);
 // router.get('/adminData',AdminPanel.getUsers); // For Admin Panel of AI
 router.get('/adminData', AdminDashboardController.dashboardCounts);
 
@@ -19,5 +24,9 @@ router.get('/getPlanDetails', AdminPlanController.managePlans);
 router.get('/getModuleDetails', AdminModuleController.manageAddOns);
 router.get('/Cadminplan', CAdminPlanController.handlePlan);
 router.get('/CompanyAdminUser', CAdminUserController.manageUser);
+router.get('/wallet', WalletController.handleWallet);
+router.post('/withdraw', upload.single('file'), WalletController.requestWithdraw);
+router.get('/UserRole',UserTypeController.manageUserType)
+
 
 module.exports = router;

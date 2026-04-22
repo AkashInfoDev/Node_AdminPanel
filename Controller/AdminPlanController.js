@@ -3,11 +3,30 @@ const TokenService = require('../Services/tokenServices');
 const Encryptor = require('../Services/encryptor');
 const PLRDBA02Controller = require('./PLRDBA02Controller');
 const { fn, col, where } = require('sequelize');
+const db = require('../Config/config');
+const sequelizeRDB = db.getConnection('RDB');
 
+const defineUserTypes = require('../Models/RDB/EP_USERTPYES');
+const UserTypes = defineUserTypes(sequelizeRDB, require('sequelize').DataTypes);
 const encryptor = new Encryptor();
 const planRepo = new PLRDBA02Controller();
 
 class AdminPlanController {
+    static cachedRoles = null;
+
+    static async checkRoleAccess(roleId) {
+
+        if (!this.cachedRoles) {
+            const roles = await UserTypes.findAll({
+                attributes: ['ID'],
+                raw: true
+            });
+
+            this.cachedRoles = roles.map(r => Number(r.ID));
+        }
+
+        return this.cachedRoles.includes(Number(roleId));
+    }
 
     static async managePlans(req, res) {
         let response = { status: 'SUCCESS', message: '', data: null };
@@ -23,13 +42,22 @@ class AdminPlanController {
                 return AdminPlanController.send(res, response, 401);
             }
 
+            // if (![1, 2,5].includes(decoded.roleId)) {
+            //     response.status = 'FAIL';
+            //     response.message = 'Access denied';
+            //     return AdminPlanController.send(res, response, 403);
+            // }
             const decoded = await TokenService.validateToken(token);
-            if (![1, 2].includes(decoded.roleId)) {
+
+            const roleId = Number(decoded.roleId);
+
+            const isAllowed = await AdminPlanController.checkRoleAccess(roleId);
+
+            if (!isAllowed) {
                 response.status = 'FAIL';
                 response.message = 'Access denied';
                 return AdminPlanController.send(res, response, 403);
             }
-
             /* ==========================
              * 🔓 DECRYPT PARAMS
              * ========================== */

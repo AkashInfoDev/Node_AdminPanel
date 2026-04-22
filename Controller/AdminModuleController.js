@@ -4,7 +4,8 @@ const Encryptor = require('../Services/encryptor');
 const PLRDBPLRELController = require('./PLRDBPLRELController');
 const db = require('../Config/config');
 const sequelizeRDB = db.getConnection('RDB');
-
+const defineUserTypes = require('../Models/RDB/EP_USERTPYES');
+const UserTypes = defineUserTypes(sequelizeRDB, require('sequelize').DataTypes);
 const encryptor = new Encryptor();
 const ModuleRepo = new PLRDBPLRELController();
 
@@ -73,6 +74,21 @@ async function checkDuplicate(ModuleType, ModuleCode) {
 
 
 class AdminModuleController {
+    static cachedRoles = null;
+
+    static async checkRoleAccess(roleId) {
+
+        if (!this.cachedRoles) {
+            const roles = await UserTypes.findAll({
+                attributes: ['ID'],
+                raw: true
+            });
+
+            this.cachedRoles = roles.map(r => Number(r.ID));
+        }
+
+        return this.cachedRoles.includes(Number(roleId));
+    }
 
     static async manageAddOns(req, res) {
         let response = { status: 'SUCCESS', message: '', data: null };
@@ -90,7 +106,11 @@ class AdminModuleController {
 
             const decoded = await TokenService.validateToken(token);
             // Allow all roles to READ
-            if (![1, 2, 3, 4].includes(decoded.roleId)) {
+            const roleId = Number(decoded.roleId);
+
+            const isAllowed = await AdminModuleController.checkRoleAccess(roleId);
+
+            if (!isAllowed) {
                 response.status = 'FAIL';
                 response.message = 'Access denied';
                 return AdminModuleController.send(res, response, 403);

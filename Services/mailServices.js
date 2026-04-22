@@ -327,4 +327,76 @@ const sendEmailWithAttachment = async (to, attachmentPath, filename, smtpConfig 
     }
 };
 
-module.exports = { sendAccountInfoMail, sendResetMail, sendLogOutMail, sendEmailWithAttachment };
+async function sendForceLogoutOTP({ to, corpId, otp }) {
+    try {
+
+        const transporter = createTransporter();
+
+        const mailOptions = {
+            from: `"EPLUS Support" <${process.env.SMTP_USER}>`,
+            to,
+            subject: `OTP for ${corpId} to Force Logout`,
+            html: `
+                <div style="font-family: Arial, sans-serif; background:#f4f6f8; padding:20px;">
+                <div style="max-width:600px; margin:auto; background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 0 10px rgba(0,0,0,0.08);">
+                    
+                    <div style="background:#0d6efd; color:#ffffff; padding:20px; text-align:center;">
+                        <h2 style="margin:0;">E-PLUS CLOUD-ERP</h2>
+                        <p style="margin:5px 0 0;">Force Logout OTP</p>
+                    </div>
+
+                    <div style="padding:25px; color:#333;">
+                        <p>Hello,</p>
+
+                        <p>
+                            We received a request to login from another device.
+                        </p>
+
+                        <p>
+                            Use the OTP below to confirm force logout:
+                        </p>
+
+                        <table style="width:100%; border-collapse:collapse; margin:20px 0;">
+                            <tr>
+                                <td style="padding:10px; font-weight:bold; background:#f0f2f5;">Corporate ID</td>
+                                <td style="padding:10px; background:#fafafa;">${corpId}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding:10px; font-weight:bold; background:#f0f2f5;">OTP</td>
+                                <td style="padding:10px; background:#fafafa; font-size:22px; font-weight:bold;">
+                                    ${otp}
+                                </td>
+                            </tr>
+                        </table>
+
+                        <p style="margin-top:20px;">
+                            ⚠ This OTP is valid for 5 minutes.
+                        </p>
+
+                        <p style="color:#666;">Regards,<br/>E-PLUS Support Team</p>
+                    </div>
+
+                    <div style="background:#f0f2f5; padding:15px; text-align:center; font-size:12px; color:#999;">
+                        © ${new Date().getFullYear()} Aakash Infoway Pvt. Ltd.
+                    </div>
+
+                </div>
+            </div>
+            `
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+
+        console.log("✅ Force Logout OTP sent:", info.response);
+
+        return info;
+
+    } catch (error) {
+
+        console.error("❌ OTP Mail Error:", error);
+
+        throw new Error("Failed to send OTP email");
+    }
+}
+
+module.exports = { sendAccountInfoMail, sendResetMail, sendLogOutMail, sendEmailWithAttachment, sendForceLogoutOTP };

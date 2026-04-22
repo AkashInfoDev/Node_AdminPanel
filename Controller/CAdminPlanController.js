@@ -11,6 +11,7 @@ const definePLRDBGAO = require('../Models/RDB/PLRDBGAO'); // Model factory
 const ADMIController = require('./ADMIController');
 const M81Controller = require('./M81Controller');
 const EP_USERController = require('./EP_USERController');
+const defineEPTRNS = require('../Models/RDB/EP_TRNS');
 
 const sequelizeRDB = db.getConnection('RDB');
 
@@ -19,6 +20,7 @@ const PLRDBPYMT = definePLRDBPYMT(sequelizeRDB);
 const PLRDBA02 = definePLRDBA02(sequelizeRDB);
 const PLRDBPLREL = definePLRDBPLREL(sequelizeRDB);
 const PLRDBGAO = definePLRDBGAO(sequelizeRDB);
+const EP_TRNS = defineEPTRNS(sequelizeRDB);
 
 
 const encryptor = new Encryptor();
@@ -33,46 +35,7 @@ function getPrefix(roleId) {
     }
 }
 class CAdminPlanController {
-    // static async getLoggedInUser(decoded) {
 
-    //     const encryptor = new Encryptor();
-
-    //     // 🔥 Resolve RDB dynamically
-    //     let rdbName;
-
-    //     if (decoded.corpId) {
-    //         const parts = decoded.corpId.split('-');
-
-    //         rdbName = parts.length === 3
-    //             ? parts[0] + parts[1] + parts[2] + 'RDB'
-    //             : parts[0] + parts[1] + 'RDB';
-    //     } else {
-    //         rdbName = 'RDB';
-    //     }
-
-    //     const userCtrl = new EP_USERController(rdbName);
-
-    //     const users = await userCtrl.findAll({
-    //         User_IsDeleted: 'N'
-    //     });
-
-    //     for (let u of users) {
-
-    //         let decryptedId;
-
-    //         try {
-    //             decryptedId = encryptor.decrypt(u.UserID);
-    //         } catch {
-    //             decryptedId = u.UserID;
-    //         }
-
-    //         if (decryptedId === decoded.userId) {
-    //             return u;
-    //         }
-    //     }
-
-    //     return null;
-    // }
     static async getLoggedInUser(decoded) {
 
         const encryptor = new Encryptor();
@@ -154,11 +117,43 @@ class CAdminPlanController {
 
             const roleId = Number(decoded.roleId);
 
-            if (![1, 2, 3, 4].includes(roleId)) {
-                response.status = 'FAIL';
-                response.message = 'Access denied';
+            // if (![1, 2, 3, 4, 5].includes(roleId)) {
+            //     response.status = 'FAIL';
+            //     response.message = 'Access denied';
+            //     return res.status(403).json({
+            //         encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+            //     });
+            // }
+            //     const roles = await sequelizeRDB.query(`
+            //     SELECT ID FROM EP_USERTPYES
+            // `, { type: require('sequelize').QueryTypes.SELECT });
+
+            //             const allowedRoleIds = roles.map(r => r.ID);
+
+            //             if (!allowedRoleIds.includes(roleId)) {
+            //                 return res.status(403).json({
+            //                     encryptedResponse: encryptor.encrypt(JSON.stringify({
+            //                         status: 'FAIL',
+            //                         message: 'Access denied'
+            //                     }))
+            //                 });
+            //             }
+            const defineUserTypes = require('../Models/RDB/EP_USERTPYES');
+            const UserTypes = defineUserTypes(sequelizeRDB, require('sequelize').DataTypes);
+
+            const roles = await UserTypes.findAll({
+                attributes: ['ID'],
+                raw: true
+            });
+
+            const allowedRoleIds = roles.map(r => Number(r.ID));
+
+            if (!allowedRoleIds.includes(Number(roleId))) {
                 return res.status(403).json({
-                    encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        status: 'FAIL',
+                        message: 'Access denied'
+                    }))
                 });
             }
 
@@ -177,8 +172,8 @@ class CAdminPlanController {
             const action = pa.action;
             const corporateId = pa.corporateId;
             /* =========================
-   🔥 ROLE-BASED ACCESS CHECK
-========================= */
+             🔥 ROLE-BASED ACCESS CHECK
+            ========================= */
 
             // if (roleId !== 1 && corporateId) {
 
@@ -208,7 +203,7 @@ class CAdminPlanController {
             //         });
             //     }
             // }
-            if (![1, 2].includes && corporateId) {
+            if (![1, 2].includes(roleId) && corporateId) {
 
                 const loggedUser = await CAdminPlanController.getLoggedInUser(decoded);
 
@@ -673,49 +668,6 @@ class CAdminPlanController {
     /* ===================================================== */
     /* GET TRANSACTIONS                                     */
     /* ===================================================== */
-    // static async getTransactions(pa, response, res) {
-    //     try {
-
-    //         // 1️⃣ Fetch all transactions (no corporate filter)
-    //         const rows = await PLRDBPYMT.findAll({
-    //             order: [['PYMT08', 'DESC']]
-    //         });
-
-
-    //         // 2️⃣ Group by Corporate ID
-    //         const groupedData = {};
-
-    //         for (let txn of rows) {
-
-    //             const corpId = txn.PYMT01;
-
-    //             if (!groupedData[corpId]) {
-    //                 groupedData[corpId] = [];
-    //             }
-
-    //             groupedData[corpId].push(txn);
-    //         }
-
-    //         response.data = groupedData;
-    //         response.status = 'SUCCESS';
-    //         response.message = 'All corporate transactions fetched successfully';
-
-    //         return res.status(200).json({
-    //             encryptedResponse: encryptor.encrypt(JSON.stringify(response))
-    //         });
-
-    //     } catch (err) {
-
-    //         console.error(err);
-
-    //         response.status = 'FAIL';
-    //         response.message = 'Failed to load transactions';
-
-    //         return res.status(500).json({
-    //             encryptedResponse: encryptor.encrypt(JSON.stringify(response))
-    //         });
-    //     }
-    // }
     static async getTransactions(pa, response, res) {
         try {
 
@@ -728,7 +680,9 @@ class CAdminPlanController {
             SELECT 
                 p.*,
                 c.A01F02 AS companyName,
+                c.A01F19 AS roleid,
                 u.UTF02 AS dealerName,
+                u.UTF12 AS commission,
                 u.UTF17 AS gstNumber
             FROM PLRDBPYMT p
             LEFT JOIN PLRDBA01 c 
@@ -744,6 +698,7 @@ class CAdminPlanController {
                2️⃣ GROUP DATA (KEEP EXISTING)
             ========================= */
 
+
             const groupedData = {};
 
             for (let txn of rows) {
@@ -753,6 +708,12 @@ class CAdminPlanController {
                 if (!groupedData[corpId]) {
                     groupedData[corpId] = [];
                 }
+                const amount = parseFloat(txn.PYMT05) || 0;
+                const commissionPercent = parseFloat(txn.commission) || 0;
+
+                // ✅ Calculate commission amount
+                const commissionAmount = (amount * commissionPercent) / 100;
+
 
                 groupedData[corpId].push({
 
@@ -772,7 +733,10 @@ class CAdminPlanController {
                     // ➕ NEW FIELDS (ADDED ONLY)
                     customerName: txn.companyName || null,
                     dealerName: txn.dealerName || null,
-                    gstNumber: txn.gstNumber || null
+                    dealerId: txn.roleid || null,
+                    commission: txn.commission || null,
+                    gstNumber: txn.gstNumber || null,
+                    commissionAmount: commissionAmount || null
                 });
             }
 
@@ -1133,167 +1097,7 @@ class CAdminPlanController {
     /* ===================================================== */
     /* MODULE DEACTIVATION                                  */
     /* ===================================================== */
-    // static async moduleDeactivation(pa, response, res) {
 
-    //     const {
-    //         corporateId,
-    //         moduleId,
-    //         setUpId,
-    //         amount,
-    //         description,
-    //         paymentMethod,
-    //         referenceNo
-    //     } = pa;
-
-    //     const transaction = await sequelizeRDB.transaction();
-
-    //     try {
-
-    //         const corp = await PLRDBA01.findOne({
-    //             where: { A01F03: corporateId },
-    //             transaction
-    //         });
-
-    //         if (!corp) {
-    //             response.status = 'FAIL';
-    //             response.message = 'Corporate not found';
-    //             await transaction.rollback();
-
-    //             return res.status(404).json({
-    //                 encryptedResponse: encryptor.encrypt(JSON.stringify(response))
-    //             });
-    //         }
-
-    //         const corpUnq = String(corp.A01F01).trim();
-
-    //         const parts = corporateId.split('-');
-
-    //         let sdbName =
-    //             parts.length === 3
-    //                 ? `${parts[0]}${parts[1]}${parts[2]}SDB`
-    //                 : `${parts[0]}${parts[1]}SDB`;
-
-    //         if (sdbName === 'PLP00001SDB')
-    //             sdbName = 'A00001SDB';
-
-    //         const admi = new ADMIController(sdbName);
-    //         const m81 = new M81Controller(sdbName);
-
-    //         /* ============================ */
-    //         /* 1️⃣ GET SUPER USER           */
-    //         /* ============================ */
-
-    //         const superUser = await admi.findOne({
-    //             ADMIF06: 2,
-    //             ADMICORP: corpUnq
-    //         });
-
-    //         if (!superUser) {
-    //             response.status = 'FAIL';
-    //             response.message = 'Super user not found';
-    //             await transaction.rollback();
-
-    //             return res.status(400).json({
-    //                 encryptedResponse: encryptor.encrypt(JSON.stringify(response))
-    //             });
-    //         }
-
-    //         /* ============================ */
-    //         /* 2️⃣ MODULE DEACTIVATION      */
-    //         /* ============================ */
-
-    //         if (moduleId) {
-
-    //             // Convert incoming modules to array
-    //             let removeModules = String(moduleId).includes(',')
-    //                 ? String(moduleId).split(',')
-    //                 : [moduleId];
-
-    //             removeModules = removeModules.map(m => m.trim());
-
-    //             // Existing modules
-    //             let existingModules = superUser.ADMIMOD
-    //                 ? superUser.ADMIMOD.split(',')
-    //                 : [];
-
-    //             existingModules = existingModules.map(m => m.trim());
-
-    //             // Remove modules
-    //             const updatedModules = existingModules.filter(
-    //                 mod => !removeModules.includes(mod)
-    //             );
-
-    //             await admi.update(
-    //                 { ADMIMOD: updatedModules.join(',') },
-    //                 { ADMIF00: superUser.ADMIF00 }
-    //             );
-    //         }
-
-    //         /* ============================ */
-    //         /* 3️⃣ SETUP DEACTIVATION       */
-    //         /* ============================ */
-
-    //         if (setUpId) {
-
-    //             const m81Row = await m81.findOne({
-    //                 M81UNQ: superUser.ADMIF00.toString()
-    //             });
-
-    //             if (m81Row) {
-
-    //                 let existingSetups = m81Row.M81SID
-    //                     ? m81Row.M81SID.split(',')
-    //                     : [];
-
-    //                 existingSetups = existingSetups
-    //                     .filter(id => id !== setUpId);
-
-    //                 await m81.update(
-    //                     { M81SID: existingSetups.join(',') },
-    //                     { M81UNQ: superUser.ADMIF00.toString() }
-    //                 );
-    //             }
-    //         }
-
-    //         /* ============================ */
-    //         /* 4️⃣ PAYMENT / AUDIT ENTRY    */
-    //         /* ============================ */
-
-    //         await PLRDBPYMT.create({
-    //             PYMT01: corporateId,
-    //             PYMT02: 0,
-    //             PYMT03: referenceNo || ('ADMIN_DEMOD_' + Date.now()),
-    //             PYMT04: 'OFFLINE',
-    //             PYMT05: parseFloat(amount || 0),
-    //             PYMT06: 'SUCCESS',
-    //             PYMT07: paymentMethod || 'CASH',
-    //             PYMT09: description || 'Module Deactivation',
-    //             PYMT10: corp.A01F13 || null
-    //         }, { transaction });
-
-    //         await transaction.commit();
-
-    //         response.status = 'SUCCESS';
-    //         response.message = 'Module / Setup deactivated successfully';
-
-    //         return res.status(200).json({
-    //             encryptedResponse: encryptor.encrypt(JSON.stringify(response))
-    //         });
-
-    //     } catch (err) {
-
-    //         await transaction.rollback();
-
-    //         console.error(err);
-
-    //         response.status = 'FAIL';
-    //         response.message = 'Failed to deactivate module';
-
-    //         return res.status(500).json({
-    //             encryptedResponse: encryptor.encrypt(JSON.stringify(response))
-    //         });
-    //     }
-    // }
     static async moduleDeactivation(pa, response, res, decoded) {
 
         const {

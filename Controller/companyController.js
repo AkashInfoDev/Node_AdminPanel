@@ -5,6 +5,8 @@ require('dotenv').config();
 const db = require('../Config/config'); // Your Database class
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01'); // Model factory
 const definePLRDBA02 = require('../Models/RDB/PLRDBA02'); // Model factory
+const defineEP_FILE = require('../Models/RDB/EP_FILE');
+const defineEP_USER = require('../Models/RDB/EP_USER');
 const Encryptor = require('../Services/encryptor');
 const { Op, QueryTypes } = require('sequelize');
 // const PLRDBA01 = require('../Models/RDB/PLRDBA01');
@@ -27,6 +29,8 @@ const sequelizeMASTER = db.getConnection('master');
 // Initialize model using the Sequelize instance
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 const PLRDBA02 = definePLRDBA02(sequelizeRDB);
+const EP_FILE = defineEP_FILE(sequelizeRDB, require('sequelize').DataTypes);
+const EP_USER = defineEP_USER(sequelizeRDB, require('sequelize').DataTypes);
 const encryptor = new Encryptor();
 // let response = { data: null, Status: "SUCCESS", message: null }
 
@@ -35,7 +39,14 @@ class CompanyService {
         this.ExistingcorpId = ExistingcorpId;
     }
     static async createCompany(req, res, lbool) {
-        const parameterString = encryptor.decrypt(req.query.pa);
+        // const parameterString = encryptor.decrypt(req.query.pa);
+        const encryptedPa = req.body.pa || req.query.pa;
+
+        if (!encryptedPa) {
+            throw new Error('pa parameter missing');
+        }
+
+        const parameterString = encryptor.decrypt(encryptedPa);
         let decodedParam = decodeURIComponent(parameterString);
         let pa = querystring.parse(decodedParam);
         let { firstName, middleName, lastName, dob, gender, email, password, roleId, address, base64Image, GUaction, rpname, corpId, cusRole, CmpList, BrcList, userId, companyName, softSubType, softType, dbVersion, webVer, noOfUser, regDate, subStrtDate, subEndDate, cancelDate, subDomainDelDate, cnclRes, SBDdbType, srverIP, serverUserName, serverPassword, A02id, phoneNumber, cSData, ExistingcorpId, GSTNumber, Installby, lAudit } = pa
@@ -61,8 +72,13 @@ class CompanyService {
         }
 
         const decoded = await TokenService.validateToken(token);
+        /* =========================
+            📄 SAVE PAYMENT PROOF
+        ========================= */
+
 
         try {
+            // let existingCompName = await PLRDBA01.findAll();
             let existingCompName = await PLRDBA01.findAll();
             for (let i of existingCompName) {
                 const decrypted = i.A01F02;
@@ -163,9 +179,9 @@ class CompanyService {
                 A01F16: cnclRes,
                 A01F17: phoneNumber ? phoneNumber : user.ADMIF13,
                 A01F51: SBDdbType ? SBDdbType : 'SQL',
-                A01F52: srverIP ? srverIP : '94.176.235.105',
-                A01F53: serverUserName ? serverUserName : 'aipharma_aakash',
-                A01F54: serverPassword ? serverPassword : 'Aipharma@360',
+                A01F52: srverIP ? srverIP : '45.195.159.72',
+                A01F53: serverUserName ? serverUserName : 'aiAdmin',
+                A01F54: serverPassword ? serverPassword : 'aaBC@#23',
                 FTPURL: 's01.lyfexplore.com',
                 FTPUID: 'ftpuser',
                 FTPPWD: 'ftp@3360',
@@ -173,7 +189,8 @@ class CompanyService {
                 FTPPATH: 'https://s01.lyfexplore.com/eplus/',
                 A02F01: A02id,
                 A01CHLD: '',
-                A01F19: Installby
+                A01F19: Installby,
+                A01F20: 'P', // 👈 New field (Pending)
             });
 
             if (createCMP) {
@@ -198,6 +215,54 @@ class CompanyService {
                     }, { ADMICORP: nextId }
                     );
                 }
+            }
+            /* =========================
+   📄 SAVE PAYMENT PROOF (AFTER SUCCESS)
+========================= */
+
+            if (req.file && A02id) {
+
+                const fileName = req.file.originalname;
+                const base64 = req.file.buffer.toString('base64');
+
+                const mime = req.file.mimetype;
+
+                if (!mime.includes('pdf') && !mime.includes('image')) {
+                    throw new Error('Only PDF or Image allowed');
+                }
+
+                if (req.file.size > 2 * 1024 * 1024) {
+                    throw new Error('File size exceeds 2MB');
+                }
+
+                const tokenUserId = decoded.userId;
+
+                let userRecord = await EP_USER.findOne({
+                    where: {
+                        UTF04: tokenUserId,
+                        UTF07: 'N'
+                    }
+                });
+
+                // fallback
+                if (!userRecord) {
+                    userRecord = await EP_USER.findOne({
+                        where: {
+                            UTF04: userId,
+                            UTF07: 'N'
+                        }
+                    });
+                }
+
+                if (!userRecord) {
+                    throw new Error('User not found for file upload');
+                }
+
+                await EP_FILE.create({
+                    FILE02: fileName,
+                    FILE03: base64,
+                    FILE04: userRecord.UTF01
+                });
             }
 
             // Update user to attach company

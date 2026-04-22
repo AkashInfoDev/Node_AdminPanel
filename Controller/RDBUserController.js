@@ -3,19 +3,30 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const db = require('../Config/config');
+const definePLSTATE = require('../Models/IDB/PLSTATE');
+
 
 // 🔥 MODEL FACTORY
 // const defineUserTable = require('../Models/RDB/UserTable');
 const defineEPUser = require('../Models/RDB/EP_USER');
+const defineEPBank = require('../Models/RDB/EP_BANK');
 
 const Encryptor = require('../Services/encryptor');
 
 const { Op } = require('sequelize');
+const sequelizeIDB = db.getConnection('IDBAPI');
+
 const TokenService = require('../Services/tokenServices');
+// const PLSTATE = require('../Models/IDB/PLSTATE');
+const PLSTATE = definePLSTATE(sequelizeIDB);
+
 
 // 🔗 CONNECT RDB
 const sequelizeRDB = db.getConnection('RDB');
+const EPBank = defineEPBank(sequelizeRDB);
 
+const defineUserTypes = require('../Models/RDB/EP_USERTPYES');
+const UserTypes = defineUserTypes(sequelizeRDB, require('sequelize').DataTypes);
 // 🔥 DEFINE MODEL (IMPORTANT)
 // const UserTable = defineUserTable(sequelizeRDB);
 const EPUser = defineEPUser(sequelizeRDB);
@@ -26,6 +37,21 @@ const encryptor = new Encryptor();
 
 
 class RDBUserController {
+    static cachedRoles = null;
+
+static async checkRoleAccess(roleId) {
+
+    if (!this.cachedRoles) {
+        const roles = await UserTypes.findAll({
+            attributes: ['ID'],
+            raw: true
+        });
+
+        this.cachedRoles = roles.map(r => Number(r.ID));
+    }
+
+    return this.cachedRoles.includes(Number(roleId));
+}
 
     // 🔥 MAIN ENTRY (same pattern as your system)
 
@@ -45,15 +71,26 @@ class RDBUserController {
             }
             const decoded = await TokenService.validateToken(token);
 
+            // const roleId = Number(decoded.roleId);
+
+            // if (![1, 2, 3, 4,5].includes(roleId)) {
+            //     response.status = 'FAIL';
+            //     response.message = 'Access denied';
+            //     return res.status(403).json({
+            //         encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+            //     });
+            // }
             const roleId = Number(decoded.roleId);
 
-            if (![1, 2, 3, 4].includes(roleId)) {
-                response.status = 'FAIL';
-                response.message = 'Access denied';
-                return res.status(403).json({
-                    encryptedResponse: encryptor.encrypt(JSON.stringify(response))
-                });
-            }
+const isAllowed = await RDBUserController.checkRoleAccess(roleId);
+
+if (!isAllowed) {
+    response.status = 'FAIL';
+    response.message = 'Access denied';
+    return res.status(403).json({
+        encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+    });
+}
 
 
             // const decoded1 = await TokenService.validateToken(token);
@@ -74,6 +111,25 @@ class RDBUserController {
             const decrypted = encryptor.decrypt(req.query.pa);
             const pa = querystring.parse(decodeURIComponent(decrypted));
             // ✅ KEEP FRONTEND SAME
+            // const {
+            //     User_Id,
+            //     action,
+            //     userId,
+            //     userName,
+            //     password,
+            //     userType,
+            //     email,
+            //     dealerCode,
+            //     userMobile,
+            //     fbtokenapp,
+            //     commission,
+            //     address,
+            //     city,
+            //     state,
+            //     pincode,
+            //     gstin,
+            //     isActive
+            // } = pa;
             const {
                 User_Id,
                 action,
@@ -91,7 +147,15 @@ class RDBUserController {
                 state,
                 pincode,
                 gstin,
-                isActive
+                isActive,
+
+                // 💰 NEW BANK FIELDS
+                accountHolderName,
+                bankName,
+                accountNumber,
+                ifscCode,
+                upiId
+
             } = pa;
 
             // 🔥 NORMALIZE TYPE (IMPORTANT)
@@ -129,25 +193,24 @@ class RDBUserController {
                         });
                     }
 
+                    // return RDBUserController.createUser({
+                    //     userId,
+                    //     userName,
+                    //     password,
+                    //     userType: normalizedUserType, // 🔥 FIXED
+                    //     email,
+                    //     dealerCode,
+                    //     userMobile,
+                    //     fbtokenapp,
+                    //     commission,
+                    //     address,
+                    //     city,
+                    //     state,
+                    //     pincode,
+                    //     gstin
+                    // }, res);
                     return RDBUserController.createUser({
-                        userId,
-                        userName,
-                        password,
-                        userType: normalizedUserType, // 🔥 FIXED
-                        email,
-                        dealerCode,
-                        userMobile,
-                        fbtokenapp,
-                        commission,
-                        address,
-                        city,
-                        state,
-                        pincode,
-                        gstin
-                    }, res);
-
-                case 'E':
-                    return RDBUserController.updateUser({
+                        // newId,
                         userId,
                         userName,
                         password,
@@ -162,7 +225,42 @@ class RDBUserController {
                         state,
                         pincode,
                         gstin,
-                        isActive
+
+                        // 💰 BANK DATA
+                        accountHolderName,
+                        bankName,
+                        accountNumber,
+                        ifscCode,
+                        upiId
+
+                    }, res);
+
+                case 'E':
+                    return RDBUserController.updateUser({
+                        User_Id,
+                        userId,
+                        userName,
+                        password,
+                        userType: normalizedUserType,
+                        email,
+                        dealerCode,
+                        userMobile,
+                        fbtokenapp,
+                        commission,
+                        address,
+                        city,
+                        state,
+                        pincode,
+                        gstin,
+                        isActive,
+
+                        // 💰 BANK DATA
+                        accountHolderName,
+                        bankName,
+                        accountNumber,
+                        ifscCode,
+                        upiId
+
                     }, res);
 
                 case 'D':
@@ -172,14 +270,18 @@ class RDBUserController {
                     return RDBUserController.getUsers(res);
 
 
-                case 'F':
-                    return RDBUserController.getUsers1(req, res);
 
                 // case 'G':
                 //     return RDBUserController.getUsers1(req, res);
 
                 case 'T':
                     return RDBUserController.toggleUserStatus(User_Id, res);
+
+                case 'DB':   // 🔥 NEW ACTION
+                    return RDBUserController.handleGetDatabases(pa, res, decoded);
+
+                case 'W': // Withdraw Request
+                    return RDBUserController.requestWithdraw(pa, res, decoded);
 
                 default:
                     return res.status(400).json({
@@ -207,16 +309,38 @@ class RDBUserController {
 
     static async createUser(data, res) {
 
-        let response = { status: 'SUCCESS', message: '', data: null };
+        function generateResellerId() {
+            const chars = '0123456789';
+            let code = '';
+            for (let i = 0; i < 6; i++) {
+                code += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return `RES_${code}`;
+        }
+
+        async function generateUniqueResellerId() {
+            let id;
+            let exists = true;
+
+            while (exists) {
+                id = generateResellerId();
+
+                const existing = await EPUser.findOne({
+                    where: { UTF04: encryptor.encrypt(id) }
+                });
+
+                if (!existing) exists = false;
+            }
+
+            return id;
+        }
 
         function generateDealerCode() {
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
             let code = '';
-
             for (let i = 0; i < 6; i++) {
                 code += chars.charAt(Math.floor(Math.random() * chars.length));
             }
-
             return code;
         }
 
@@ -228,7 +352,7 @@ class RDBUserController {
                 code = generateDealerCode();
 
                 const existing = await EPUser.findOne({
-                    where: { UTF08: code } // ✅ fixed
+                    where: { UTF08: code }
                 });
 
                 if (!existing) exists = false;
@@ -239,11 +363,7 @@ class RDBUserController {
 
         try {
 
-            /* =========================
-               🔐 VALIDATION
-            ========================= */
-
-            const userType = String(data.userType); // 🔥 normalize
+            const userType = String(data.userType);
 
             if (!userType) {
                 return res.status(400).json({
@@ -254,7 +374,7 @@ class RDBUserController {
                 });
             }
 
-            // 👉 Only for NON-reseller
+            // 🔐 login validation
             if (userType !== '4' && (!data.userId || !data.password)) {
                 return res.status(400).json({
                     encryptedResponse: encryptor.encrypt(JSON.stringify({
@@ -264,10 +384,22 @@ class RDBUserController {
                 });
             }
 
-            /* =========================
-               🔍 DUPLICATE CHECK
-            ========================= */
+            // 💰 BANK VALIDATION (Dealer + Reseller)
+            if (['3', '4'].includes(userType)) {
+                if (
+                    !data.upiId &&
+                    (!data.accountNumber || !data.ifscCode)
+                ) {
+                    return res.status(400).json({
+                        encryptedResponse: encryptor.encrypt(JSON.stringify({
+                            status: 'FAIL',
+                            message: 'Provide UPI or Bank details'
+                        }))
+                    });
+                }
+            }
 
+            // 🔍 duplicate check (non reseller)
             if (userType !== '4') {
 
                 const users = await EPUser.findAll();
@@ -279,7 +411,7 @@ class RDBUserController {
                     try {
                         decryptedId = encryptor.decrypt(u.UTF04);
                     } catch {
-                        decryptedId = u.UTF04; // fallback
+                        decryptedId = u.UTF04;
                     }
 
                     if (decryptedId === data.userId) {
@@ -293,51 +425,73 @@ class RDBUserController {
                 }
             }
 
-            /* =========================
-               🔐 PREPARE DATA
-            ========================= */
-
             const encryptedPassword = data.password
                 ? encryptor.encrypt(data.password)
                 : null;
 
             const dealerCode = await generateUniqueDealerCode();
 
+            // 🔐 USER ID LOGIC
+            let finalUserId = null;
+
+            if (userType === '4') {
+                const resellerId = await generateUniqueResellerId();
+                finalUserId = encryptor.encrypt(resellerId);
+            } else {
+                finalUserId = encryptor.encrypt(data.userId);
+            }
+
             /* =========================
-               💾 CREATE USER (UTF MAP)
+               💾 CREATE USER
             ========================= */
+            const lastUser = await EPUser.findOne({
+                order: [['UTF01', 'DESC']]
+            });
+
+            const newId = lastUser ? lastUser.UTF01 + 1 : 1;
 
             const newUser = await EPUser.create({
-
+                // UTF01: newId,
                 UTF02: data.userName,
                 UTF03: userType,
 
-                // 🔐 Login fields
-                UTF04: userType === '4' ? null : encryptor.encrypt(data.userId),
+                UTF04: finalUserId,
                 UTF05: userType === '4' ? null : encryptedPassword,
 
-                // 📧 Contact
                 UTF10: data.email,
-
-                // 🏷 Dealer / reseller
                 UTF08: dealerCode,
                 UTF09: data.userMobile ? Number(data.userMobile) : null,
-
-                // 🔔 Meta
                 UTF11: data.fbtokenapp,
                 UTF12: data.commission ? Number(data.commission) : null,
-
-                // 📍 Address
                 UTF13: data.address,
                 UTF14: data.city,
                 UTF15: data.state,
                 UTF16: data.pincode ? Number(data.pincode) : null,
                 UTF17: data.gstin,
 
-                // 🔐 Flags
                 UTF06: 'Y',
                 UTF07: 'N'
             });
+
+            /* =========================
+               💰 CREATE BANK ENTRY
+            ========================= */
+
+            if (['3', '4'].includes(userType)) {
+
+                await EPBank.create({
+                    BNK02: newUser.UTF01,   // 🔥 LINK
+
+                    BNK03: data.accountHolderName || null,
+                    BNK04: data.bankName || null,
+                    BNK05: data.accountNumber || null,
+                    BNK06: data.ifscCode || null,
+                    BNK07: data.upiId || null,
+
+                    BNK08: 'Y',
+                    BNK09: 'N'
+                });
+            }
 
             /* =========================
                📦 RESPONSE
@@ -346,7 +500,7 @@ class RDBUserController {
             return res.status(201).json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify({
                     status: 'SUCCESS',
-                    message: 'User created successfully',
+                    message: 'User + Bank created successfully',
                     data: newUser
                 }))
             });
@@ -367,35 +521,19 @@ class RDBUserController {
 
     static async updateUser(data, res) {
 
-        let response = { status: 'SUCCESS', message: '', data: null };
 
         try {
 
             /* =========================
-               🔍 FIND USER (BY USERID)
+               🔍 FIND USER
             ========================= */
 
-            const users = await EPUser.findAll({
-                where: { UTF07: 'N' } // not deleted
+            const user = await EPUser.findOne({
+                where: {
+                    UTF01: data.User_Id,
+                    UTF07: 'N'
+                }
             });
-
-            let user = null;
-
-            for (let u of users) {
-
-                let decryptedId;
-
-                try {
-                    decryptedId = encryptor.decrypt(u.UTF04);
-                } catch {
-                    decryptedId = u.UTF04; // fallback
-                }
-
-                if (decryptedId === data.userId) {
-                    user = u;
-                    break;
-                }
-            }
 
             if (!user) {
                 return res.status(404).json({
@@ -406,11 +544,14 @@ class RDBUserController {
                 });
             }
 
+            const currentUserType = String(user.UTF03);
+            const incomingUserType = String(data.userType || currentUserType);
+
             /* =========================
-               🔁 DUPLICATE CHECK (NEW USERID)
+               🔁 DUPLICATE CHECK
             ========================= */
 
-            if (data.newUserId) {
+            if (data.newUserId && incomingUserType !== '4') {
 
                 const users = await EPUser.findAll({
                     where: { UTF07: 'N' }
@@ -449,9 +590,6 @@ class RDBUserController {
             if (data.userName !== undefined)
                 updateData.UTF02 = data.userName;
 
-            if (data.userType !== undefined)
-                updateData.UTF03 = String(data.userType);
-
             if (data.email !== undefined)
                 updateData.UTF10 = data.email;
 
@@ -475,14 +613,6 @@ class RDBUserController {
 
             if (data.isActive !== undefined)
                 updateData.UTF06 = data.isActive;
-
-            /* =========================
-               🔐 USERID UPDATE
-            ========================= */
-
-            if (data.newUserId) {
-                updateData.UTF04 = encryptor.encrypt(data.newUserId);
-            }
 
             /* =========================
                📱 VALIDATIONS
@@ -531,23 +661,110 @@ class RDBUserController {
             }
 
             /* =========================
-               🔐 PASSWORD UPDATE
+               🔐 USERID + PASSWORD
             ========================= */
 
-            if (data.password) {
-                updateData.UTF05 = encryptor.encrypt(data.password);
+            if (incomingUserType !== '4') {
+
+                if (data.newUserId) {
+                    updateData.UTF04 = encryptor.encrypt(data.newUserId);
+                }
+
+                if (data.password) {
+                    updateData.UTF05 = encryptor.encrypt(data.password);
+                }
+
+            } else {
+                updateData.UTF05 = null; // reseller no password
             }
 
             /* =========================
-               💾 UPDATE DB
+               🔄 USER TYPE CHANGE
+            ========================= */
+
+            if (data.userType !== undefined) {
+                updateData.UTF03 = incomingUserType;
+            }
+
+            /* =========================
+               💾 UPDATE USER
             ========================= */
 
             await user.update(updateData);
 
+            /* =========================
+               💰 BANK SYNC (IMPORTANT)
+            ========================= */
+
+            if (['3', '4'].includes(incomingUserType)) {
+
+                // 🔍 find existing bank
+                let bank = await EPBank.findOne({
+                    where: {
+                        BNK02: user.UTF01,
+                        BNK09: 'N'
+                    }
+                });
+
+                // 🧠 VALIDATION
+                if (
+                    data.accountHolderName ||
+                    data.bankName ||
+                    data.accountNumber ||
+                    data.ifscCode ||
+                    data.upiId
+                ) {
+
+                    if (
+                        !data.upiId &&
+                        (!data.accountNumber || !data.ifscCode)
+                    ) {
+                        return res.status(400).json({
+                            encryptedResponse: encryptor.encrypt(JSON.stringify({
+                                status: 'FAIL',
+                                message: 'Provide UPI or Bank details'
+                            }))
+                        });
+                    }
+                }
+
+                if (bank) {
+
+                    // 🔄 UPDATE BANK
+                    await bank.update({
+                        BNK03: data.accountHolderName ?? bank.BNK03,
+                        BNK04: data.bankName ?? bank.BNK04,
+                        BNK05: data.accountNumber ?? bank.BNK05,
+                        BNK06: data.ifscCode ?? bank.BNK06,
+                        BNK07: data.upiId ?? bank.BNK07
+                    });
+
+                } else {
+
+                    // 🆕 CREATE BANK IF NOT EXIST
+                    await EPBank.create({
+                        BNK02: user.UTF01,
+
+                        BNK03: data.accountHolderName || null,
+                        BNK04: data.bankName || null,
+                        BNK05: data.accountNumber || null,
+                        BNK06: data.ifscCode || null,
+                        BNK07: data.upiId || null,
+
+                        BNK08: 'Y',
+                        BNK09: 'N'
+                    });
+                }
+            }
+
+            /* =========================
+               📦 RESPONSE
+            ========================= */
+
             return res.status(200).json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify({
                     status: 'SUCCESS',
-                    message: 'User updated successfully'
+                    message: 'User + Bank updated successfully'
                 }))
             });
 
@@ -567,129 +784,12 @@ class RDBUserController {
 
     static async deleteUser(User_Id, res) {
 
-        try {
 
-            /* =========================
-               🔍 FIND USER (NOT DELETED)
-            ========================= */
-
-            const user = await EPUser.findOne({
-                where: {
-                    UTF01: User_Id,   // ✅ primary key
-                    UTF07: 'N'        // ✅ not deleted
-                }
-            });
-
-            if (!user) {
-                return res.status(404).json({
-                    encryptedResponse: encryptor.encrypt(JSON.stringify({
-                        status: 'FAIL',
-                        message: 'User not found or already deleted'
-                    }))
-                });
-            }
-
-            /* =========================
-               🗑️ SOFT DELETE
-            ========================= */
-
-            await user.update({
-                UTF07: 'Y' // ✅ mark deleted
-            });
-
-            return res.status(200).json({
-                encryptedResponse: encryptor.encrypt(JSON.stringify({
-                    status: 'SUCCESS',
-                    message: 'User deleted successfully'
-                }))
-            });
-
-        } catch (error) {
-
-            console.error("DeleteUser Error:", error);
-
-            return res.status(500).json({
-                encryptedResponse: encryptor.encrypt(JSON.stringify({
-                    status: 'FAIL',
-                    message: 'Delete failed'
-                }))
-            });
-        }
-    }
-
-
-    static async getUsers(res) {
-
-        let response = { status: 'SUCCESS', message: '', data: null };
-
-        try {
-            const users = await EPUser.findAll({
-                where: { UTF07: 'N' } // ✅ not deleted
-            });
-
-            /* =========================
-               🔄 MAP RESPONSE (IMPORTANT)
-               👉 keep frontend same
-            ========================= */
-
-            const formattedUsers = users.map(u => ({
-
-                User_Id: u.UTF01,
-                User_Name: u.UTF02,
-                User_Type: u.UTF03,
-
-
-                UserID: u.UTF04,
-
-                Password: u.UTF05, // usually not needed but kept same
-
-                User_IsActive: u.UTF06,
-                User_IsDeleted: u.UTF07,
-
-                Dealer_Code: u.UTF08,
-                User_Mobile: u.UTF09,
-                user_email: u.UTF10,
-                fbtokenapp: u.UTF11,
-                commission: u.UTF12,
-                address: u.UTF13,
-                city: u.UTF14,
-                state: u.UTF15,
-                pincode: u.UTF16,
-                gstin: u.UTF17
-            }));
-
-            /* =========================
-               📦 RESPONSE
-            ========================= */
-
-            return res.status(200).json({
-                encryptedResponse: encryptor.encrypt(JSON.stringify({
-                    status: 'SUCCESS',
-                    message: 'Users fetched successfully',
-                    data: formattedUsers
-                }))
-            });
-
-        } catch (error) {
-
-            console.error("GetUsers Error:", error.message);
-
-            return res.status(500).json({
-                encryptedResponse: encryptor.encrypt(JSON.stringify({
-                    status: 'FAIL',
-                    message: 'Fetch failed'
-                }))
-            });
-        }
-    }
-
-
-    static async toggleUserStatus(User_Id, res) {
 
         try {
 
             /* =========================
-               🔍 FIND USER (NOT DELETED)
+               🔍 FIND USER
             ========================= */
 
             const user = await EPUser.findOne({
@@ -708,6 +808,318 @@ class RDBUserController {
                 });
             }
 
+            const userType = String(user.UTF03);
+
+            /* =========================
+               🗑️ SOFT DELETE USER
+            ========================= */
+
+            await user.update({
+                UTF07: 'Y'
+            });
+
+            /* =========================
+               💰 SOFT DELETE BANK (Dealer/Reseller)
+            ========================= */
+
+            if (['3', '4'].includes(userType)) {
+
+                await EPBank.update(
+                    { BNK09: 'Y' },
+                    {
+                        where: {
+                            BNK02: User_Id
+                        }
+                    }
+                );
+            }
+
+            /* =========================
+               📦 RESPONSE
+            ========================= */
+
+            return res.status(200).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    status: 'SUCCESS',
+                    message: 'User + Bank deleted successfully'
+                }))
+            });
+
+        } catch (error) {
+
+            console.error("DeleteUser Error:", error);
+
+            return res.status(500).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    status: 'FAIL',
+                    message: 'Delete failed'
+                }))
+            });
+        }
+    }
+
+
+    // static async getUsers(res) {
+
+
+    //     let response = { status: 'SUCCESS', message: '', data: null };
+
+    //     try {
+
+    //         /* =========================
+    //            🔍 FETCH USERS
+    //         ========================= */
+
+    //         const users = await EPUser.findAll({
+    //             where: { UTF07: 'N' }
+    //         });
+
+    //         /* =========================
+    //            🔍 FETCH BANK DATA
+    //         ========================= */
+
+    //         const banks = await EPBank.findAll({
+    //             where: { BNK09: 'N' }
+    //         });
+
+    //         // 🔁 Create map for fast lookup
+    //         const bankMap = {};
+    //         banks.forEach(b => {
+    //             bankMap[b.BNK02] = b;
+    //         });
+
+    //         /* =========================
+    //            🔄 MAP RESPONSE
+    //         ========================= */
+
+    //         const formattedUsers = users.map(u => {
+
+    //             const userType = String(u.UTF03);
+    //             const bank = bankMap[u.UTF01];
+
+    //             return {
+
+    //                 User_Id: u.UTF01,
+    //                 User_Name: u.UTF02,
+    //                 User_Type: u.UTF03,
+
+    //                 UserID: u.UTF04,
+    //                 Password: u.UTF05,
+
+    //                 User_IsActive: u.UTF06,
+    //                 User_IsDeleted: u.UTF07,
+
+    //                 Dealer_Code: u.UTF08,
+    //                 User_Mobile: u.UTF09,
+    //                 user_email: u.UTF10,
+    //                 fbtokenapp: u.UTF11,
+    //                 commission: u.UTF12,
+    //                 address: u.UTF13,
+    //                 city: u.UTF14,
+    //                 state: u.UTF15,
+    //                 pincode: u.UTF16,
+    //                 gstin: u.UTF17,
+
+    //                 /* =========================
+    //                    💰 BANK DATA
+    //                 ========================= */
+
+    //                 accountHolderName:
+    //                     (['3', '4'].includes(userType) && bank) ? bank.BNK03 : null,
+
+    //                 bankName:
+    //                     (['3', '4'].includes(userType) && bank) ? bank.BNK04 : null,
+
+    //                 accountNumber:
+    //                     (['3', '4'].includes(userType) && bank) ? bank.BNK05 : null,
+
+    //                 ifscCode:
+    //                     (['3', '4'].includes(userType) && bank) ? bank.BNK06 : null,
+
+    //                 upiId:
+    //                     (['3', '4'].includes(userType) && bank) ? bank.BNK07 : null
+    //             };
+    //         });
+
+    //         /* =========================
+    //            📦 RESPONSE
+    //         ========================= */
+
+    //         return res.status(200).json({
+    //             encryptedResponse: encryptor.encrypt(JSON.stringify({
+    //                 status: 'SUCCESS',
+    //                 message: 'Users + Bank fetched successfully',
+    //                 data: formattedUsers
+    //             }))
+    //         });
+
+    //     } catch (error) {
+
+    //         console.error("GetUsers Error:", error.message);
+
+    //         return res.status(500).json({
+    //             encryptedResponse: encryptor.encrypt(JSON.stringify({
+    //                 status: 'FAIL',
+    //                 message: 'Fetch failed'
+    //             }))
+    //         });
+    //     }
+    // }
+    static async getUsers(res) {
+
+        let response = { status: 'SUCCESS', message: '', data: null };
+
+        try {
+
+            /* =========================
+               🔍 FETCH USERS
+            ========================= */
+
+            const users = await EPUser.findAll({
+                where: { UTF07: 'N' }
+            });
+
+            /* =========================
+               🔍 FETCH BANK DATA
+            ========================= */
+
+            const banks = await EPBank.findAll({
+                where: { BNK09: 'N' }
+            });
+
+            const bankMap = {};
+            banks.forEach(b => {
+                bankMap[b.BNK02] = b;
+            });
+
+            /* =========================
+               🌍 FETCH STATES
+            ========================= */
+
+            const statesRaw = await PLSTATE.findAll({ raw: true });
+
+            const states = statesRaw.map(s => ({
+                stateCode: s.PLSF01,
+                stateName: s.PLSF02
+            }));
+
+            const defineUserTypes = require('../Models/RDB/EP_USERTPYES');
+            const UserTypes = defineUserTypes(sequelizeRDB, require('sequelize').DataTypes);
+
+            const rolesRaw = await UserTypes.findAll({ raw: true });
+
+            const roles = rolesRaw.map(r => ({
+                roleId: r.ID,
+                roleName: r.Type
+            }));
+
+            /* =========================
+               🔄 MAP USERS
+            ========================= */
+
+            const formattedUsers = users.map(u => {
+
+                const userType = String(u.UTF03);
+                const bank = bankMap[u.UTF01];
+
+                return {
+
+                    User_Id: u.UTF01,
+                    User_Name: u.UTF02,
+                    User_Type: u.UTF03,
+
+                    UserID: u.UTF04,
+                    Password: u.UTF05,
+
+                    User_IsActive: u.UTF06,
+                    User_IsDeleted: u.UTF07,
+
+                    Dealer_Code: u.UTF08,
+                    User_Mobile: u.UTF09,
+                    user_email: u.UTF10,
+                    fbtokenapp: u.UTF11,
+                    commission: u.UTF12,
+                    address: u.UTF13,
+                    city: u.UTF14,
+                    state: u.UTF15,
+                    pincode: u.UTF16,
+                    gstin: u.UTF17,
+
+                    /* 💰 BANK DATA */
+
+                    accountHolderName:
+                        (['3', '4'].includes(userType) && bank) ? bank.BNK03 : null,
+
+                    bankName:
+                        (['3', '4'].includes(userType) && bank) ? bank.BNK04 : null,
+
+                    accountNumber:
+                        (['3', '4'].includes(userType) && bank) ? bank.BNK05 : null,
+
+                    ifscCode:
+                        (['3', '4'].includes(userType) && bank) ? bank.BNK06 : null,
+
+                    upiId:
+                        (['3', '4'].includes(userType) && bank) ? bank.BNK07 : null
+                };
+            });
+
+            /* =========================
+               📦 FINAL RESPONSE
+            ========================= */
+
+            return res.status(200).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    status: 'SUCCESS',
+                    message: 'Users + Bank + States fetched successfully',
+                    data: {
+                        users: formattedUsers,
+                        states: states,
+                        roles: roles
+                    }
+                }))
+            });
+
+        } catch (error) {
+
+            console.error("GetUsers Error:", error.message);
+
+            return res.status(500).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    status: 'FAIL',
+                    message: 'Fetch failed'
+                }))
+            });
+        }
+    }
+
+    static async toggleUserStatus(User_Id, res) {
+
+
+        try {
+
+            /* =========================
+               🔍 FIND USER
+            ========================= */
+
+            const user = await EPUser.findOne({
+                where: {
+                    UTF01: User_Id,
+                    UTF07: 'N'
+                }
+            });
+
+            if (!user) {
+                return res.status(404).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        status: 'FAIL',
+                        message: 'User not found or already deleted'
+                    }))
+                });
+            }
+
+            const userType = String(user.UTF03);
+
             /* =========================
                🔄 TOGGLE STATUS
             ========================= */
@@ -718,6 +1130,27 @@ class RDBUserController {
                 UTF06: newStatus
             });
 
+            /* =========================
+               💰 SYNC BANK STATUS
+            ========================= */
+
+            if (['3', '4'].includes(userType)) {
+
+                await EPBank.update(
+                    { BNK08: newStatus },   // 🔥 ACTIVE FLAG SYNC
+                    {
+                        where: {
+                            BNK02: User_Id,
+                            BNK09: 'N'
+                        }
+                    }
+                );
+            }
+
+            /* =========================
+               📦 RESPONSE
+            ========================= */
+
             return res.status(200).json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify({
                     status: 'SUCCESS',
@@ -725,7 +1158,7 @@ class RDBUserController {
                         ? 'User activated successfully'
                         : 'User deactivated successfully',
                     data: {
-                        userId: user.UTF01, // keep same structure
+                        userId: user.UTF01,
                         status: newStatus
                     }
                 }))
@@ -744,187 +1177,135 @@ class RDBUserController {
 
         }
     }
-
-    static async getUsers1(req, res) {
-        let response = { status: 'SUCCESS', message: '', data: null };
-
+    static async getCorporateDatabases(corporateID) {
         try {
 
-            /* =========================
-               🔐 TOKEN VALIDATION
-            ========================= */
-
-            const token = req.headers['authorization']?.split(' ')[1];
-
-            if (!token) {
-                return res.status(401).json({
-                    encryptedResponse: encryptor.encrypt(JSON.stringify({
-                        status: 'FAIL',
-                        message: 'Authorization token missing'
-                    }))
-                });
+            if (!corporateID) {
+                throw new Error("corporateID is required");
             }
 
-            const decoded = await TokenService.validateToken(token);
+            /* =========================
+               🔹 1. BUILD SDB NAME
+            ========================= */
+            const parts = corporateID.split('-');
 
-            const roleId = Number(decoded.roleId);
-            const loginUserId = decoded.Id;
+            let sdbName =
+                parts.length === 3
+                    ? `${parts[0]}${parts[1]}${parts[2]}SDB`
+                    : `${parts[0]}${parts[1]}SDB`;
+
+            // 🔥 special case fix
+            if (sdbName === 'PLP00001SDB') {
+                sdbName = 'A00001SDB';
+            }
 
             /* =========================
-               🔍 FETCH LOGIN USER
+               🔹 2. CONNECT SDB
             ========================= */
+            const sequelizeSDB = db.getConnection(sdbName);
 
-            const loginUser = await EPUser.findOne({
-                where: { UTF01: loginUserId, UTF07: 'N' }
+            /* =========================
+               🔹 3. GET COMPANY IDS
+            ========================= */
+            const companies = await sequelizeSDB.query(`
+            SELECT CMPF01 
+            FROM PLSDBCMP
+            ORDER BY CMPF01
+        `, {
+                type: require('sequelize').QueryTypes.SELECT
             });
 
-            if (!loginUser) {
-                return res.status(404).json({
-                    encryptedResponse: encryptor.encrypt(JSON.stringify({
-                        status: 'FAIL',
-                        message: 'Login user not found'
-                    }))
-                });
-            }
+            /* =========================
+               🔹 4. BUILD CMP DB NAMES
+            ========================= */
+            const corpSuffix = corporateID.slice(-5); // 00085
 
-            let formattedUsers = [];
+            const cmpDatabases = companies.map(c => {
+                const companyID = Number(c.CMPF01);
+
+                return `A${corpSuffix}CMP${companyID
+                    .toString()
+                    .padStart(4, '0')}`;
+            });
 
             /* =========================
-                ADMIN / USER (1,2)
-                self + dealer + reseller
+               🔹 5. RETURN STRUCTURE
             ========================= */
+            return {
+                corporateID,
+                sdbDatabase: sdbName,
+                cmpDatabases
+            };
 
-            if ([1, 2].includes(roleId)) {
+        } catch (error) {
+            console.error("getCorporateDatabases Error:", error);
+            throw error;
+        }
+    }
+    static async handleGetDatabases(pa, res, decoded) {
+        try {
 
-                const allDealersAndResellers = await EPUser.findAll({
-                    where: {
-                        UTF07: 'N',
-                        UTF03: [3, 4]
-                    }
-                });
+            // 🔥 USE pa OR fallback to token
+            const corporateID = pa.corporateID || decoded.corpId;
 
-                formattedUsers = [
-                    {
-                        User_Id: loginUser.UTF01,
-                        User_Name: loginUser.UTF02,
-                        User_Type: loginUser.UTF03,
-
-
-                        UserID: loginUser.UTF04,
-
-                        Password: loginUser.UTF05, // usually not needed but kept same
-
-                        User_IsActive: loginUser.UTF06,
-                        User_IsDeleted: loginUser.UTF07,
-
-                        Dealer_Code: loginUser.UTF08,
-                        User_Mobile: loginUser.UTF09,
-                        user_email: loginUser.UTF10,
-                        fbtokenapp: loginUser.UTF11,
-                        commission: loginUser.UTF12,
-                        address: loginUser.UTF13,
-                        city: loginUser.UTF14,
-                        state: loginUser.UTF15,
-                        pincode: loginUser.UTF16,
-                        gstin: loginUser.UTF17
-                    },
-                    ...allDealersAndResellers.map(u => ({
-                        User_Id: u.UTF01,
-                        User_Name: u.UTF02,
-                        User_Type: u.UTF03,
-
-
-                        UserID: u.UTF04,
-
-                        Password: u.UTF05,
-
-                        User_IsActive: u.UTF06,
-                        User_IsDeleted: u.UTF07,
-
-                        Dealer_Code: u.UTF08,
-                        User_Mobile: u.UTF09,
-                        user_email: u.UTF10,
-                        fbtokenapp: u.UTF11,
-                        commission: u.UTF12,
-                        address: u.UTF13,
-                        city: u.UTF14,
-                        state: u.UTF15,
-                        pincode: u.UTF16,
-                        gstin: u.UTF17
-                    }))
-                ];
-            }
-
-            /* =========================
-               🧑‍💻 DEALER / RESELLER (3,4)
-               👉 only self
-            ========================= */
-
-            else if ([3, 4].includes(roleId)) {
-
-                formattedUsers = [{
-                    User_Id: loginUser.UTF01,
-                    User_Name: loginUser.UTF02,
-                    User_Type: loginUser.UTF03,
-
-
-                    UserID: loginUser.UTF04,
-
-                    Password: loginUser.UTF05, // usually not needed but kept same
-
-                    User_IsActive: loginUser.UTF06,
-                    User_IsDeleted: loginUser.UTF07,
-
-                    Dealer_Code: loginUser.UTF08,
-                    User_Mobile: loginUser.UTF09,
-                    user_email: loginUser.UTF10,
-                    fbtokenapp: loginUser.UTF11,
-                    commission: loginUser.UTF12,
-                    address: loginUser.UTF13,
-                    city: loginUser.UTF14,
-                    state: loginUser.UTF15,
-                    pincode: loginUser.UTF16,
-                    gstin: loginUser.UTF17
-                }];
-            }
-
-            /* =========================
-               🚫 INVALID ROLE
-            ========================= */
-
-            else {
-                return res.status(403).json({
-                    encryptedResponse: encryptor.encrypt(JSON.stringify({
-                        status: 'FAIL',
-                        message: 'Access denied'
-                    }))
-                });
-            }
-
-            /* =========================
-               📦 RESPONSE
-            ========================= */
+            const result = await RDBUserController.getCorporateDatabases(corporateID);
 
             return res.status(200).json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify({
                     status: 'SUCCESS',
-                    message: 'Users fetched successfully',
-                    data: formattedUsers
+                    message: 'Databases fetched successfully',
+                    data: result
                 }))
             });
 
         } catch (error) {
-
-            console.error("getUsers1 Error:", error.message);
-
             return res.status(500).json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify({
                     status: 'FAIL',
-                    message: 'Fetch failed'
+                    message: error.message
                 }))
             });
         }
     }
+    static async requestWithdraw(pa, res, decoded) {
+        try {
+
+            const dealerId = decoded.userId; // 🔥 from token
+            const amount = Number(pa.amount);
+            const method = pa.method;
+
+            if (!amount || amount <= 0) {
+                throw new Error("Invalid amount");
+            }
+
+            const txn = await EP_TRNS.create({
+                TRN02: dealerId,
+                TRN03: amount,
+                TRN04: method || 'UPI',
+                TRN05: 'PENDING',
+                TRN07: new Date(),
+                TRN15: 'WITHDRAW_REQUEST'
+            });
+
+            return res.status(200).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    status: 'SUCCESS',
+                    message: 'Withdraw request submitted',
+                    data: txn
+                }))
+            });
+
+        } catch (err) {
+            return res.status(500).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    status: 'FAIL',
+                    message: err.message
+                }))
+            });
+        }
+    }
+
+
 }
 
 module.exports = { RDBUserController };

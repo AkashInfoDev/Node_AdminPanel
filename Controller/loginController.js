@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const axios = require('axios');
 
+
 const db = require('../Config/config'); // Your Database class
 const definePLSDBADMI = require('../Models/SDB/PLSDBADMI'); // Model factory
 // const definePLSDBADMI = require('../Models/SDB/PLSDBADMI'); // Model factory
@@ -11,6 +12,7 @@ const definePLRDBA02 = require('../Models/RDB/PLRDBA02'); // Model factory
 const definePLRDBOTP = require('../Models/RDB/PLRDBOTP');
 const definePLRDBGAO = require('../Models/RDB/PLRDBGAO');
 const defineEP_USER = require('../Models/RDB/EP_USER');
+const defineEPLOGIN = require('../Models/RDB/EP_LOGIN');
 const Encryptor = require('../Services/encryptor');
 const { Op, QueryTypes, Sequelize } = require('sequelize');
 // const PLRDBA01 = require('../Models/RDB/PLRDBA01');
@@ -28,7 +30,8 @@ const M81Controller = require('./M81Controller');
 const M82Controller = require('./M82Controller');
 const CMPController = require('./CMPController');
 const queryService = require('../Services/queryService');
-const { sendAccountInfoMail, sendResetMail, sendLogOutMail } = require('../Services/mailServices');
+
+const { sendAccountInfoMail, sendResetMail, sendLogOutMail, sendForceLogoutOTP } = require('../Services/mailServices');
 const M83Controller = require('./M83Controller');
 const { response } = require('express');
 
@@ -43,6 +46,7 @@ const PLRDBA02 = definePLRDBA02(sequelizeRDB);
 const PLRDBOTP = definePLRDBOTP(sequelizeRDB);
 const PLRDBGAO = definePLRDBGAO(sequelizeRDB);
 const EP_USER = defineEP_USER(sequelizeRDB);
+const EP_LOGIN = defineEPLOGIN(sequelizeRDB);
 const encryptor = new Encryptor();
 // let response = { data: null, Status: "SUCCESS", message: null }
 
@@ -86,9 +90,17 @@ class AdminController {
             //     return AdminController.loginAdmin(userId, password, res);
             // }
             if (action === 'L') {
-                return AdminController.loginAdmin(userId, password, res);
+                // return AdminController.loginAdmin(userId, password, res);
+                return AdminController.loginAdmin(userId, password, res, pa);
             }
 
+            if (action === 'F') {
+                return AdminController.sendLoginOTP(userId, res);
+            }
+            if (action === 'V') {
+                return AdminController.verifyOTPAndForceLogin(pa, res);
+            }
+            if (action === 'O') { return AdminController.logoutAdmin(req, res); }
 
             return res.status(400).json({ message: 'Invalid action parameter' });
 
@@ -98,7 +110,7 @@ class AdminController {
         }
     }
 
-    static async registerAdmin(userId, firstName, middleName, lastName, dob, gender, email, password, roleId, address, phoneNumber, base64Image, lAudit, res) {
+    static async registerAdmin(userId, firstName, middleName, lastName, dob, gender, email, password, roleId, address, phoneNumber, base64Image, res) {
         try {
             let response = {
                 status: 'SUCCESS',
@@ -135,7 +147,6 @@ class AdminController {
                 ADMIF12: address,
                 ADMIF13: phoneNumber,
                 ADMIF14: base64Image,
-                ADMIF15: lAudit
                 // isActive will be 1 when new use registered
             });
             const admin = await PLSDBADMI.findOne({ where: { ADMIF01: encrypted } });
@@ -297,23 +308,212 @@ class AdminController {
     //         return res.status(500).json({ encryptedResponse: encryptedResponse });
     //     }
     // }
+    // static async loginAdmin(userId, password, res) {
 
-    static async loginAdmin(userId, password, res) {
+    //     try {
+
+    //         /* ========================= */
+    //         /* 👤 STEP 1: FIND USER */
+    //         /* ========================= */
+
+    //         const users = await EP_USER.findAll({
+    //             where: { UTF07: 'N' } // not deleted
+    //         });
+
+    //         let user = null;
+
+    //         for (let u of users) {
+
+    //             let decryptedId;
+
+    //             try {
+    //                 decryptedId = encryptor.decrypt(u.UTF04);
+    //             } catch {
+    //                 decryptedId = u.UTF04;
+    //             }
+
+    //             if (decryptedId === userId) {
+    //                 user = u;
+    //                 break;
+    //             }
+    //         }
+
+    //         if (!user) {
+    //             return res.status(400).json({
+    //                 encryptedResponse: encryptor.encrypt(JSON.stringify({
+    //                     response: { message: 'Invalid user' }
+    //                 }))
+    //             });
+    //         }
+
+    //         /* ========================= */
+    //         /* 🔐 PASSWORD CHECK */
+    //         /* ========================= */
+
+    //         const decryptedPassword = encryptor.decrypt(user.UTF05);
+
+    //         if (decryptedPassword !== password) {
+    //             return res.status(400).json({
+    //                 encryptedResponse: encryptor.encrypt(JSON.stringify({
+    //                     response: { message: 'Invalid password' }
+    //                 }))
+    //             });
+    //         }
+
+    //         /* ========================= */
+    //         /* 🚫 ACTIVE CHECK */
+    //         /* ========================= */
+
+    //         if (user.UTF06 !== 'Y') {
+    //             return res.status(403).json({
+    //                 encryptedResponse: encryptor.encrypt(JSON.stringify({
+    //                     response: { message: 'User is inactive' }
+    //                 }))
+    //             });
+    //         }
+
+    //         /* ========================= */
+    //         /* 🔐 TOKEN */
+    //         /* ========================= */
+
+    //         const token = jwt.sign(
+    //             {
+    //                 Id: user.UTF01,
+    //                 // userId: encryptor.decrypt(user.UTF04),
+    //                 userId: user.UTF04,   // 🔐 keep encrypted
+    //                 password: user.UTF05,
+    //                 roleId: Number(user.UTF03)   // 🔥 role from EP_USER
+    //             },
+    //             process.env.JWT_SECRET_KEY,
+    //             { expiresIn: process.env.JWT_EXPIRATION }
+    //         );
+
+    //         /* ========================= */
+    //         /* 📊 COMMON DATA */
+    //         /* ========================= */
+
+    //         let planInfo = await PLRDBA02.findAll({
+    //             where: { A02F13: 1 }
+    //         });
+
+    //         let oCmp = new Company();
+    //         CmpMaster.oYear = new Year(oCmp);
+
+    //         let dbconn = db.createPool('MULTITAX');
+    //         let oDic = await dbconn.query('SELECT * FROM CMPM00', {
+    //             type: QueryTypes.SELECT
+    //         });
+
+    //         let oEntD = { M00: oDic[0] };
+
+    //         let oM00 = new CmpMaster('', '', LangType, 'G', oEntD);
+    //         oDic = await oM00.GetDictionary(null, 'MULTITAX', LangType, '0000');
+    //         const loginUser = {
+    //             id: user.UTF01,
+    //             name: user.UTF02,
+    //             role: Number(user.UTF03),
+    //             phoneNumber: user.UTF09,
+    //             email: user.UTF10,
+    //             dealerCode: user.UTF08,
+    //             commission: user.UTF12
+    //         };
+
+    //         let ibDetail;
+
+    //         const roleId = Number(user.UTF03);
+
+    //         /* =========================
+    //            🧑‍💼 ROLE-BASED ibDetail
+    //            ========================= */
+
+    //         if ([1, 2].includes(roleId)) {
+    //             // Admin or User → themselves + all dealers and resellers
+    //             const allDealersAndResellers = await EP_USER.findAll({
+    //                 where: {
+    //                     UTF07: 'N',
+    //                     UTF03: [3, 4] // dealer and reseller
+    //                 }
+    //             });
+
+    //             ibDetail = [
+    //                 {
+    //                     id: user.UTF01,
+    //                     name: user.UTF02,
+    //                     role: roleId
+    //                 },
+    //                 ...allDealersAndResellers.map(u => ({
+    //                     id: u.UTF01,
+    //                     name: u.UTF02,
+    //                     role: Number(u.UTF03)
+    //                 }))
+    //             ];
+    //         } else if ([3, 4].includes(roleId)) {
+    //             // Dealer/Reseller → only themselves
+    //             ibDetail = [{
+    //                 id: user.UTF01,
+    //                 name: user.UTF02,
+    //                 role: roleId
+    //             }];
+    //         }
+
+    //         /* =========================
+    //            👤 DEALER / RESELLER (3,4)
+    //            ========================= */
+
+    //         else {
+
+    //             ibDetail = [{
+    //                 id: user.UTF01,
+    //                 name: user.UTF02,
+    //                 role: roleId
+    //             }];
+    //         }
+
+    //         /* ========================= */
+    //         /* 📦 RESPONSE */
+    //         /* ========================= */
+    //         return res.status(200).json({
+    //             encryptedResponse: encryptor.encrypt(JSON.stringify({
+    //                 response: {
+    //                     data: {
+    //                         planInfo,
+    //                         csData: oDic["M00"],
+    //                         ibDetail,     // 🔥 array always
+    //                         loginUser     // 🔥 separate object
+    //                     },
+    //                     message: 'Login successful',
+    //                     token
+    //                 }
+    //             }))
+    //         });
+
+    //     } catch (error) {
+
+    //         console.error("Unified Login Error:", error.message);
+
+    //         return res.status(500).json({
+    //             encryptedResponse: encryptor.encrypt(JSON.stringify({
+    //                 response: { message: 'Login failed' }
+    //             }))
+    //         });
+    //     }
+    // }
+
+    static async loginAdmin(userId, password, res, pa) {
 
         try {
 
-            /* ========================= */
-            /* 👤 STEP 1: FIND USER */
-            /* ========================= */
+            /* =========================
+               👤 FIND USER (DECRYPT MATCH)
+            ========================= */
 
             const users = await EP_USER.findAll({
-                where: { UTF07: 'N' } // not deleted
+                where: { UTF07: 'N' }
             });
 
             let user = null;
 
             for (let u of users) {
-
                 let decryptedId;
 
                 try {
@@ -329,75 +529,89 @@ class AdminController {
             }
 
             if (!user) {
-                return res.status(400).json({
-                    encryptedResponse: encryptor.encrypt(JSON.stringify({
-                        response: { message: 'Invalid user' }
-                    }))
-                });
+                throw new Error('Invalid user');
             }
 
-            /* ========================= */
-            /* 🔐 PASSWORD CHECK */
-            /* ========================= */
+            /* =========================
+               🔐 PASSWORD CHECK
+            ========================= */
 
             const decryptedPassword = encryptor.decrypt(user.UTF05);
 
             if (decryptedPassword !== password) {
-                return res.status(400).json({
-                    encryptedResponse: encryptor.encrypt(JSON.stringify({
-                        response: { message: 'Invalid password' }
-                    }))
-                });
+                throw new Error('Invalid password');
             }
 
-            /* ========================= */
-            /* 🚫 ACTIVE CHECK */
-            /* ========================= */
+            /* =========================
+               🚫 ACTIVE CHECK
+            ========================= */
 
             if (user.UTF06 !== 'Y') {
-                return res.status(403).json({
-                    encryptedResponse: encryptor.encrypt(JSON.stringify({
-                        response: { message: 'User is inactive' }
-                    }))
-                });
+                throw new Error('User is inactive');
             }
 
-            /* ========================= */
-            /* 🔐 TOKEN */
-            /* ========================= */
+            /* =========================
+               🚫 CHECK EXISTING LOGIN
+            ========================= */
+
+            const existingLogin = await EP_LOGIN.findOne({
+                where: { LOG02: user.UTF01 }
+            });
+
+            if (existingLogin && pa?.force !== 'true') {
+
+                const decodedToken = jwt.decode(existingLogin.LOG04);
+                const currentTime = Math.floor(Date.now() / 1000);
+
+                if (decodedToken && decodedToken.exp > currentTime) {
+
+                    return res.status(200).json({
+                        encryptedResponse: encryptor.encrypt(JSON.stringify({
+                            response: {
+                                status: 'FAIL',
+                                message: 'User already logged in'
+                            }
+                        }))
+                    });
+                } else {
+                    // expired → remove
+                    await EP_LOGIN.destroy({
+                        where: { LOG02: user.UTF01 }
+                    });
+                }
+            }
+
+            /* =========================
+               🔐 TOKEN GENERATION
+            ========================= */
 
             const token = jwt.sign(
                 {
                     Id: user.UTF01,
-                    // userId: encryptor.decrypt(user.UTF04),
-                    userId: user.UTF04,   // 🔐 keep encrypted
+                    userId: user.UTF04,
                     password: user.UTF05,
-                    roleId: Number(user.UTF03)   // 🔥 role from EP_USER
+                    roleId: Number(user.UTF03)
                 },
                 process.env.JWT_SECRET_KEY,
                 { expiresIn: process.env.JWT_EXPIRATION }
             );
 
-            /* ========================= */
-            /* 📊 COMMON DATA */
-            /* ========================= */
+            /* =========================
+               💾 STORE SESSION
+            ========================= */
 
-            let planInfo = await PLRDBA02.findAll({
-                where: { A02F13: 1 }
+            const { Sequelize } = require('sequelize');
+
+            await EP_LOGIN.create({
+                LOG02: user.UTF01,
+                LOG03: Sequelize.literal('GETDATE()'),
+                LOG04: token
             });
 
-            let oCmp = new Company();
-            CmpMaster.oYear = new Year(oCmp);
+            /* =========================
+               📊 USER DATA
+            ========================= */
 
-            let dbconn = db.createPool('MULTITAX');
-            let oDic = await dbconn.query('SELECT * FROM CMPM00', {
-                type: QueryTypes.SELECT
-            });
-
-            let oEntD = { M00: oDic[0] };
-
-            let oM00 = new CmpMaster('', '', LangType, 'G', oEntD);
-            oDic = await oM00.GetDictionary(null, 'MULTITAX', LangType, '0000');
             const loginUser = {
                 id: user.UTF01,
                 name: user.UTF02,
@@ -409,19 +623,14 @@ class AdminController {
             };
 
             let ibDetail;
-
             const roleId = Number(user.UTF03);
 
-            /* =========================
-               🧑‍💼 ROLE-BASED ibDetail
-               ========================= */
-
             if ([1, 2].includes(roleId)) {
-                // Admin or User → themselves + all dealers and resellers
-                const allDealersAndResellers = await EP_USER.findAll({
+
+                const allUsers = await EP_USER.findAll({
                     where: {
                         UTF07: 'N',
-                        UTF03: [3, 4] // dealer and reseller
+                        UTF03: [3, 4]
                     }
                 });
 
@@ -431,26 +640,14 @@ class AdminController {
                         name: user.UTF02,
                         role: roleId
                     },
-                    ...allDealersAndResellers.map(u => ({
+                    ...allUsers.map(u => ({
                         id: u.UTF01,
                         name: u.UTF02,
                         role: Number(u.UTF03)
                     }))
                 ];
-            } else if ([3, 4].includes(roleId)) {
-                // Dealer/Reseller → only themselves
-                ibDetail = [{
-                    id: user.UTF01,
-                    name: user.UTF02,
-                    role: roleId
-                }];
-            }
 
-            /* =========================
-               👤 DEALER / RESELLER (3,4)
-               ========================= */
-
-            else {
+            } else {
 
                 ibDetail = [{
                     id: user.UTF01,
@@ -459,18 +656,11 @@ class AdminController {
                 }];
             }
 
-            /* ========================= */
-            /* 📦 RESPONSE */
-            /* ========================= */
             return res.status(200).json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify({
                     response: {
-                        data: {
-                            planInfo,
-                            csData: oDic["M00"],
-                            ibDetail,     // 🔥 array always
-                            loginUser     // 🔥 separate object
-                        },
+                        // data: { ibDetail, loginUser },
+                        status: 'SUCCESS',
                         message: 'Login successful',
                         token
                     }
@@ -479,16 +669,291 @@ class AdminController {
 
         } catch (error) {
 
-            console.error("Unified Login Error:", error.message);
-
-            return res.status(500).json({
+            return res.status(400).json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify({
-                    response: { message: 'Login failed' }
+                    response: {
+                        status: 'FAIL',
+                        message: error.message
+                    }
                 }))
             });
         }
     }
+    static async sendLoginOTP(userId, res) {
+        try {
+
+            const { Sequelize } = require('sequelize');
+
+            /* =========================
+               👤 FIND USER
+            ========================= */
+
+            const users = await EP_USER.findAll();
+
+            let user = null;
+
+            for (let u of users) {
+                let decryptedId;
+
+                try {
+                    decryptedId = encryptor.decrypt(u.UTF04);
+                } catch {
+                    decryptedId = u.UTF04;
+                }
+
+                if (decryptedId === userId) {
+                    user = u;
+                    break;
+                }
+            }
+
+            if (!user) throw new Error('User not found');
+            if (!user.UTF10) throw new Error('User email not found');
+
+            /* =========================
+               🔢 GENERATE OTP
+            ========================= */
+
+            const otp = Math.floor(100000 + Math.random() * 900000);
+
+            const decryptedId = encryptor.decrypt(user.UTF04);
+
+            /* =========================
+               💾 SAVE OTP (NEW STRUCTURE)
+            ========================= */
+
+            await PLRDBOTP.create({
+                CORP_ID: decryptedId,                  // ✅ REQUIRED
+                EMAIL: user.UTF10,                     // ✅ REQUIRED
+                OTP_CODE: otp.toString(),              // ✅ REQUIRED
+                OTP_EXPIRY: Sequelize.literal("DATEADD(MINUTE, 5, GETDATE())"), // ✅ +5 min
+                OTP_STATUS: 'PENDING',                 // ✅ REQUIRED
+                OTP_DESC: 'FL'                // ✅ REQUIRED
+            });
+
+            /* =========================
+               📩 SEND EMAIL
+            ========================= */
+
+            await sendForceLogoutOTP({
+                to: user.UTF10,
+                corpId: decryptedId,
+                otp: otp
+            });
+
+            return res.json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    status: 'SUCCESS',
+                    message: 'OTP sent successfully'
+                }))
+            });
+
+        } catch (err) {
+
+            console.error("❌ sendLoginOTP Error:", err);
+
+            return res.status(500).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    status: 'FAIL',
+                    message: err.message
+                }))
+            });
+        }
+    }
+    static async verifyOTPAndForceLogin(pa, res) {
+        try {
+
+            const { userId, otp } = pa;
+
+            /* =========================
+               👤 FIND USER
+            ========================= */
+
+            const users = await EP_USER.findAll();
+
+            let user = null;
+
+            for (let u of users) {
+                let decryptedId;
+
+                try {
+                    decryptedId = encryptor.decrypt(u.UTF04);
+                } catch {
+                    decryptedId = u.UTF04;
+                }
+
+                if (decryptedId === userId) {
+                    user = u;
+                    break;
+                }
+            }
+
+            if (!user) throw new Error('User not found');
+
+            const decryptedId = encryptor.decrypt(user.UTF04);
+
+            /* =========================
+               🔍 FIND OTP (NEW STRUCTURE)
+            ========================= */
+
+            const record = await PLRDBOTP.findOne({
+                where: {
+                    CORP_ID: decryptedId,
+                    OTP_CODE: otp,
+                    OTP_STATUS: 'PENDING',
+                    OTP_DESC: 'FL'   // match your insert
+                },
+                order: [['OTPID', 'DESC']]
+            });
+
+            if (!record) throw new Error('Invalid or already used OTP');
+
+            /* =========================
+               ⏳ EXPIRY CHECK (DB BASED)
+            ========================= */
+
+            const now = new Date();
+            const expiry = new Date(record.OTP_EXPIRY);
+
+            if (now > expiry) {
+                throw new Error('OTP expired');
+            }
+
+            /* =========================
+               🔒 MARK OTP USED
+            ========================= */
+
+            await PLRDBOTP.update(
+                { OTP_STATUS: 'USED' },
+                { where: { OTPID: record.OTPID } }
+            );
+
+            /* =========================
+               🚪 DELETE OLD SESSION
+            ========================= */
+
+            await EP_LOGIN.destroy({
+                where: { LOG02: user.UTF01 }
+            });
+
+            /* =========================
+               ✅ RESPONSE
+            ========================= */
+
+            return res.json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    status: 'SUCCESS',
+                    message: 'OTP verified. Login again with force=true'
+                }))
+            });
+
+        } catch (err) {
+
+            console.error("❌ verifyOTP Error:", err);
+
+            return res.status(500).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    status: 'FAIL',
+                    message: err.message
+                }))
+            });
+        }
+    }
+    static async logoutAdmin(req, res) {
+        try {
+
+            let response = { status: 'SUCCESS', message: null };
+
+            /* =========================
+               🔐 GET TOKEN
+            ========================= */
+
+            const token = req.headers['authorization']?.split(' ')[1];
+
+            if (!token) {
+                throw new Error('No token provided');
+            }
+
+            /* =========================
+               🔓 VERIFY TOKEN
+            ========================= */
+
+            let decoded;
+
+            try {
+                decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
+            } catch (err) {
+                throw new Error('Invalid or expired token');
+            }
+
+            const userId = decoded.Id;
+
+            /* =========================
+               🚪 DELETE SESSION
+            ========================= */
+
+            const deleted = await EP_LOGIN.destroy({
+                where: { LOG02: userId }
+            });
+
+            if (!deleted) {
+                return res.status(200).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        response: {
+                            status: 'FAIL',
+                            message: 'User already logged out'
+                        }
+                    }))
+                });
+            }
+
+            /* =========================
+               📩 OPTIONAL EMAIL (like UserController)
+            ========================= */
+
+            // try {
+            //     const user = await EP_USER.findOne({
+            //         where: { UTF01: userId }
+            //     });
+
+            //     if (user && user.UTF10) {
+            //         await sendLogOutMail({
+            //             to: user.UTF10,
+            //             userId: encryptor.decrypt(user.UTF04)
+            //         });
+            //     }
+            // } catch (mailErr) {
+            //     console.error("Logout mail failed:", mailErr.message);
+            // }
+
+            /* =========================
+               ✅ RESPONSE
+            ========================= */
+
+            return res.status(200).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    response: {
+                        status: 'SUCCESS',
+                        message: 'Logout successful'
+                    }
+                }))
+            });
+
+        } catch (error) {
+
+            return res.status(400).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    response: {
+                        status: 'FAIL',
+                        message: error.message
+                    }
+                }))
+            });
+        }
+    }
+
 }
+
 class UserController {
     // Handle user actions: Register (R), Edit (E), Login (L)
     static async manageUser(req, res) {
@@ -562,11 +1027,444 @@ class UserController {
         }
     }
 
-    static async registerUser({
-        userId, firstName, middleName, lastName, dob, gender,
-        email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, corpId, cusRole, lAudit, req, decoded, CmpList, BrcList
-    }, res) {
+    // static async registerUser({
+
+    //     userId, firstName, middleName, lastName, dob, gender,
+    //     email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, corpId, cusRole, req, decoded, CmpList, BrcList
+    // }, res) 
+
+    // {
+    //     try {
+    //         if (roleId == '2') {
+    //             let response = { status: 'SUCCESS', message: null };
+    //             const encryptedUserId = encryptor.encrypt(userId);
+
+    //             // const existing = await PLSDBADMI.findAll();
+    //             // for (let i of existing) {
+    //             //     const decrypted = encryptor.decrypt(i.ADMIF01);
+    //             //     if (decrypted === userId) {
+    //             //         response.status = 'FAIL';
+    //             //         response.message = 'User ID is already registered';
+    //             //         const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+    //             //         return res.status(400).json({ encryptedResponse: encryptedResponse });
+    //             //     }
+    //             // }
+
+    //             // const hashedPassword = encryptor.encrypt(password);
+    //             // let SDBdbname = 'A' + corpNum + "SDB"
+    //             // let admi = new ADMIController(SDBdbname);
+    //             // const newUser = await admi.create(encryptedUserId, firstName, middleName, lastName, hashedPassword, roleId, email, dob, gender, address, phoneNumber, base64Image, BrcList, CmpList);
+
+    //             // let rel = new RELController(SDBdbname)
+    //             // if (newUser) {
+    //             //     const newUser = await rel.create("", encryptedUserId, "", "");
+    //             // }
+    //             let GU = 'U';  // Default value for GU
+    //             let GUID = '0000000';  // GUID initialization (without prefix initially)
+    //             let usrCodeList;
+    //             let nextNumber = 0;
+
+    //             const companyResult = await CompanyService.createCompany(req, res, true);
+    //             if (!this.existingCorpId) {
+    //                 if (GUaction == 'G') {
+    //                     GU = 'G';  // Change prefix to 'G'
+
+    //                     // If the list is empty, start from 'G0000000'
+    //                     if (grpCodeList.length === 0) {
+    //                         GUID = 'G0000000';  // Initialize GUID for 'G'
+    //                     } else {
+    //                         // Extract the numeric part and increment it
+    //                         let numericPart = parseInt(GUID.slice(1));  // Remove 'G' and get the number
+    //                         GUID = GU + (numericPart + 1).toString().padStart(7, '0');  // Add 'G' and pad with zeros
+    //                     }
+    //                 }
+
+    //                 let m81 = new M81Controller(companyResult.SDBdbname);
+    //                 // Fetch all records for M81F05
+    //                 let grpCodeList = await m81.findAll({},
+    //                     ['M81F05']
+    //                 );
+
+    //                 usrCodeList = await m81.findAll({
+    //                     M81F01: {
+    //                         [Op.like]: 'U%'  // This will match strings that start with 'U'
+    //                     }
+    //                 });
+
+    //                 do {
+    //                     // Check if a user with the same GUID exists
+    //                     usrCodeList = await m81.findAll({
+    //                         M81F01: GUID
+    //                     });
+
+    //                     // If a user exists with that GUID, generate a new GUID
+    //                     if (usrCodeList.length > 0) {
+    //                         // Increment GUID by 1
+    //                         let numericPart = parseInt(GUID.slice(1));  // Get the numeric part of GUID
+    //                         GUID = GU + (numericPart + 1).toString().padStart(7, '0');  // Update GUID
+    //                     } else {
+    //                         GUID = GU + '0000000';  // Reset GUID to the default value if no user is found
+    //                     }
+
+    //                     usrCodeList = await m81.findAll(
+    //                         { M81F01: GUID }
+    //                     );
+
+    //                 } while (usrCodeList.length > 0);  // Keep checking until GUID is unique
+
+    //                 // If grpCodeList is empty, start from 'G0000000'
+    //                 if (grpCodeList.length === 0) {
+    //                     GUID = 'G0000000';
+    //                 } else {
+    //                     // Extract the numeric part and find the highest number
+    //                     const numbers = grpCodeList
+    //                         .map(item => {
+    //                             const numberPart = item.M81F05.slice(1); // Remove 'G' and get the numeric part
+    //                             return parseInt(numberPart, 10);  // Convert to integer
+    //                         })
+    //                         .filter(num => !isNaN(num));  // Remove NaN values
+
+    //                     // Now find the maximum number and increment it
+    //                     const maxNumber = numbers.length > 0 ? Math.max(...numbers) : 0;  // If numbers is empty, maxNumber is 0
+    //                     nextNumber = GU + (maxNumber + 1).toString().padStart(7, '0');  // Pad with zeros to maintain the format
+    //                 }
+    //             }
+
+    //             // let cmpServ = new CompanyService()
+
+    //             // Handle success or failure of company creation
+    //             if (!companyResult.status) {
+    //                 let admi = new ADMIController(companyResult.SDBdbname);
+    //                 let m81 = new M81Controller(companyResult.SDBdbname);
+    //                 const existingUser = await admi.findAll();
+    //                 for (let i of existingUser) {
+    //                     const decrypted = encryptor.decrypt(i.ADMIF01);
+    //                     if (decrypted === userId) {
+    //                         await admi.destroy({
+    //                             ADMIF01: i.ADMIF01
+    //                         });
+    //                     }
+    //                 }
+    //                 await m81.destroy({
+    //                     M81F01: GUID
+    //                 });
+    //                 return res.status(500).json(companyResult); // Make sure the response is returned here
+    //             } else {
+    //                 try {
+    //                     let admin;
+    //                     let adminId = userId;
+    //                     let admi = new ADMIController(companyResult.SDBdbname);
+    //                     const existingAdmin = await admi.findAll();
+    //                     for (let i of existingAdmin) {
+    //                         const decrypted = encryptor.decrypt(i.ADMIF01)
+    //                         if (decrypted == adminId) {
+    //                             admin = i;
+    //                         }
+    //                     }
+    //                     let m81 = new M81Controller(companyResult.SDBdbname);
+    //                     let M81Info = await m81.findOne({ M81UNQ: admin.ADMIF00 });
+
+    //                     let cUserID = M81Info.M81F01;
+    //                     let m82 = new M82Controller(companyResult.SDBdbname);
+    //                     await m82.create(cUserID, parseInt(companyResult.CmpNum), '', '', '', '', '', '', '', 'Y', (new Date().getFullYear() % 100).toString(), 'A');
+    //                     let cmp = new CMPController(companyResult.SDBdbname);
+    //                     await cmp.create(parseInt(companyResult.CmpNum), companyName, 'SQL', 'No Group', cUserID, formatDate(new Date()), '45.195.159.72', 'aiAdmin', 'aaBC@#23', 'DATA', null);
+    //                     // Fetch user info based on company name
+    //                     let userInfo = await PLRDBA01.findOne({
+    //                         where: { A01F02: companyName }
+    //                     });
+
+    //                     // Fetch all existing admin users
+    //                     let existing = await admi.findAll();
+    //                     let existingUser = null; // Variable to store the matched existing user
+
+    //                     // Loop through existing users to find the one matching the userId
+    //                     for (let i of existing) {
+    //                         const decrypted = encryptor.decrypt(i.ADMIF01);
+    //                         if (decrypted === userId) {
+    //                             existingUser = i; // Set the existing user if match found
+    //                             break; // Exit the loop once the user is found
+    //                         }
+    //                     }
+
+    //                     if (!existingUser) {
+    //                         return res.status(404).json({ message: 'User not found' });
+    //                     }
+
+    //                     if (userInfo) {
+    //                         // Update the admin user if user info is found
+    //                         await admi.update(
+    //                             { ADMICORP: userInfo.A01F01 },
+    //                             { ADMIF00: existingUser.ADMIF00 }
+    //                         );
+    //                     }
+    //                     await PLRDBGAO.create({
+    //                         GAOF01: companyResult.nextCorpId,
+    //                         GAOF02: parseInt(companyResult.CmpNum),
+    //                         GAOF03: 2, // Customized Bill Print(Formate Wise) Free
+    //                         GAOF04: 0,
+    //                         GAOF05: 5, // Customized Report Setup(Report Wise) Free
+    //                         GAOF06: 0,
+    //                         GAOF07: 50, // User Field(Limit Wise) Free
+    //                         GAOF08: 0,
+    //                         GAOF09: 5, // User Master(Limit Wise) Free
+    //                         GAOF10: 0
+    //                     });
+    //                     // Create a new JWT token
+    //                     const updatedToken = jwt.sign(
+    //                         { userId: admin.ADMIF01, corpId: companyResult.corpId },
+    //                         process.env.JWT_SECRET_KEY,
+    //                         { expiresIn: process.env.JWT_EXPIRATION }
+    //                     );
+
+    //                     // Prepare the success response
+    //                     const response = {
+    //                         status: 'SUCCESS',
+    //                         message: 'User registered successfully And Mail Send to Registered MAIL id',
+    //                         userId: encryptor.decrypt(admin.ADMIF01),
+    //                         password: encryptor.decrypt(admin.ADMIF05),
+    //                         corpId: companyResult.nextCorpId,
+    //                         updatedToken: updatedToken
+    //                     };
+
+    //                     try {
+    //                         const info = await sendAccountInfoMail({
+    //                             to: admin.ADMIF07,
+    //                             corpId: response.corpId,
+    //                             userId: response.userId,
+    //                             password1: response.password,
+    //                         });
+    //                     } catch (mailErr) {
+    //                         console.error("❌ MAIL FAILED:", mailErr);
+    //                     }
+
+    //                     // Encrypt the response
+    //                     const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+
+    //                     // Return the response
+    //                     return res.status(201).json({ encryptedResponse });
+
+    //                 } catch (error) {
+    //                     // Handle any errors that occur in the try block
+    //                     console.error(error);
+    //                     return res.status(500).json({ message: 'An error occurred', error: error.message });
+    //                 }
+    //             }
+    //         } else if (roleId == '3') {
+    //             let corpId = decoded.corpId;
+    //             let sdbSeq = corpId.split('-');
+    //             let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
+    //             let admi = new ADMIController(sdbdbname);
+    //             let m81 = new M81Controller(sdbdbname);
+    //             let m82 = new M82Controller(sdbdbname);
+    //             let cmp = new CMPController(sdbdbname);
+    //             let rel = new RELController(sdbdbname);
+    //             let response = { status: 'SUCCESS', message: null };
+    //             const encryptedUserId = encryptor.encrypt(userId);
+
+    //             const existing = await admi.findAll();
+    //             for (let i of existing) {
+    //                 const decrypted = encryptor.decrypt(i.ADMIF01);
+    //                 if (decrypted === userId) {
+    //                     response.status = 'FAIL';
+    //                     response.message = 'User ID is already registered';
+    //                     const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+    //                     return res.status(400).json({ encryptedResponse: encryptedResponse });
+    //                 }
+    //             }
+
+    //             let userCorp = await PLRDBA01.findOne({
+    //                 where: { A01F03: corpId }
+    //             });
+
+    //             let superUserDetails = await admi.findOne({
+    //                 ADMICORP: userCorp.A01F01,
+    //                 ADMIF06: [1, 2]
+    //             });
+
+    //             const hashedPassword = encryptor.encrypt(password);
+    //             const newUser = await admi.create(encryptedUserId, firstName, middleName, lastName, hashedPassword, roleId, email, (dob.toString()) ? dob.toString() : null, gender, address, phoneNumber, base64Image, BrcList, CmpList, '', cusRole, superUserDetails.ADMICORP
+    //             );
+
+    //             let superUsrCorpDtl = await PLRDBA01.findOne({
+    //                 where: { A01F01: superUserDetails.ADMICORP }
+    //             });
+
+    //             if (newUser) {
+    //                 const newUser = await rel.create(
+    //                     (superUserDetails.ADMICORP).trim(),
+    //                     encryptedUserId,
+    //                     "",
+    //                     ""
+    //                 );
+    //             }
+    //             let GU = 'U';  // Default value for GU
+    //             let GUID = '0000000';  // GUID initialization (without prefix initially)
+    //             let usrCodeList;
+    //             let nextNumber = 0;
+
+    //             if (!corpId) {
+    //                 if (GUaction == 'G') {
+    //                     GU = 'G';  // Change prefix to 'G'
+
+    //                     // If the list is empty, start from 'G0000000'
+    //                     if (grpCodeList.length === 0) {
+    //                         GUID = 'G0000000';  // Initialize GUID for 'G'
+    //                     } else {
+    //                         // Extract the numeric part and increment it
+    //                         let numericPart = parseInt(GUID.slice(1));  // Remove 'G' and get the number
+    //                         GUID = GU + (numericPart + 1).toString().padStart(7, '0');  // Add 'G' and pad with zeros
+    //                     }
+    //                 }
+
+    //                 // Fetch all records for M81F05
+    //                 let grpCodeList = await m81.findAll({
+    //                     attributes: ['M81F05']
+    //                 });
+
+    //                 usrCodeList = await m81.findAll({
+    //                     M81F01: {
+    //                         [Op.like]: 'U%'  // This will match strings that start with 'U'
+    //                     }
+    //                 });
+
+    //                 do {
+    //                     // Check if a user with the same GUID exists
+    //                     usrCodeList = await m81.findAll({
+    //                         where: { M81F01: GUID }
+    //                     });
+
+    //                     // If a user exists with that GUID, generate a new GUID
+    //                     if (usrCodeList.length > 0) {
+    //                         // Increment GUID by 1
+    //                         let numericPart = parseInt(GUID.slice(1));  // Get the numeric part of GUID
+    //                         GUID = GU + (numericPart + 1).toString().padStart(7, '0');  // Update GUID
+    //                     } else {
+    //                         GUID = GU + '0000000';  // Reset GUID to the default value if no user is found
+    //                     }
+
+    //                     usrCodeList = await m81.findAll({
+    //                         where: { M81F01: GUID }
+    //                     });
+
+    //                 } while (usrCodeList.length > 0);  // Keep checking until GUID is unique
+
+    //                 // If grpCodeList is empty, start from 'G0000000'
+    //                 if (grpCodeList.length === 0) {
+    //                     GUID = 'G0000000';
+    //                 } else {
+    //                     // Extract the numeric part and find the highest number
+    //                     const numbers = grpCodeList
+    //                         .map(item => {
+    //                             const numberPart = item.M81F05.slice(1); // Remove 'G' and get the numeric part
+    //                             return parseInt(numberPart, 10);  // Convert to integer
+    //                         })
+    //                         .filter(num => !isNaN(num));  // Remove NaN values
+
+    //                     // Now find the maximum number and increment it
+    //                     const maxNumber = numbers.length > 0 ? Math.max(...numbers) : 0;  // If numbers is empty, maxNumber is 0
+    //                     nextNumber = GU + (maxNumber + 1).toString().padStart(7, '0');  // Pad with zeros to maintain the format
+    //                 }
+
+    //                 await m81.create(GU, GUID, firstName + lastName, userId, password, nextNumber, grpname ? grpname : roleId == '1' ? 'Admin' : roleId == '2' || '3' ? 'User' : 'Employee', phoneNumber, email, '', '', 'A', newUser.ADMIF00, 'ABCD', usrCodeList[0].M81SID);
+    //             } else {
+    //                 if (GUaction == 'G') {
+    //                     GU = 'G';  // Change prefix to 'G'
+
+    //                     // If the list is empty, start from 'G0000000'
+    //                     if (grpCodeList.length === 0) {
+    //                         GUID = 'G0000000';  // Initialize GUID for 'G'
+    //                     } else {
+    //                         // Extract the numeric part and increment it
+    //                         let numericPart = parseInt(GUID.slice(1));  // Remove 'G' and get the number
+    //                         GUID = GU + (numericPart + 1).toString().padStart(7, '0');  // Add 'G' and pad with zeros
+    //                     }
+    //                 }
+
+    //                 // Fetch all records for M81F05
+    //                 let grpCodeList = await m81.findAll({}, [],
+    //                     ['M81F05']
+    //                 );
+
+    //                 usrCodeList = await m81.findAll({
+    //                     M81F01: {
+    //                         [Op.like]: 'U%'  // This will match strings that start with 'U'
+    //                     }
+    //                 });
+
+    //                 do {
+    //                     // Check if a user with the same GUID exists
+    //                     usrCodeList = await m81.findAll({
+    //                         M81F01: GUID
+    //                     });
+
+    //                     // If a user exists with that GUID, generate a new GUID
+    //                     if (usrCodeList.length > 0) {
+    //                         // Increment GUID by 1
+    //                         let numericPart = parseInt(GUID.slice(1));  // Get the numeric part of GUID
+    //                         GUID = GU + (numericPart + 1).toString().padStart(7, '0');  // Update GUID
+    //                     } else {
+    //                         GUID = GU + '0000000';  // Reset GUID to the default value if no user is found
+    //                     }
+
+    //                     usrCodeList = await m81.findAll({
+    //                         M81F01: GUID
+    //                     });
+
+    //                 } while (usrCodeList.length > 0);  // Keep checking until GUID is unique
+
+    //                 // If grpCodeList is empty, start from 'G0000000'
+    //                 if (grpCodeList.length === 0) {
+    //                     GUID = 'G0000000';
+    //                 } else {
+    //                     // Extract the numeric part and find the highest number
+    //                     const numbers = grpCodeList
+    //                         .map(item => {
+    //                             const numberPart = item.M81F05.slice(1); // Remove 'G' and get the numeric part
+    //                             return parseInt(numberPart, 10);  // Convert to integer
+    //                         })
+    //                         .filter(num => !isNaN(num));  // Remove NaN values
+
+    //                     // Now find the maximum number and increment it
+    //                     const maxNumber = numbers.length > 0 ? Math.max(...numbers) : 0;  // If numbers is empty, maxNumber is 0
+    //                     nextNumber = GU + (maxNumber + 1).toString().padStart(7, '0');  // Pad with zeros to maintain the format
+    //                 }
+
+    //                 await m81.create(GU, GUID, firstName + lastName, userId, password, nextNumber, grpname ? grpname : roleId == '1' ? 'Admin' : roleId == '2' || '3' ? 'User' : 'Employee', phoneNumber, email, '', '', 'A', '', newUser.ADMIF00);
+    //             }
+    //             response.status = 'SUCCESS';
+    //             const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+    //             return res.status(201).json({ encryptedResponse: encryptedResponse })
+    //         }
+    //     }
+    //     catch (error) {
+    //         console.error(error);
+    //         const encryptedResponse = encryptor.encrypt(JSON.stringify({ message: 'User registration failed' }));
+    //         return res.status(500).json({ encryptedResponse: encryptedResponse });
+    //     }
+    // }
+    static async registerUser({ req }, res) {
         try {
+            // const parameterString = encryptor.decrypt(req.query.pa);
+            const encryptedPa = req.body.pa || req.query.pa;
+
+            if (!encryptedPa) {
+                throw new Error('pa parameter missing');
+            }
+
+            const parameterString = encryptor.decrypt(encryptedPa);
+            let decodedParam = decodeURIComponent(parameterString);
+            let pa = querystring.parse(decodedParam);
+
+            let {
+                userId, firstName, middleName, lastName, dob, gender,
+                email, password, roleId, address, phoneNumber,
+                base64Image, GUaction, grpname, companyName,
+                corpId, cusRole, CmpList, BrcList
+            } = pa;
+            // const token = req.headers['authorization']?.split(' ')[1];
+            // const decoded = await TokenService.validateToken(token);
+            // req.decodedToken = decoded;
             if (roleId == '2') {
                 let response = { status: 'SUCCESS', message: null };
                 const encryptedUserId = encryptor.encrypt(userId);
@@ -612,6 +1510,7 @@ class UserController {
                     }
 
                     let m81 = new M81Controller(companyResult.SDBdbname);
+                    console.log("SDB DB NAME:", companyResult.SDBdbname);
                     // Fetch all records for M81F05
                     let grpCodeList = await m81.findAll({},
                         ['M81F05']
@@ -1103,22 +2002,6 @@ class UserController {
                 response.message = 'Invalid Credentials';
                 const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                 return res.status(400).json({ encryptedResponse: encryptedResponse });
-            }
-            if (corpexi) {
-                if (corpexi[0].A01F12 < Date.now()) {
-                    if (corpexi[0].A02A01 == 2) {
-                        response.status = 'FAIL';
-                        response.message = 'Your Trial Plan has be completed';
-                        const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
-                        return res.status(400).json({ encryptedResponse: encryptedResponse });
-                    }
-                    if (corpexi[0].A02A01 == 7) {
-                        response.status = 'FAIL';
-                        response.message = 'Your Package time has been due';
-                        const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
-                        return res.status(400).json({ encryptedResponse: encryptedResponse });
-                    }
-                }
             }
             let sdbSeq = corpId.split('-');
             let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
