@@ -17,7 +17,7 @@ const UserTypeController = require('../Controller/UserTypeController');
 // In your express route:
 // router.get('/adminData',AdminPanel.getUsers); // For Admin Panel of AI
 router.get('/adminData', AdminDashboardController.dashboardCounts);
-
+router.get('/dashboardData',dashboardController.dashboardData);
 router.get('/getAllCorporateUsers', AdminDashboardController.getAllCorporateUsers);
 router.get('/getUserList', AdminDashboardController.manageDashboard);
 router.get('/getPlanDetails', AdminPlanController.managePlans);
