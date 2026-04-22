@@ -6,7 +6,7 @@ const defineUserTypes = require('../Models/RDB/EP_USERTPYES');
 const UserTypes = defineUserTypes(db.getConnection('RDB'), require('sequelize').DataTypes);
 const sequelizeRDB = db.getConnection('IDBAPI');
 
-const definePages = require('../Models/IDB/PLSYSM82.JS');
+const definePages = require('../Models/IDB/PLSYSM82');
 // const definePLSTATE = require('../Models/IDB/PLSTATE');
 
 // const definePages = require('../Models/IDB/PLSYSM821')
