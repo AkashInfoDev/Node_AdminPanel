@@ -55,11 +55,31 @@ class CompanyService {
             message: '',
             corpId: ''
         }
+        // const today = new Date();
+        // regDate = formatDate(today);
+        // subStrtDate = formatDate(today);
+        // const endDate = new Date(today);
+        // endDate.setFullYear(endDate.getFullYear() + 1);
+        // subEndDate = formatDate(endDate);
+
         const today = new Date();
+
         regDate = formatDate(today);
         subStrtDate = formatDate(today);
+
         const endDate = new Date(today);
-        endDate.setFullYear(endDate.getFullYear() + 1);
+
+        /* =========================
+           🧠 PLAN LOGIC
+        ========================= */
+
+        // Trial plan (A02id = 2)
+        if (A02id == 2) {
+            endDate.setDate(endDate.getDate() + 7);   // +7 days
+        } else {
+            endDate.setFullYear(endDate.getFullYear() + 1); // +1 year
+        }
+
         subEndDate = formatDate(endDate);
 
         const token = req.headers['authorization']?.split(' ')[1]; // 'Bearer <token>'
@@ -217,23 +237,57 @@ class CompanyService {
                 }
             }
             /* =========================
-   📄 SAVE PAYMENT PROOF (AFTER SUCCESS)
-========================= */
+            📄 SAVE PAYMENT PROOF (AFTER SUCCESS)
+            ========================= */
 
-            if (req.file && A02id) {
+            // if (req.file && A02id) {
 
-                const fileName = req.file.originalname;
-                const base64 = req.file.buffer.toString('base64');
+            //     const fileName = req.file.originalname;
+            //     const base64 = req.file.buffer.toString('base64');
 
-                const mime = req.file.mimetype;
+            //     const mime = req.file.mimetype;
 
-                if (!mime.includes('pdf') && !mime.includes('image')) {
-                    throw new Error('Only PDF or Image allowed');
-                }
+            //     if (!mime.includes('pdf') && !mime.includes('image')) {
+            //         throw new Error('Only PDF or Image allowed');
+            //     }
 
-                if (req.file.size > 2 * 1024 * 1024) {
-                    throw new Error('File size exceeds 2MB');
-                }
+            //     if (req.file.size > 2 * 1024 * 1024) {
+            //         throw new Error('File size exceeds 2MB');
+            //     }
+
+            //     const tokenUserId = decoded.userId;
+
+            //     let userRecord = await EP_USER.findOne({
+            //         where: {
+            //             UTF04: tokenUserId,
+            //             UTF07: 'N'
+            //         }
+            //     });
+
+            //     // fallback
+            //     if (!userRecord) {
+            //         userRecord = await EP_USER.findOne({
+            //             where: {
+            //                 UTF04: userId,
+            //                 UTF07: 'N'
+            //             }
+            //         });
+            //     }
+
+            //     if (!userRecord) {
+            //         throw new Error('User not found for file upload');
+            //     }
+
+            //     await EP_FILE.create({
+            //         FILE02: fileName,
+            //         FILE03: base64,
+            //         FILE04: userRecord.UTF01
+            //     });
+            // }
+
+            // Update user to attach company
+
+            if ((req.file || pa.paymentDescription) && A02id) {
 
                 const tokenUserId = decoded.userId;
 
@@ -244,7 +298,6 @@ class CompanyService {
                     }
                 });
 
-                // fallback
                 if (!userRecord) {
                     userRecord = await EP_USER.findOne({
                         where: {
@@ -255,17 +308,53 @@ class CompanyService {
                 }
 
                 if (!userRecord) {
-                    throw new Error('User not found for file upload');
+                    throw new Error('User not found for payment');
+                }
+
+                let fileName = null;
+                let base64 = null;
+
+                /* =========================
+                   📄 HANDLE FILE (OPTIONAL)
+                ========================= */
+                if (req.file) {
+
+                    const mime = req.file.mimetype;
+
+                    if (!mime.includes('pdf') && !mime.includes('image')) {
+                        throw new Error('Only PDF or Image allowed');
+                    }
+
+                    if (req.file.size > 2 * 1024 * 1024) {
+                        throw new Error('File size exceeds 2MB');
+                    }
+
+                    fileName = req.file.originalname;
+                    base64 = req.file.buffer.toString('base64');
+                }
+
+                /* =========================
+                   📝 HANDLE DESCRIPTION
+                ========================= */
+                const description = pa.paymentDescription || null;
+
+                /* =========================
+                   📍 SOURCE TRACKING
+                ========================= */
+                const source = pa.paymentSource || 'AC'; //Add customer
+
+                if (!fileName && !description) {
+                    throw new Error('Either payment file or description is required');
                 }
 
                 await EP_FILE.create({
                     FILE02: fileName,
                     FILE03: base64,
-                    FILE04: userRecord.UTF01
+                    FILE04: userRecord.UTF01,
+                    FILE06: description,
+                    FILE07: source
                 });
             }
-
-            // Update user to attach company
             const existing = await admi.findAll({}, [], ['ADMIF01', 'ADMIF05']);
             let encryuser = userId.includes(':') ? userId : encryptor.encrypt(userId);
             let cMaster = new CmpMaster(encryuser, ExistingcorpId, LangType, 'A', null, null, SDBdbname);

@@ -14,6 +14,8 @@ const PLRDBPLREL = definePLRDBPLREL(sequelizeRDB);
 const definePLRDBPYMT = require('../Models/RDB/PLRDBPYMT');
 const EP_USERController = require('./EP_USERController');
 const defineEP_USER = require('../Models/RDB/EP_USER');
+const defineEP_FILE = require('../Models/RDB/EP_FILE');
+const QueryService = require('../Services/queryService');
 const Company = require('../PlusData/Class/CmpYrCls/Company');
 const Year = require('../PlusData/Class/CmpYrCls/Year');
 const CmpMaster = require('../PlusData/Class/CmpYrCls/CmpMaster');
@@ -21,6 +23,8 @@ const { LangType } = require('../PlusData/commonClass/plusCommon');
 const PLRDBPYMT = definePLRDBPYMT(sequelizeRDB);
 const EP_USER = defineEP_USER(sequelizeRDB);
 const defineUserTypes = require('../Models/RDB/EP_USERTPYES');
+// const EP_FILE = require('../Models/RDB/EP_FILE');
+const EP_FILE = defineEP_FILE(sequelizeRDB, require('sequelize').DataTypes);
 const UserTypes = defineUserTypes(sequelizeRDB, require('sequelize').DataTypes);
 
 
@@ -1330,23 +1334,58 @@ class AdminDashboardController {
             });
         }
     }
-    static async updateCorporateStatus(corporateId, status, req, response, res) {
+
+    static async updateCorporateStatus(req, res) {
+        let response = { status: 'SUCCESS', message: '', data: null };
+
         try {
+            /* =========================
+               🔐 TOKEN
+            ========================= */
             const token = req.headers['authorization']?.split(' ')[1];
+
+            if (!token) {
+                response.status = 'FAIL';
+                response.message = 'Token missing';
+                return res.status(401).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                });
+            }
+
             const decoded = await TokenService.validateToken(token);
 
-            const roleId = Number(decoded.roleId);
+            /* =========================
+               🔓 DECRYPT PA
+            ========================= */
+            const encryptedPa = req.body.pa;
 
-            // 🔥 ONLY ACCOUNTANT CAN DO THIS
-            // if (roleId !== 5) {
-            //     response.status = 'FAIL';
-            //     response.message = 'Only accountant can approve corporates';
-            //     return res.status(403).json({
-            //         encryptedResponse: encryptor.encrypt(JSON.stringify(response))
-            //     });
-            // }
+            if (!encryptedPa) {
+                response.status = 'FAIL';
+                response.message = 'pa is required';
+                return res.status(400).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                });
+            }
 
-            // Validate status
+            const decrypted = encryptor.decrypt(encryptedPa);
+            const pa = querystring.parse(decodeURIComponent(decrypted));
+
+            const corporateId = pa.corporateId;
+            const status = pa.status;
+            const paymentDescription = pa.paymentDescription;
+            const paymentSource = pa.paymentSource || 'SC';   //status change
+
+            /* =========================
+               ✅ VALIDATION
+            ========================= */
+            if (!corporateId || !status) {
+                response.status = 'FAIL';
+                response.message = 'corporateId and status required';
+                return res.status(400).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                });
+            }
+
             if (!['A', 'R'].includes(status)) {
                 response.status = 'FAIL';
                 response.message = 'Invalid status';
@@ -1355,7 +1394,17 @@ class AdminDashboardController {
                 });
             }
 
-            // Update
+            if (!req.file && !paymentDescription) {
+                response.status = 'FAIL';
+                response.message = 'Either file or description required';
+                return res.status(400).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                });
+            }
+
+            /* =========================
+               🔄 UPDATE CORPORATE
+            ========================= */
             const updated = await PLRDBA01.update(
                 { A01F20: status },
                 { where: { A01F03: corporateId } }
@@ -1369,10 +1418,61 @@ class AdminDashboardController {
                 });
             }
 
+            /* =========================
+               📄 FILE HANDLING
+            ========================= */
+            let fileName = null;
+            let base64 = null;
+
+            if (req.file) {
+                const mime = req.file.mimetype;
+
+                if (!mime.includes('pdf') && !mime.includes('image')) {
+                    throw new Error('Only PDF or Image allowed');
+                }
+
+                if (req.file.size > 2 * 1024 * 1024) {
+                    throw new Error('File size exceeds 2MB');
+                }
+
+                fileName = req.file.originalname;
+                base64 = req.file.buffer.toString('base64');
+            }
+
+            /* =========================
+               👤 USER FETCH
+            ========================= */
+            let userRecord = await EP_USER.findOne({
+                where: {
+                    UTF04: decoded.userId,
+                    UTF07: 'N'
+                }
+            });
+
+            if (!userRecord) {
+                throw new Error('User not found');
+            }
+
+            /* =========================
+               💾 SAVE EP_FILE
+            ========================= */
+            await EP_FILE.create({
+                FILE02: fileName,
+                FILE03: base64,
+                FILE04: userRecord.UTF01,
+                FILE06: paymentDescription || null,
+                FILE07: paymentSource,
+                // FILE08: corporateId   // optional but recommended
+            });
+
+            /* =========================
+               ✅ RESPONSE
+            ========================= */
             response.status = 'SUCCESS';
-            response.message = status === 'A'
-                ? 'Corporate Activated Successfully'
-                : 'Corporate Rejected';
+            response.message =
+                status === 'A'
+                    ? 'Corporate Activated Successfully'
+                    : 'Corporate Rejected';
 
             return res.status(200).json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify(response))
@@ -1381,11 +1481,11 @@ class AdminDashboardController {
         } catch (err) {
             console.error(err);
 
-            response.status = 'FAIL';
-            response.message = 'Status update failed';
-
             return res.status(500).json({
-                encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    status: 'FAIL',
+                    message: 'Status update failed'
+                }))
             });
         }
     }
@@ -1792,13 +1892,91 @@ class AdminDashboardController {
         }
     }
 
+    // static async previewCorporateDeletion(corporateId, response, res) {
+
+    //     try {
+
+    //         const corpId = corporateId.trim().toUpperCase();
+
+    //         // 1️⃣ Validate corporate
+    //         const corp = await PLRDBA01.findOne({
+    //             where: { A01F03: corpId },
+    //             attributes: ['A01F01']
+    //         });
+
+    //         if (!corp) {
+    //             response.status = 'FAIL';
+    //             response.message = 'Corporate not found';
+    //             return res.status(404).json({
+    //                 encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+    //             });
+    //         }
+
+    //         /* =========================
+    //            2️⃣ Extract numeric part
+    //         ========================== */
+
+    //         const numberPart = corpId.split('-')[1];  // 00086
+
+    //         /* =========================
+    //            3️⃣ Build SDB
+    //         ========================== */
+
+    //         const sdbName = `EP${numberPart}SDB`;
+
+    //         const sdb = db.getConnection(sdbName);
+
+    //         /* =========================
+    //            4️⃣ Get companies from SDB
+    //         ========================== */
+
+    //         const companies = await sdb.query(`
+    //         SELECT CMPF01
+    //         FROM PLSDBCMP
+    //     `, {
+    //             type: require('sequelize').QueryTypes.SELECT
+    //         });
+
+    //         /* =========================
+    //            5️⃣ Build CMP DB names
+    //         ========================== */
+
+    //         const cmpDatabases = companies.map(c =>
+    //             // `A${numberPart}CMP${c.CMPF01}`
+    //             `A${numberPart}CMP${String(c.CMPF01).padStart(4, '0')}`
+    //         );
+
+    //         response.data = {
+    //             corporateId: corpId,
+    //             sdbDatabase: sdbName,
+    //             cmpDatabases
+    //         };
+
+    //         return res.status(200).json({
+    //             encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+    //         });
+
+    //     } catch (err) {
+
+    //         console.error(err);
+
+    //         response.status = 'FAIL';
+    //         response.message = 'Preview failed';
+
+    //         return res.status(500).json({
+    //             encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+    //         });
+    //     }
+    // }
     static async previewCorporateDeletion(corporateId, response, res) {
 
         try {
 
             const corpId = corporateId.trim().toUpperCase();
 
-            // 1️⃣ Validate corporate
+            /* =========================
+               1️⃣ VALIDATE CORPORATE
+            ========================= */
             const corp = await PLRDBA01.findOne({
                 where: { A01F03: corpId },
                 attributes: ['A01F01']
@@ -1813,23 +1991,26 @@ class AdminDashboardController {
             }
 
             /* =========================
-               2️⃣ Extract numeric part
-            ========================== */
+               2️⃣ FIND SDB (LIKE ADMI)
+            ========================= */
 
-            const numberPart = corpId.split('-')[1];  // 00086
+            let sdbSeq = corpId.split('-');
 
-            /* =========================
-               3️⃣ Build SDB
-            ========================== */
+            let sdbName =
+                sdbSeq.length === 3
+                    ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB'
+                    : sdbSeq[0] + sdbSeq[1] + 'SDB';
 
-            const sdbName = `EP${numberPart}SDB`;
+            // same special handling as ADMIController
+            if (sdbName === 'PLP00001SDB') {
+                sdbName = 'A00001SDB';
+            }
 
             const sdb = db.getConnection(sdbName);
 
             /* =========================
-               4️⃣ Get companies from SDB
-            ========================== */
-
+               3️⃣ GET COMPANIES FROM SDB
+            ========================= */
             const companies = await sdb.query(`
             SELECT CMPF01
             FROM PLSDBCMP
@@ -1838,14 +2019,15 @@ class AdminDashboardController {
             });
 
             /* =========================
-               5️⃣ Build CMP DB names
-            ========================== */
-
+               4️⃣ GENERATE CMP DBs (USING YOUR SERVICE)
+            ========================= */
             const cmpDatabases = companies.map(c =>
-                // `A${numberPart}CMP${c.CMPF01}`
-                `A${numberPart}CMP${String(c.CMPF01).padStart(4, '0')}`
+                QueryService.generateDatabaseName(corpId, c.CMPF01)
             );
 
+            /* =========================
+               5️⃣ RESPONSE
+            ========================= */
             response.data = {
                 corporateId: corpId,
                 sdbDatabase: sdbName,
@@ -1865,6 +2047,139 @@ class AdminDashboardController {
 
             return res.status(500).json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+            });
+        }
+    }
+    static async deleteCorporateCompletely(req, res) {
+        let response = { status: 'SUCCESS', message: '', data: null };
+
+        const sequelizeMASTER = db.getConnection('MASTER'); // for DROP
+        const sequelizeRDB = db.getConnection('RDB');       // for PLRDBA01
+
+        try {
+            /* =========================
+               🔐 TOKEN (optional but recommended)
+            ========================= */
+            const token = req.headers['authorization']?.split(' ')[1];
+            if (!token) {
+                throw new Error('Token missing');
+            }
+
+            const decoded = await TokenService.validateToken(token);
+
+            /* =========================
+               🔓 INPUT
+            ========================= */
+            const corporateId = req.body.corporateId?.trim().toUpperCase();
+
+            if (!corporateId) {
+                throw new Error('corporateId required');
+            }
+
+            /* =========================
+               1️⃣ VALIDATE CORPORATE
+            ========================= */
+            const corp = await PLRDBA01.findOne({
+                where: { A01F03: corporateId }
+            });
+
+            if (!corp) {
+                throw new Error('Corporate not found');
+            }
+
+            /* =========================
+               2️⃣ FIND SDB (ADMI STYLE)
+            ========================= */
+            let sdbSeq = corporateId.split('-');
+
+            let sdbName =
+                sdbSeq.length === 3
+                    ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB'
+                    : sdbSeq[0] + sdbSeq[1] + 'SDB';
+
+            if (sdbName === 'PLP00001SDB') {
+                sdbName = 'A00001SDB';
+            }
+
+            /* =========================
+               3️⃣ GET CMP DATABASES
+            ========================= */
+            let cmpDatabases = [];
+
+            try {
+                const sdb = db.getConnection(sdbName);
+
+                const companies = await sdb.query(`
+                SELECT CMPF01 FROM PLSDBCMP
+            `, {
+                    type: require('sequelize').QueryTypes.SELECT
+                });
+
+                cmpDatabases = companies.map(c =>
+                    QueryService.generateDatabaseName(corporateId, c.CMPF01)
+                );
+
+            } catch (err) {
+                console.warn('SDB not found or already deleted:', sdbName);
+            }
+
+            /* =========================
+               4️⃣ DROP CMP DATABASES
+            ========================= */
+            for (let dbName of cmpDatabases) {
+
+                if (!/^[A-Z0-9]+$/.test(dbName)) continue; // safety
+
+                try {
+                    await sequelizeMASTER.query(`
+                    IF EXISTS (SELECT name FROM sys.databases WHERE name = '${dbName}')
+                    DROP DATABASE [${dbName}]
+                `);
+                    console.log(`Dropped CMP DB: ${dbName}`);
+                } catch (err) {
+                    console.error(`Failed to drop CMP DB ${dbName}:`, err.message);
+                }
+            }
+
+            /* =========================
+               5️⃣ DROP SDB
+            ========================= */
+            if (/^[A-Z0-9]+$/.test(sdbName)) {
+                try {
+                    await sequelizeMASTER.query(`
+                    IF EXISTS (SELECT name FROM sys.databases WHERE name = '${sdbName}')
+                    DROP DATABASE [${sdbName}]
+                `);
+                    console.log(`Dropped SDB: ${sdbName}`);
+                } catch (err) {
+                    console.error(`Failed to drop SDB ${sdbName}:`, err.message);
+                }
+            }
+
+            /* =========================
+               6️⃣ DELETE FROM RDB
+            ========================= */
+            await PLRDBA01.destroy({
+                where: { A01F03: corporateId }
+            });
+
+            /* =========================
+               ✅ RESPONSE
+            ========================= */
+            response.message = 'Corporate and all databases deleted successfully';
+
+            return res.status(200).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+            });
+
+        } catch (err) {
+            console.error(err);
+
+            return res.status(500).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    status: 'FAIL',
+                    message: err.message || 'Delete failed'
+                }))
             });
         }
     }

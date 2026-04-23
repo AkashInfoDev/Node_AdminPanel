@@ -203,7 +203,7 @@ class CAdminPlanController {
             //         });
             //     }
             // }
-            if (![1, 2].includes(roleId) && corporateId) {
+            if (![1, 2, 3, 4, 5].includes(roleId) && corporateId) {
 
                 const loggedUser = await CAdminPlanController.getLoggedInUser(decoded);
 

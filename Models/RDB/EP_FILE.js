@@ -9,12 +9,12 @@ module.exports = (sequelize, DataTypes) => {
 
         FILE02: {
             type: DataTypes.STRING(255),
-            allowNull: false
+            allowNull: true
         },
 
         FILE03: {
             type: DataTypes.TEXT('long'),
-            allowNull: false
+            allowNull: true
         },
 
         FILE04: {
@@ -25,6 +25,16 @@ module.exports = (sequelize, DataTypes) => {
         FILE05: {
             type: DataTypes.DATE,
             allowNull: true   // ✅ let DB handle GETDATE()
+        },
+
+        FILE06: {  // 🆕 description
+            type: DataTypes.TEXT,
+            allowNull: true
+        },
+
+        FILE07: {  // 🆕 source
+            type: DataTypes.STRING(50),
+            allowNull: true
         }
 
     }, {
