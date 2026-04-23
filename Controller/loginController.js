@@ -2552,7 +2552,7 @@ class UserController {
                     let paObj = { "CorpID": `${corpId}`, "cUser": `${userId}`, "cPass": `${decPass}`, "lForce": false }
                     let encodedUrl = encodeURIComponent(JSON.stringify(paObj));
                     let encUrl = encryptor.encrypt(encodedUrl);
-                    let logOutReq = await axios.get(`https://api.epluserp.cloud/eplus/api/User/LogoutNotify/?pa=${encUrl}`);
+                    let logOutReq = await axios.get(`https://api.epluserp.cloud/api/User/LogoutNotify/?pa=${encUrl}`);
                     if (logOutReq) {
                         let resp = encryptor.decrypt(logOutReq.data);
                         resp = JSON.parse(resp);
@@ -2578,7 +2578,7 @@ class UserController {
                     let paObj = { "CorpID": `${corpId}`, "cUser": `${userId}`, "cPass": `${decPass}`, "lForce": true }
                     let encodedUrl = encodeURIComponent(JSON.stringify(paObj))
                     let encUrl = encryptor.encrypt(encodedUrl);
-                    let logOutReq = await axios.get(`https://api.epluserp.cloud/eplus/api/User/LogoutNotify/?pa=${encUrl}`);
+                    let logOutReq = await axios.get(`https://api.epluserp.cloud/api/User/LogoutNotify/?pa=${encUrl}`);
                     if (logOutReq) {
                         let resp = encryptor.decrypt(logOutReq.data);
                         resp = JSON.parse(resp);
