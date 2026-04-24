@@ -2283,6 +2283,23 @@ class UserController {
                     }
                 }
             }
+            let cmpAddOns = await PLRDBGAO.findAll({
+                attributes: [
+                    [Sequelize.literal('GAOF01'), 'CorpId'],
+                    [Sequelize.literal('GAOF02'), 'CmpNum'],
+                    [Sequelize.literal('GAOF03'), 'CusT_Bill_Print_P'],
+                    [Sequelize.literal('GAOF04'), 'CusT_Bill_Print_U'],
+                    [Sequelize.literal('GAOF05'), 'Cust_Report_Setup_P'],
+                    [Sequelize.literal('GAOF06'), 'Cust_Report_Setup_U'],
+                    [Sequelize.literal('GAOF07'), 'User_Field_P'],
+                    [Sequelize.literal('GAOF08'), 'User_Field_U'],
+                    [Sequelize.literal('GAOF09'), 'User_Master_P'],
+                    [Sequelize.literal('GAOF10'), 'User_Master_U']
+                ],
+                where: {
+                    GAOF01: corpId
+                }
+            })
 
             // if (!user) {
             //     response.status = 'FAIL';
@@ -2392,7 +2409,8 @@ class UserController {
                     purchasedSetUpIds: M81Row[0].M81SID,
                     isActive: inputDate < today ? false : true,
                     userMail: user.ADMIF07,
-                    lAudit: user.ADMIF15
+                    lAudit: user.ADMIF15,
+                    cmpAddOns: cmpAddOns
                 };
                 // let currentTime = new Date();
                 // let newLogin = await m83.create(userId, formatDate(currentTime), '', '', '', token);
@@ -2491,7 +2509,8 @@ class UserController {
                     modData: modData,
                     purchasedSetUpIds: M81Row[0].M81SID,
                     isActive: inputDate < today ? false : true,
-                    userMail: user.ADMIF07
+                    userMail: user.ADMIF07,
+                    cmpAddOns: cmpAddOns
                 };
                 response.message = 'Login successful';
                 // response.token = token;

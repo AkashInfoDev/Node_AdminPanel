@@ -82,6 +82,19 @@ class UpgradePlan {
                     return sendResponse('FAIL', 'Transaction not found');
                 }
 
+                let user
+                let decryptedUserId = encryptor.decrypt(decoded.userId)
+                const existing = await admi.findAll();
+                for (let i of existing) {
+                    const decrypted = encryptor.decrypt(i.ADMIF01)
+                    if (decrypted == decryptedUserId) {
+                        user = i;
+                        response = {
+                            message: 'User ID valid'
+                        }
+                    }
+                }
+
                 const today = new Date();
                 const todayFormatted = UpgradePlan.formatDate(today);
 
@@ -120,7 +133,7 @@ class UpgradePlan {
                 }
 
                 // Construct Payment Data
-                const paymentData = UpgradePlan.constructPaymentData(transactionDetail, paymentMode, A02id, corpId, userId, description, paymentMethod);
+                const paymentData = UpgradePlan.constructPaymentData(transactionDetail, paymentMode, A02id, corpId, user.ADMIF00, description, paymentMethod);
                 const paymentInfo = await PLRDBPYMT.create(paymentData);
 
                 return sendResponse('SUCCESS', 'Payment info updated successfully', paymentInfo);
@@ -450,10 +463,38 @@ class UpgradePlan {
                 for (let transaction of allTransaction) {
                     let matchingPlan = planRows.find(plan => plan.A02F01.toString().trim() === transaction.PYMT01.toString().trim());
                     transaction.dataValues.PYMTPNM = matchingPlan ? matchingPlan.A02F02 : null;
-                    if(transaction.dataValues)
+                    if (transaction.dataValues)
                         finalTransaction.push(transaction.dataValues);
                 }
                 return sendResponse('SUCCESS', 'Transactions fetched successfully', finalTransaction);
+            }
+            else if (action === 'R') {
+                let finalTransaction = [];
+                const userRows = await PLRDBA01.findOne({
+                    where: { A01F03: corpId }
+                });
+                const transactionDetail = await PLRDBRPAY.findOne({
+                    where: { RPAYF01: transactionId }
+                });
+
+                if (!transactionDetail && paymentMode === 'ONLINE') {
+                    return sendResponse('FAIL', 'Transaction not found');
+                }
+
+                if (userRows) {
+                    const today = new Date();
+                    today.setFullYear(today.getFullYear() + 1);
+                    const futureDate = today.toISOString().split('T')[0];
+                    await PLRDBA01.update({
+                        A01F13: futureDate
+                    }, {
+                        where: {
+                            A01F03: userRows.A01F03
+                        }
+                    })
+                }
+
+                return sendResponse('SUCCESS', 'Activation done Successfully', null);
             }
             // Invalid action
             else {
@@ -472,7 +513,7 @@ class UpgradePlan {
 
     // Helper function to construct payment data
     static constructPaymentData(transactionDetail, paymentMode, A02id, corpId, userId, description, paymentMethod) {
-        const tranInfo = transactionDetail ? (JSON.parse(transactionDetail?.RPAYF02)).payment.entity: null;
+        const tranInfo = transactionDetail ? (JSON.parse(transactionDetail?.RPAYF02)).payment.entity : null;
         let transactionId = ''
         const now = new Date();
         if (paymentMode == 'OFFLINE') {
