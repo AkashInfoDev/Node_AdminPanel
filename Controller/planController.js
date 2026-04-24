@@ -218,7 +218,12 @@ class UpgradePlan {
                 if (cmpNum) {
                     let cmpList = cmpNum.includes(',') ? cmpNum.split(',') : [parseInt(cmpNum)];
                     for (let cmp of cmpList) {
-                        let numOfUsr = await PLRDBGAO.findOne({ GAOF01: corpId, GAOF02: parseInt(cmp) });
+                        let numOfUsr = await PLRDBGAO.findOne({
+                            where: {
+                                GAOF01: corpId,
+                                GAOF02: parseInt(cmp)
+                            }
+                        });
                         if (!numOfUsr) {
                             await PLRDBGAO.create({
                                 GAOF01: corpId,
