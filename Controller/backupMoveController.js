@@ -247,8 +247,8 @@ const backupToDrive = async (req, res) => {
         });
 
         /* ========= DOWNLOAD ========= */
-        const localDir = path.join("/tmp", "downloads", fileName);
-        // const localDir = path.join("..", "..", "..", "..", "..", "downloads", fileName);
+        // const localDir = path.join("/tmp", "downloads", fileName);
+        const localDir = path.join("..", "..", "..", "downloads", fileName);
 
         try {
             await fs.promises.mkdir(localDir, { recursive: true });
