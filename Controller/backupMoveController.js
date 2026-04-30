@@ -179,6 +179,34 @@ async function getCompanyBranches(corporateID, companyID) {
     }));
 }
 
+async function downloadFileToBuffer(fileUrl) {
+    return new Promise((resolve, reject) => {
+        https.get(fileUrl, (res) => {
+            if (res.statusCode !== 200) {
+                reject(new Error(`Download failed. Status: ${res.statusCode}`));
+                return;
+            }
+
+            const chunks = [];
+
+            res.on('data', (chunk) => {
+                chunks.push(chunk);
+            });
+
+            res.on('end', () => {
+                const fileBuffer = Buffer.concat(chunks);
+                resolve(fileBuffer);
+            });
+
+            res.on('error', (err) => {
+                reject(err);
+            });
+        }).on('error', (err) => {
+            reject(err);
+        });
+    });
+}
+
 /* ================= MAIN API ================= */
 
 const backupToDrive = async (req, res) => {
@@ -263,43 +291,44 @@ const backupToDrive = async (req, res) => {
         let bakPath;
         const fileUrl = `https://files.epluserp.cloud/${fileName}`;
 
-        await new Promise((resolve, reject) => {
-            https.get(fileUrl, (res) => {
-                // Check if the response status code is 200 (success)
-                if (res.statusCode !== 200) {
-                    reject(new Error(`Download failed. Status: ${res.statusCode}`));
-                    return;
-                }
+        // await new Promise((resolve, reject) => {
+        //     https.get(fileUrl, (res) => {
+        //         // Check if the response status code is 200 (success)
+        //         if (res.statusCode !== 200) {
+        //             reject(new Error(`Download failed. Status: ${res.statusCode}`));
+        //             return;
+        //         }
 
-                // Define the directory and file path for saving the file
-                localDir = path.join("..", "..", "..", "..", "downloads");
-                console.error("localDir", localDir);
-                bakPath = path.join(localDir, fileName);
-                fs.promises.mkdir(localDir, { recursive: true })
-                    .then(() => {
-                        const fileStream = fs.createWriteStream(bakPath);
-                        res.pipe(fileStream);
-                        fileStream.on('finish', () => {
-                            fileStream.close();
-                            resolve();
-                        });
+        //         // Define the directory and file path for saving the file
+        //         localDir = path.join("..", "..", "..", "..", "downloads");
+        //         console.error("localDir", localDir);
+        //         bakPath = path.join(localDir, fileName);
+        //         fs.promises.mkdir(localDir, { recursive: true })
+        //             .then(() => {
+        //                 const fileStream = fs.createWriteStream(bakPath);
+        //                 res.pipe(fileStream);
+        //                 fileStream.on('finish', () => {
+        //                     fileStream.close();
+        //                     resolve();
+        //                 });
 
-                        // Handle errors during the file writing process
-                        fileStream.on('error', (err) => {
-                            reject(err);
-                        });
-                    })
-                    .catch((err) => {
-                        console.log('Error creating directory:', err);
-                        reject(err);
-                    });
-            }).on('error', (err) => {
-                console.log('Error with the HTTPS request:', err);
-                reject(err);
-            });
-        });
+        //                 // Handle errors during the file writing process
+        //                 fileStream.on('error', (err) => {
+        //                     reject(err);
+        //                 });
+        //             })
+        //             .catch((err) => {
+        //                 console.log('Error creating directory:', err);
+        //                 reject(err);
+        //             });
+        //     }).on('error', (err) => {
+        //         console.log('Error with the HTTPS request:', err);
+        //         reject(err);
+        //     });
+        // });
         // await ftpClient.downloadTo(bakPath, `https://files.epluserp.cloud/files/${fileName}`);
 
+        const fileBuffer = await downloadFileToBuffer(fileUrl);
         /* ========= JSON ========= */
         const branches = await getCompanyBranches(corporateID, companyID);
         const states = await getStates();
@@ -395,7 +424,7 @@ const backupToDrive = async (req, res) => {
                 },
                 media: {
                     mimeType: "application/zip",
-                    body: fs.createReadStream(zipPath)
+                    body: fileBuffer
                 }
             });
 
@@ -483,7 +512,8 @@ const backupToDrive = async (req, res) => {
                     emailList,
                     zipPath,
                     fileName,
-                    normalizedSMTP
+                    normalizedSMTP,
+                    fileBuffer
                 );
             } catch (err) {
                 console.error("📧 Mail Failed:", err.message);

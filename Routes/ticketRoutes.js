@@ -8,13 +8,10 @@ const upload = multer({
 });
 
 const TicketController = require('../Controller/TicketController')
+const CategoryController = require('../Controller/CategoryController');
 
-
-/* =========================
-   🎯 TICKET ROUTE (CLASS BASED)
-========================= */
-
-// 🔥 EXACT SAME STYLE AS WALLET
 router.post('/handleTicket', upload.array('files', 5), TicketController.handleTicket);
+router.get('/handleCategory', CategoryController.manageCategory);
+
 
 module.exports = router;

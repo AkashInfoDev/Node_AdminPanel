@@ -9,6 +9,7 @@ const defineTicket = require('../Models/RDB/EP_TICKET');
 const defineTicketMsg = require('../Models/RDB/EP_TICKET_MSG');
 const defineEP_FILE = require('../Models/RDB/EP_FILE');
 const defineUser = require('../Models/RDB/EP_USER');
+const defineTicketMaster = require('../Models/RDB/TICKETMASTER');
 
 /* =========================
    🔗 DB CONNECTION
@@ -24,6 +25,7 @@ const Ticket = defineTicket(sequelizeRDB, Sequelize.DataTypes);
 const TicketMessage = defineTicketMsg(sequelizeRDB, Sequelize.DataTypes);
 const EP_FILE = defineEP_FILE(sequelizeRDB, Sequelize.DataTypes);
 const User = defineUser(sequelizeRDB, Sequelize.DataTypes);
+const TicketMaster = defineTicketMaster(sequelizeRDB, Sequelize.DataTypes);
 
 /* =========================
    🔐 SERVICES
@@ -35,7 +37,12 @@ const TokenService = require('../Services/tokenServices');
 
 const encryptor = new Encryptor();
 
-const formatTicket = (t) => ({
+const formatCategory = (c) => ({
+    id: c.CAT01,
+    name: c.CAT02,
+    assignedRole: c.CAT03
+});
+const formatTicket = (t, category = null) => ({
     ticket_id: t.TKT01,
     subject: t.TKT02,
     description: t.TKT03,
@@ -44,7 +51,13 @@ const formatTicket = (t) => ({
     createdBy: t.TKT06,
     roleId: t.TKT07,
     createdAt: t.TKT08,
-    updatedAt: t.TKT09
+    updatedAt: t.TKT09,
+
+    category: category ? {
+        id: category.CAT01,
+        name: category.CAT02,
+        assignedRole: category.CAT03
+    } : null
 });
 
 const formatMessage = (m) => ({
@@ -110,9 +123,13 @@ class TicketController {
                 case 'D': // 🔥 Detail view
                     return TicketController.getTicketDetail(pa, res, decoded);
 
+                case 'TC':
+                    return TicketController.handleTicketCategory(pa, res, decoded);
+
                 default:
                     throw new Error('Invalid action');
             }
+
 
         } catch (err) {
 
@@ -124,27 +141,199 @@ class TicketController {
             });
         }
     }
+
+    static async handleTicketCategory(pa, res, decoded) {
+
+        const subAction = pa.subAction;
+
+        if (!subAction) {
+            throw new Error('subAction is required');
+        }
+
+        switch (subAction) {
+
+            /* =========================
+               ➕ CREATE CATEGORY
+            ========================= */
+            case 'C': {
+
+                const { name } = pa;
+
+                if (!name) {
+                    throw new Error('Category name required');
+                }
+                const exists = await TicketMaster.findOne({
+                    where: {
+                        CAT02: name,
+                        CAT04: 1
+                    }
+                });
+
+                if (exists) {
+                    throw new Error('Category already exists');
+                }
+
+                const created = await TicketMaster.create({
+                    CAT02: name,
+                    CAT03: null   // ✅ optional now
+                });
+
+                return res.json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        status: 'SUCCESS',
+                        message: 'Category created',
+                        data: formatCategory(created)
+                    }))
+                });
+            }
+
+            /* =========================
+               📥 GET ALL
+            ========================= */
+            case 'G': {
+
+                const categories = await TicketMaster.findAll({
+                    where: { CAT04: 1 },
+                    raw: true
+                });
+
+                return res.json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        status: 'SUCCESS',
+                        message: 'Categories fetched',
+                        data: categories.map(c => formatCategory(c))
+                    }))
+                });
+            }
+
+            /* =========================
+               ✏️ UPDATE
+            ========================= */
+            case 'U': {
+
+                const { id, name } = pa;
+
+                if (!id) {
+                    throw new Error('Category ID required');
+                }
+
+                if (!name) {
+                    throw new Error('Category name required');
+                }
+
+                const exists = await TicketMaster.findOne({
+                    where: { CAT01: id }
+                });
+
+                if (!exists) {
+                    throw new Error('Category not found');
+                }
+
+                await TicketMaster.update(
+                    {
+                        CAT02: name
+                    },
+                    { where: { CAT01: id } }
+                );
+
+                const updated = await TicketMaster.findOne({
+                    where: { CAT01: id },
+                    raw: true
+                });
+
+                return res.json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        status: 'SUCCESS',
+                        message: 'Category updated',
+                        data: formatCategory(updated)
+                    }))
+                });
+            }
+
+            /* =========================
+               ❌ DELETE (SOFT DELETE)
+            ========================= */
+            case 'D': {
+
+                const { id } = pa;
+
+                if (!id) {
+                    throw new Error('Category ID required');
+                }
+
+                const exists = await TicketMaster.findOne({
+                    where: { CAT01: id }
+                });
+
+                if (!exists) {
+                    throw new Error('Category not found');
+                }
+
+                await TicketMaster.update(
+                    { CAT04: 0 },
+                    { where: { CAT01: id } }
+                );
+                const existing = await TicketMaster.findOne({
+                    where: { CAT01: id },
+                    raw: true
+                });
+
+                return res.json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        status: 'SUCCESS',
+                        message: 'Category deleted',
+                        data: formatCategory(existing)
+                    }))
+                });
+            }
+
+            default:
+                throw new Error('Invalid category subAction');
+        }
+    }
+
     static async createTicket(pa, res, decoded, req) {
 
         const { subject, description, priority } = pa;
 
-        if (!subject || !description) {
-            throw new Error('Missing fields');
+        // ✅ convert properly
+        const category_id = Number(pa.category_id);
+
+        /* =========================
+           VALIDATION
+        ========================= */
+        if (!subject || !description || isNaN(category_id)) {
+            throw new Error('Missing or invalid fields');
         }
 
+        /* =========================
+           CATEGORY CHECK
+        ========================= */
+        const category = await TicketMaster.findOne({
+            where: { CAT01: category_id, CAT04: 1 },
+            raw: true
+        });
+
+        if (!category) {
+            throw new Error('Invalid category');
+        }
+
+        /* =========================
+           CREATE TICKET
+        ========================= */
         const ticket = await Ticket.create({
             TKT02: subject,
             TKT03: description,
             TKT04: priority || 'MEDIUM',
             TKT05: 'OPEN',
             TKT06: decoded.Id,
-            TKT07: decoded.roleId
+            TKT07: decoded.roleId,
+            TKT10: category_id   // ✅ now correct type
         });
 
         /* =========================
-           📎 FILE UPLOAD (EP_FILE)
+           FILE UPLOAD
         ========================= */
-
         if (req.files && req.files.length > 0) {
 
             const filesData = req.files.map(file => ({
@@ -167,109 +356,6 @@ class TicketController {
             }))
         });
     }
-    // static async getTickets(pa, res, decoded) {
-
-    //     const roleId = Number(decoded.roleId);
-
-
-
-    //     // 🔥 Admin → all tickets
-    //     let where = {};
-
-    //     if (roleId === 1) {
-    //         // Admin → see all
-    //         where = {};
-    //     } else {
-    //         // 🔥 Others → only their tickets
-    //         where.TKT06 = decoded.Id;
-    //     }
-
-    //     const tickets = await Ticket.findAll({
-    //         where,
-    //         raw: true
-    //     });
-
-    //     /* =========================
-    //        📦 FETCH FILES (TICKET)
-    //     ========================= */
-
-    //     const ticketIds = tickets.map(t => t.TKT01);
-
-    //     const ticketFiles = await EP_FILE.findAll({
-    //         where: {
-    //             FILE07: 'TICKET',
-    //             FILE08: {
-    //                 [Op.in]: ticketIds
-    //             }
-    //         },
-    //         raw: true
-    //     });
-
-    //     /* =========================
-    //        💬 FETCH MESSAGES
-    //     ========================= */
-
-    //     const messages = await TicketMessage.findAll({
-    //         where: {
-    //             MSG02: {
-    //                 [Op.in]: ticketIds
-    //             }
-    //         },
-    //         raw: true
-    //     });
-
-    //     const messageIds = messages.map(m => m.MSG01);
-
-    //     /* =========================
-    //        📎 FETCH MESSAGE FILES
-    //     ========================= */
-
-    //     const messageFiles = await EP_FILE.findAll({
-    //         where: {
-    //             FILE07: 'TICKET_MSG',
-    //             FILE08: {
-    //                 [Op.in]: messageIds
-    //             }
-    //         },
-    //         raw: true
-    //     });
-
-    //     /* =========================
-    //        🔗 MERGE DATA
-    //     ========================= */
-
-    //     const finalData = tickets.map(ticket => {
-
-    //         // ticket level files
-    //         const files = ticketFiles.filter(f => f.FILE08 === ticket.TKT01);
-
-    //         // messages for ticket
-    //         const ticketMsgs = messages
-    //             .filter(m => m.MSG02 === ticket.TKT01)
-    //             .map(msg => {
-
-    //                 const msgFiles = messageFiles.filter(f => f.FILE08 === msg.MSG01);
-
-    //                 return {
-    //                     ...msg,
-    //                     files: msgFiles
-    //                 };
-    //             });
-
-    //         return {
-    //             ...ticket,
-    //             files,
-    //             messages: ticketMsgs
-    //         };
-    //     });
-
-    //     return res.json({
-    //         encryptedResponse: encryptor.encrypt(JSON.stringify({
-    //             status: 'SUCCESS',
-    //             data: finalData
-    //         }))
-    //     });
-    // }
     static async getTickets(pa, res, decoded) {
 
         const roleId = Number(decoded.roleId);
@@ -315,6 +401,17 @@ class TicketController {
             where: {
                 FILE07: 'TICKET',
                 FILE08: { [Op.in]: ticketIds }
+            },
+            raw: true
+        });
+        const categoryIds = tickets
+            .map(t => t.TKT10)
+            .filter(id => id !== null && id !== undefined);
+
+        const categories = await TicketMaster.findAll({
+            where: {
+                CAT01: { [Op.in]: categoryIds },
+                CAT04: 1
             },
             raw: true
         });
@@ -364,8 +461,10 @@ class TicketController {
                     };
                 });
 
+            const category = categories.find(c => c.CAT01 === ticket.TKT10);
+
             return {
-                ...formatTicket(ticket),
+                ...formatTicket(ticket, category),
 
                 // 🔥 ADD DEALER INFO HERE
                 User: user ? {
@@ -511,100 +610,7 @@ class TicketController {
             }))
         });
     }
-    // static async getTicketDetail(pa, res, decoded) {
 
-    //     const { ticket_id } = pa;
-
-    //     if (!ticket_id) {
-    //         throw new Error('ticket_id required');
-    //     }
-
-    //     /* =========================
-    //        🔍 FETCH TICKET
-    //     ========================= */
-    //     const ticket = await Ticket.findOne({
-    //         where: { TKT01: ticket_id },
-    //         raw: true
-    //     });
-
-    //     if (!ticket) {
-    //         throw new Error('Ticket not found');
-    //     }
-
-    //     /* =========================
-    //        🔐 ACCESS CONTROL
-    //     ========================= */
-    //     const roleId = Number(decoded.roleId);
-
-    //     if (![1].includes(roleId) && ticket.TKT06 !== decoded.Id) {
-    //         throw new Error('Access denied');
-    //     }
-
-    //     /* =========================
-    //        📎 TICKET FILES
-    //     ========================= */
-    //     const ticketFiles = await EP_FILE.findAll({
-    //         where: {
-    //             FILE07: 'TICKET',
-    //             FILE08: ticket_id
-    //         },
-    //         raw: true
-    //     });
-
-    //     /* =========================
-    //        💬 MESSAGES
-    //     ========================= */
-    //     const messages = await TicketMessage.findAll({
-    //         where: { MSG02: ticket_id },
-    //         order: [['MSG06', 'ASC']],
-    //         raw: true
-    //     });
-
-    //     const messageIds = messages.map(m => m.MSG01);
-
-    //     /* =========================
-    //        📎 MESSAGE FILES
-    //     ========================= */
-    //     let messageFiles = [];
-
-    //     if (messageIds.length > 0) {
-    //         messageFiles = await EP_FILE.findAll({
-    //             where: {
-    //                 FILE07: 'TICKET_MSG',
-    //                 FILE08: {
-    //                     [Op.in]: messageIds
-    //                 }
-    //             },
-    //             raw: true
-    //         });
-    //     }
-
-    //     /* =========================
-    //        🔗 MERGE DATA
-    //     ========================= */
-    //     const formattedMessages = messages.map(msg => {
-
-    //         const files = messageFiles.filter(f => f.FILE08 === msg.MSG01);
-
-    //         return {
-    //             ...msg,
-    //             files
-    //         };
-    //     });
-
-    //     const finalData = {
-    //         ...ticket,
-    //         files: ticketFiles,
-    //         messages: formattedMessages
-    //     };
-
-    //     return res.json({
-    //         encryptedResponse: encryptor.encrypt(JSON.stringify({
-    //             status: 'SUCCESS',
-    //             data: finalData
-    //         }))
-    //     });
-    // }
     static async getTicketDetail(pa, res, decoded) {
 
         const { ticket_id } = pa;
@@ -626,6 +632,10 @@ class TicketController {
         }
         const user = await User.findOne({
             where: { UTF01: ticket.TKT06 },
+            raw: true
+        });
+        const category = await TicketMaster.findOne({
+            where: { CAT01: ticket.TKT10, CAT04: 1 },
             raw: true
         });
 
@@ -687,7 +697,7 @@ class TicketController {
         });
 
         const finalData = {
-            ...formatTicket(ticket),
+            ...formatTicket(ticket, category),
 
             // 🔥 ADD DEALER HERE
             dealer: user ? {
@@ -713,7 +723,6 @@ class TicketController {
             }))
         });
     }
-
 
 }
 
