@@ -250,7 +250,7 @@ const backupToDrive = async (req, res) => {
 
         await fs.promises.mkdir(localDir, { recursive: true });
 
-        let bakPath = path.join("/downloads", fileName);
+        let bakPath = path.join(localDir, fileName);
         // URL to download
         const fileUrl = `https://files.epluserp.cloud/${fileName}`;
 
