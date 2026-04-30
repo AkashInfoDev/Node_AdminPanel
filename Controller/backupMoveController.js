@@ -242,17 +242,16 @@ const backupToDrive = async (req, res) => {
             BACKUP DATABASE [${databaseName}]
             TO DISK =  N'C:\\files\\${databaseName}.bak'
             WITH FORMAT, INIT, COPY_ONLY
-        `,{
+        `, {
             type: QueryTypes.RAW
         });
 
         /* ========= DOWNLOAD ========= */
         // const localDir = path.join("/tmp", "downloads", fileName);
-        const localDir = path.join("..", "..", "..", '/tmp', "downloads", fileName);
-
+        const localDir = path.join("/tmp", "downloads"); // directory only
         await fs.promises.mkdir(localDir, { recursive: true });
 
-        let bakPath = path.join(localDir, fileName);
+        const bakPath = path.join(localDir, fileName); // full path including file
         // URL to download
         const fileUrl = `https://files.epluserp.cloud/${fileName}`;
 
