@@ -11,6 +11,7 @@ const definePLRDBA01 = require('../Models/RDB/PLRDBA01'); // Model factory
 const definePLRDBA02 = require('../Models/RDB/PLRDBA02'); // Model factory
 const definePLRDBOTP = require('../Models/RDB/PLRDBOTP');
 const definePLRDBGAO = require('../Models/RDB/PLRDBGAO');
+const defineDBSER_INFO = require('../Models/RDB/DBSER_INFO');
 const defineEP_USER = require('../Models/RDB/EP_USER');
 const defineEPLOGIN = require('../Models/RDB/EP_LOGIN');
 const Encryptor = require('../Services/encryptor');
@@ -45,6 +46,7 @@ const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 const PLRDBA02 = definePLRDBA02(sequelizeRDB);
 const PLRDBOTP = definePLRDBOTP(sequelizeRDB);
 const PLRDBGAO = definePLRDBGAO(sequelizeRDB);
+const DBSER_INFO = defineDBSER_INFO(sequelizeRDB);
 const EP_USER = defineEP_USER(sequelizeRDB);
 const EP_LOGIN = defineEPLOGIN(sequelizeRDB);
 const encryptor = new Encryptor();
@@ -1669,6 +1671,18 @@ class UserController {
                             console.error("❌ MAIL FAILED:", mailErr);
                         }
 
+                        let updateServerInfo = await DBSER_INFO.findOne({
+                            where: {
+                                INFO_11: 'Y'
+                            }
+                        })
+                        await DBSER_INFO.update({
+                            INFO_10: (parseInt(updateServerInfo.INFO_10) + 1)
+                        }, {
+                            where: {
+                                INFO_01: updateServerInfo.INFO_01
+                            }
+                        })
                         // Encrypt the response
                         const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
 

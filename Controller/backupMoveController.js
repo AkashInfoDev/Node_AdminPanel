@@ -1,3 +1,4 @@
+const https = require('https');
 const ftp = require("basic-ftp");
 const fs = require("fs");
 const path = require("path");
@@ -206,39 +207,88 @@ const backupToDrive = async (req, res) => {
         if (!token) throw new Error("Auth token missing");
 
         const decoded = await validateToken(token);
+
+        if (!decoded) {
+            response.message = "Token Expired"
+            response.status = "FAIL"
+            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(403).json({ encryptedResponse })
+        }
         const corporateID = decoded.corpId;
-
+        let FTPdetails = await PLRDBA01.findOne({
+            where: {
+                A01F03: corporateID
+            }
+        })
+        let CmpDBName = corporateID.split('-');
         /* ========= DB ========= */
-        const databaseName = generateDatabaseName(corporateID, companyID); //`A${corporateID.slice(-5)}CMP${companyID.toString().padStart(4, "0")}`;
+        const databaseName = corporateID == 'PL-P-00001' ? `A${corporateID.slice(-5)}CMP${companyID.toString().padStart(4, "0")}` : `${CmpDBName.join('')}CMP${companyID.toString().padStart(4, "0")}`;
         const fileName = `${databaseName}.bak`;
-
-        const ftpFolderPath = `/html/eplus/`;
-        const remoteBackupPath = `/var/www${ftpFolderPath}${fileName}`;
 
         /* ========= FTP ========= */
         await ftpClient.access({
-            host: process.env.FTP_HOST,
-            user: process.env.FTP_USER,
-            password: process.env.FTP_PASS,
-            secure: false
+            host: FTPdetails.A01F52,
+            user: FTPdetails.FTPUID,
+            password: FTPdetails.FTPPWD,
+            port: 21,  // Try 990 for implicit FTPS if 21 doesn't work
+            secure: true,  // Use FTPS (Explicit FTPS)
+            secureOptions: { rejectUnauthorized: false },  // Disable certificate validation (only for dev)
+            passive: true,  // Passive mode (recommended for most cases)
+            debug: (message) => console.log(message),  // Enable debug messages for more insight
         });
-
 
         /* ========= BACKUP ========= */
         await sequelizeMASTER.query(`
             BACKUP DATABASE [${databaseName}]
-            TO DISK = '${remoteBackupPath}'
-            WITH FORMAT, INIT, COMPRESSION, COPY_ONLY
+            TO DISK = 'C:\\files\\${databaseName}.bak'
+            WITH FORMAT, INIT, COPY_ONLY
         `);
 
         /* ========= DOWNLOAD ========= */
         // const localDir = path.join("/tmp", "downloads", fileName);
-        const localDir = path.join("..", "..", "..", '/tmp', "downloads", fileName);
+        const localDir = path.join("..", "/downloads");
 
         await fs.promises.mkdir(localDir, { recursive: true });
 
-        const bakPath = path.join(localDir, fileName);
-        await ftpClient.downloadTo(bakPath, `${ftpFolderPath}${fileName}`);
+        let bakPath = path.join("/downloads", fileName);
+        // URL to download
+        const fileUrl = `https://files.epluserp.cloud/${fileName}`;
+
+        await new Promise((resolve, reject) => {
+            https.get(fileUrl, (res) => {
+                // Check if the response status code is 200 (success)
+                if (res.statusCode !== 200) {
+                    reject(new Error(`Download failed. Status: ${res.statusCode}`));
+                    return;
+                }
+
+                // Define the directory and file path for saving the file
+                const localDir = path.join(__dirname, "..", 'downloads');
+                const bakPath = path.join(localDir, fileName);
+                fs.promises.mkdir(localDir, { recursive: true })
+                    .then(() => {
+                        const fileStream = fs.createWriteStream(bakPath);
+                        res.pipe(fileStream);
+                        fileStream.on('finish', () => {
+                            fileStream.close();
+                            resolve();
+                        });
+
+                        // Handle errors during the file writing process
+                        fileStream.on('error', (err) => {
+                            reject(err);
+                        });
+                    })
+                    .catch((err) => {
+                        console.log('Error creating directory:', err);
+                        reject(err);
+                    });
+            }).on('error', (err) => {
+                console.log('Error with the HTTPS request:', err);
+                reject(err);
+            });
+        });
+        // await ftpClient.downloadTo(bakPath, `https://files.epluserp.cloud/files/${fileName}`);
 
         /* ========= JSON ========= */
         const branches = await getCompanyBranches(corporateID, companyID);
@@ -255,7 +305,7 @@ const backupToDrive = async (req, res) => {
             STATENAME: b.BRSTATE ? stateMap[b.BRSTATE] || "" : ""
         }));
 
-        const jsonPath = path.join(localDir, `${databaseName}.json`);
+        let jsonPath = path.join(localDir, `${databaseName}.json`);
 
         await fs.promises.writeFile(
             jsonPath,
@@ -263,7 +313,7 @@ const backupToDrive = async (req, res) => {
         );
 
         /* ========= ZIP ========= */
-        const zipPath = path.join(localDir, `${databaseName}.zip`);
+        let zipPath = path.join(localDir, `${databaseName}.zip`);
 
         await zipFiles([
             { path: bakPath, name: fileName },
@@ -274,18 +324,29 @@ const backupToDrive = async (req, res) => {
             throw new Error("ZIP NOT CREATED");
         }
 
-        /* ========= FTP DELETE FUNCTION ========= */
         const deleteFromFTP = async () => {
             try {
-                const list = await ftpClient.list(ftpFolderPath);
+                console.log("Deleting File...");
+                const filePath = path.join(ftpFolderPath.replace(/\\/g, '/'), fileName);
+                console.log("Deleting file from FTP path:", filePath);
+
+                let list;
+                try {
+                    list = await ftpClient.list();
+                } catch (error) {
+                    console.log(error);
+
+                }
                 const exists = list.some(f => f.name === fileName);
 
                 if (exists) {
-                    await ftpClient.remove(`${ftpFolderPath}${fileName}`);
+                    await ftpClient.remove(fileName);
                     console.log("✅ FTP file deleted");
+                } else {
+                    console.log("❌ File not found:", fileName);
                 }
             } catch (err) {
-                console.log("⚠ FTP cleanup failed:", err.message);
+                console.log("⚠ FTP cleanup failed:", err);
             }
         };
 
@@ -332,7 +393,15 @@ const backupToDrive = async (req, res) => {
             ftpClient.close();
 
             [bakPath, jsonPath, zipPath].forEach(f => {
-                if (fs.existsSync(f)) fs.unlinkSync(f);
+                const normalizedPath = f.replaceAll('\\', '/');
+
+                // Use fs.promises.access (promise-based)
+                Promise.resolve(fs.promises.access(normalizedPath))  // Check if the file exists
+                    .then(() => fs.promises.unlink(normalizedPath))    // If it exists, delete it
+                    .then(() => console.log(`Deleted: ${normalizedPath}`))
+                    .catch(err => {
+                        console.error(`Error deleting ${normalizedPath}: ${err.message}`);
+                    });
             });
 
             response.status = "SUCCESS";
@@ -415,7 +484,12 @@ const backupToDrive = async (req, res) => {
             await deleteFromFTP();
 
             [bakPath, jsonPath, zipPath].forEach(f => {
-                if (fs.existsSync(f)) fs.unlinkSync(f);
+                const normalizedPath = f.replaceAll('\\', '/');
+                fs.exists(normalizedPath, (exists) => {
+                    if (exists) {
+                        fs.unlink(normalizedPath);
+                    }
+                });
             });
 
             ftpClient.close();
@@ -448,32 +522,33 @@ const backupToDrive = async (req, res) => {
 
                 if (err) {
                     console.error("Download error:", err);
-                    ftpClient.close(); // still close
+                    ftpClient.close();
                     return;
                 }
 
                 try {
-                    await deleteFromFTP(); // ✅ delete FTP file
-
+                    await deleteFromFTP();
                     [bakPath, jsonPath, zipPath].forEach(f => {
-                        if (fs.existsSync(f)) fs.unlinkSync(f);
+                        const normalizedPath = f.replaceAll('\\', '/');
+                        // Check if the file exists and then delete it asynchronously
+                        fs.exists(normalizedPath, (exists) => {
+                            if (exists) {
+                                fs.unlink(normalizedPath);
+                            }
+                        });
                     });
-
-                    console.log("🧹 Cleanup done after download");
-
                 } catch (cleanupErr) {
                     console.error("Cleanup error:", cleanupErr);
                 } finally {
                     ftpClient.close(); // ✅ close AFTER everything
                 }
             });
-        }
-
-        else {
+        } else {
             throw new Error("Invalid action type");
         }
 
     } catch (err) {
+        console.log(err);
 
         console.error("❌ ERROR:", err.message);
 
@@ -572,14 +647,18 @@ const restoreBak = async (req, res) => {
             const existsInTable = usedIds.includes(nextCompanyID);
 
             // 🔹 Check if DB already exists
-            const dbName = `A${corporateID.slice(-5)}CMP${nextCompanyID.toString().padStart(4, "0")}`;
+            let CmpDBName = corporateID.split('-');
+            const dbName = corporateID == 'PL-P-00001' ? `A${corporateID.slice(-5)}CMP${nextCompanyID.toString().padStart(4, "0")}` : `${CmpDBName.join('')}CMP${nextCompanyID.toString().padStart(4, "0")}`;
 
-            const dbCheck = await sequelizeMASTER.query(`
-        SELECT DB_ID(:dbName) as dbid
-    `, {
-                replacements: { dbName },
-                type: QueryTypes.SELECT
-            });
+            let sequelizeDynamic = db.createDynamicPool(FTPdetail.A01F53, FTPdetail.A01F54, FTPdetail.A01F52, 'MASTER');
+
+            const dbCheck =
+                await sequelizeDynamic.query(`
+                    SELECT DB_ID(:dbName) as dbid
+                    `, {
+                    replacements: { dbName },
+                    type: QueryTypes.SELECT
+                });
 
             const existsInDB = dbCheck[0].dbid !== null;
 
@@ -618,12 +697,22 @@ const restoreBak = async (req, res) => {
 
         const bakPath = path.join(tempDir, bakFile);
 
+        let FTPdetail = await PLRDBA01.findOne({
+            where: {
+                A01F03: corporateID
+            }
+        })
+
         /* ========= FTP ========= */
         await ftpClient.access({
-            host: process.env.FTP_HOST,
-            user: process.env.FTP_USER,
-            password: process.env.FTP_PASS,
-            secure: false
+            host: FTPdetail.A01F52,
+            user: FTPdetail.FTPUID,
+            password: FTPdetail.FTPPWD,
+            port: 21,  // Try 990 for implicit FTPS if 21 doesn't work
+            secure: true,  // Use FTPS (Explicit FTPS)
+            secureOptions: { rejectUnauthorized: false },  // Disable certificate validation (only for dev)
+            passive: true,  // Passive mode (recommended for most cases)
+            debug: (message) => console.log(message),  // Enable debug messages for more insight
         });
 
         remoteFileName = `${Date.now()}_${bakFile}`;
@@ -631,13 +720,17 @@ const restoreBak = async (req, res) => {
         const sqlPath = `/var/www/html/eplus/${remoteFileName}`;
 
         await ftpClient.uploadFrom(fs.createReadStream(bakPath), remoteFtpPath);
+        let CmpDBName = corporateID.split('-');
 
         /* ========= DB NAME ========= */
-        const newDatabaseName =
-            `A${corporateID.slice(-5)}CMP${nextCompanyID.toString().padStart(4, "0")}`;
+        const newDatabaseName = corporateID == 'PL-P-00001' ?
+            `A${corporateID.slice(-5)}CMP${nextCompanyID.toString().padStart(4, "0")}` :
+            `${CmpDBName.join('')}CMP${nextCompanyID.toString().padStart(4, "0")}`;
 
         /* ========= DROP ========= */
-        await sequelizeMASTER.query(`
+        let sequelizeDynamic = db.createDynamicPool(FTPdetail.A01F53, FTPdetail.A01F54, FTPdetail.A01F52, 'MASTER');
+
+        await sequelizeDynamic.query(`
             IF DB_ID('${newDatabaseName}') IS NOT NULL
             BEGIN
                 ALTER DATABASE [${newDatabaseName}]

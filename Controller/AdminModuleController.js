@@ -420,6 +420,7 @@ class AdminModuleController {
                         SELECT 
                         F02F03E + ' - ' + F02F01 AS label
                         FROM IDBAPI.dbo.PLSYSF02
+                        WHERE F02F00 = 'CCCC'
                         ORDER BY F02F01
                      `);
                     response.status = 'SUCCESS';

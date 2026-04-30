@@ -14,6 +14,8 @@ const Cron = require('./cronJobsRoutes');
 const Token = require('./tokenRoutes');
 const Google = require("./googleRoutes")
 const reportRoutes = require("./reportRoutes");
+const common = require("./commonRoutes");
+const ticketRoutes = require("./ticketRoutes")
 
 // Use loginRoutes under /User path
 router.use('/User', loginRoutes);
@@ -30,5 +32,7 @@ router.use('/admindashboard', dbRoute);
 router.use('/Token', Token);
 router.use('/google', Google)
 router.use('/report', reportRoutes)
+router.use('/common', common)
+router.use('/Ticket',ticketRoutes)
 
 module.exports = router;

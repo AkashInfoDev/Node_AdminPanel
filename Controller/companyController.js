@@ -7,6 +7,7 @@ const definePLRDBA01 = require('../Models/RDB/PLRDBA01'); // Model factory
 const definePLRDBA02 = require('../Models/RDB/PLRDBA02'); // Model factory
 const defineEP_FILE = require('../Models/RDB/EP_FILE');
 const defineEP_USER = require('../Models/RDB/EP_USER');
+const defineDBSER_INFO = require('../Models/RDB/DBSER_INFO');
 const Encryptor = require('../Services/encryptor');
 const { Op, QueryTypes } = require('sequelize');
 // const PLRDBA01 = require('../Models/RDB/PLRDBA01');
@@ -29,6 +30,7 @@ const sequelizeMASTER = db.getConnection('master');
 // Initialize model using the Sequelize instance
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 const PLRDBA02 = definePLRDBA02(sequelizeRDB);
+const DBSER_INFO = defineDBSER_INFO(sequelizeRDB);
 const EP_FILE = defineEP_FILE(sequelizeRDB, require('sequelize').DataTypes);
 const EP_USER = defineEP_USER(sequelizeRDB, require('sequelize').DataTypes);
 const encryptor = new Encryptor();
@@ -104,7 +106,7 @@ class CompanyService {
                 const decrypted = i.A01F02;
                 if (decrypted === companyName) {
                     if (!lbool) {
-                        // return res.status(500).json({ message: 'Company Name is Already Registered' })
+                        return res.status(500).json({ message: 'Company Name is Already Registered' })
                     } else {
                         response.status = false;
                         response.message = 'Company Name is Already Registered';
@@ -179,6 +181,12 @@ class CompanyService {
             }
             user = await admi.findOne({ ADMICORP: nextId });
 
+            let activeServer = await DBSER_INFO.findOne({
+                where:{
+                    INFO_11: 'Y'
+                }
+            })
+
             // Create company record
             const createCMP = await PLRDBA01.create({
                 A01F01: nextId,
@@ -199,14 +207,14 @@ class CompanyService {
                 A01F16: cnclRes,
                 A01F17: phoneNumber ? phoneNumber : user.ADMIF13,
                 A01F51: SBDdbType ? SBDdbType : 'SQL',
-                A01F52: srverIP ? srverIP : '45.195.159.72',
-                A01F53: serverUserName ? serverUserName : 'aiAdmin',
-                A01F54: serverPassword ? serverPassword : 'aaBC@#23',
-                FTPURL: 's01.lyfexplore.com',
-                FTPUID: 'ftpuser',
-                FTPPWD: 'ftp@3360',
-                FTPDIR: '/html/eplus/',
-                FTPPATH: 'https://s01.lyfexplore.com/eplus/',
+                A01F52: activeServer.INFO_02,
+                A01F53: activeServer.INFO_03,
+                A01F54: activeServer.INFO_04,
+                FTPURL: activeServer.INFO_05,
+                FTPUID: activeServer.INFO_06,
+                FTPPWD: activeServer.INFO_07,
+                FTPDIR: activeServer.INFO_08,
+                FTPPATH: activeServer.INFO_09,
                 A02F01: A02id,
                 A01CHLD: '',
                 A01F19: Installby,
@@ -352,7 +360,8 @@ class CompanyService {
                     FILE03: base64,
                     FILE04: userRecord.UTF01,
                     FILE06: description,
-                    FILE07: source
+                    FILE07: source,
+                    FILE09: nextCorpId                    
                 });
             }
             const existing = await admi.findAll({}, [], ['ADMIF01', 'ADMIF05']);

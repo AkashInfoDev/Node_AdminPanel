@@ -24,8 +24,8 @@ class FTPService {
 
     // Download file method
     async downloadFile() {
-        const client = new ftp.Client();
-        client.ftp.verbose = true;  // Set to `false` to hide FTP commands for a cleaner log
+        const ftpClient = new ftp.Client();
+        ftpClient.ftp.verbose = true;  // Set to `false` to hide FTP commands for a cleaner log
 
         try {
             let FTPdetail = await PLRDBA01.findOne({
@@ -34,20 +34,24 @@ class FTPService {
                 }
             });
             // Connect to the FTP server
-            await client.access({
-                host: FTPdetail.FTPURL,     // FTP server hostname
-                user: FTPdetail.FTPUID,       // FTP username
-                password: FTPdetail.FTPPWD,   // FTP password
-                secure: false,                   // Set to `true` if using FTPS
+            await ftpClient.access({
+                host: FTPdetail.A01F52,
+                user: FTPdetail.FTPUID,
+                password: FTPdetail.FTPPWD,
+                port: 21,  // Try 990 for implicit FTPS if 21 doesn't work
+                secure: true,  // Use FTPS (Explicit FTPS)
+                secureOptions: { rejectUnauthorized: false },  // Disable certificate validation (only for dev)
+                passive: true,  // Passive mode (recommended for most cases)
+                debug: (message) => console.log(message),  // Enable debug messages for more insight
             });
 
             // Download a file from the FTP server
-            await client.downloadTo(this.fileNM, `/html/eplus/${this.decoded.corpId}/${this.cmpNo}/images/${this.fileNM}`);
+            await ftpClient.downloadTo(this.fileNM, `${FTPdetail.FTPDIR}/${this.decoded.corpId}/${this.cmpNo}/images/${this.fileNM}`);
 
         } catch (error) {
             console.error("Error accessing FTP server:", error);
         }
-        client.close();
+        ftpClient.close();
     }
 
     async uploadFile(req) {
@@ -63,17 +67,21 @@ class FTPService {
 
             // Connect to the FTP server
             await ftpClient.access({
-                host: FTPdetail.FTPURL,
+                host: FTPdetail.A01F52,
                 user: FTPdetail.FTPUID,
                 password: FTPdetail.FTPPWD,
-                secure: false, // Assuming FTP is non-secure; change to `true` if using FTPS
+                port: 21,  // Try 990 for implicit FTPS if 21 doesn't work
+                secure: true,  // Use FTPS (Explicit FTPS)
+                secureOptions: { rejectUnauthorized: false },  // Disable certificate validation (only for dev)
+                passive: true,  // Passive mode (recommended for most cases)
+                debug: (message) => console.log(message),  // Enable debug messages for more insight
             });
 
             // Define the target file and directories on the server
-            const FinalImage = `/html/eplus/${this.decoded.corpId}/${this.cmpNo}/images/${this.fileNM}`;
-            const imageFolder = `/html/eplus/${this.decoded.corpId}/${this.cmpNo}/images/`;
-            const cmpFolder = `/html/eplus/${this.decoded.corpId}/${this.cmpNo}/`;
-            const corpFolder = `/html/eplus/${this.decoded.corpId}/`;
+            const FinalImage = `${FTPdetail.FTPDIR}/${this.decoded.corpId}/${this.cmpNo}/images/${this.fileNM}`;
+            const imageFolder = `${FTPdetail.FTPDIR}/${this.decoded.corpId}/${this.cmpNo}/images/`;
+            const cmpFolder = `${FTPdetail.FTPDIR}/${this.decoded.corpId}/${this.cmpNo}/`;
+            const corpFolder = `${FTPdetail.FTPDIR}/${this.decoded.corpId}/`;
             const remoteDir = path.dirname(FinalImage);  // Extract the directory part from the file path
 
             // Ensure the directory exists on the server
@@ -110,45 +118,43 @@ class FTPService {
     }
 
     // Function to ensure the directories exist on the server
-    async ensureDirectoriesExist(ftpClient, remoteDir) {
-        const directories = remoteDir.split('/').slice(1); // Remove leading '/'
-        let currentDir = '';
+async ensureDirectoriesExist(ftpClient, remoteDir) {
+    const directories = remoteDir.split('/').slice(1); // Remove leading '/'
+    let currentDir = '';
+    const promises = [];
 
-        // Ensure each directory exists
-        for (const dir of directories) {
-            currentDir += `/${dir}`;
-            try {
-                await ftpClient.ensureDir(currentDir);
-            } catch (error) {
+    for (const dir of directories) {
+        currentDir += `/${dir}`;
+        const dirPromise = await ftpClient.ensureDir(currentDir)
+            .catch((error) => {
                 console.error(`Failed to create directory ${currentDir}:`, error.message);
-            }
-        }
+            });
+        promises.push(dirPromise);
     }
 
-    async setPermissions(FinalImage, remoteDir, imageFolder, cmpFolder, corpFolder, ftpClient) {
-        return new Promise((resolve, reject) => {
-            try {
-                // Set permissions for the directory and file
-                const chmodCommands = [
-                    `SITE chmod 775 ${corpFolder}`,
-                    `SITE chmod 775 ${cmpFolder}`,
-                    `SITE chmod 775 ${imageFolder}`,
-                    `SITE chmod 775 ${FinalImage}`,
-                ];
+    // Wait for all directory creation tasks to finish
+    await Promise.all(promises);
+}
 
-                // Execute chmod commands sequentially
-                for (const command of chmodCommands) {
-                    this.executeSSHCommand(command, ftpClient);
-                    console.log(`Permissions set to 775 for ${command.split(' ')[2]}!`);
-                }
+async setPermissions(FinalImage, remoteDir, imageFolder, cmpFolder, corpFolder, ftpClient) {
+    try {
+        const chmodCommands = [
+            `SITE chmod 775 ${corpFolder}`,
+            `SITE chmod 775 ${cmpFolder}`,
+            `SITE chmod 775 ${imageFolder}`,
+            `SITE chmod 775 ${FinalImage}`,
+        ];
 
-                resolve();
-            } catch (err) {
-                console.error('Error setting permissions:', err);
-                reject(err);
-            }
-        });
+        // Execute all chmod commands in parallel
+        const permissionPromises = chmodCommands.map(command => this.executeSSHCommand(command, ftpClient));
+        await Promise.all(permissionPromises);
+
+        console.log(`Permissions set to 775 for all directories and file.`);
+    } catch (err) {
+        console.error('Error setting permissions:', err);
+        throw err;  // Rethrow to handle it at the top level
     }
+}
 
     async executeSSHCommand(command, ftpClient) {
         const commandResult = await ftpClient.ftp.send(`${command}`);

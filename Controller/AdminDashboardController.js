@@ -15,6 +15,10 @@ const definePLRDBPYMT = require('../Models/RDB/PLRDBPYMT');
 const EP_USERController = require('./EP_USERController');
 const defineEP_USER = require('../Models/RDB/EP_USER');
 const defineEP_FILE = require('../Models/RDB/EP_FILE');
+const ADMIController = require('./ADMIController');
+const M81Controller = require('./M81Controller');
+
+const defineEP_PAYREQ = require('../Models/RDB/EP_PAYREQ');
 const QueryService = require('../Services/queryService');
 const Company = require('../PlusData/Class/CmpYrCls/Company');
 const Year = require('../PlusData/Class/CmpYrCls/Year');
@@ -24,11 +28,309 @@ const PLRDBPYMT = definePLRDBPYMT(sequelizeRDB);
 const EP_USER = defineEP_USER(sequelizeRDB);
 const defineUserTypes = require('../Models/RDB/EP_USERTPYES');
 // const EP_FILE = require('../Models/RDB/EP_FILE');
+const definePLRDBGAO = require('../Models/RDB/PLRDBGAO'); // Model factory
+
 const EP_FILE = defineEP_FILE(sequelizeRDB, require('sequelize').DataTypes);
 const UserTypes = defineUserTypes(sequelizeRDB, require('sequelize').DataTypes);
+const EP_PAYREQ = defineEP_PAYREQ(sequelizeRDB, require('sequelize').DataTypes);
+const PLRDBGAO = definePLRDBGAO(sequelizeRDB);
+
 
 
 const encryptor = new Encryptor();
+
+async function applyLimitLogic(corporateId, payload, transaction) {
+
+    const {
+        additionalUser,
+        additionalBranch,
+        additionalCompany,
+        cmpNum,
+        custBP,
+        custRS,
+        usrFld,
+        usrMstr
+    } = payload;
+
+    /* =========================
+       1️⃣ FETCH CORPORATE
+    ========================= */
+    const corp = await PLRDBA01.findOne({
+        where: { A01F03: corporateId },
+        transaction
+    });
+
+    if (!corp) {
+        throw new Error('Corporate not found during approval');
+    }
+
+    /* =========================
+       2️⃣ UPDATE MAIN LIMITS
+    ========================= */
+    await PLRDBA01.update({
+
+        A01F14: (corp.A01F14 || 0) + Number(additionalUser || 0),     // Users
+        A01F15: (corp.A01F15 || 0) + Number(additionalBranch || 0),   // Branch
+        A01F16: (corp.A01F16 || 0) + Number(additionalCompany || 0)   // Company
+
+    }, {
+        where: { A01F03: corporateId },
+        transaction
+    });
+
+    /* =========================
+       3️⃣ COMPANY-WISE LIMITS (GAO)
+    ========================= */
+    const hasCompanyData =
+        Number(custBP || 0) > 0 ||
+        Number(custRS || 0) > 0 ||
+        Number(usrFld || 0) > 0 ||
+        Number(usrMstr || 0) > 0;
+
+    if (hasCompanyData && cmpNum) {
+
+        const companies = String(cmpNum)
+            .split(',')
+            .map(c => c.trim())
+            .filter(Boolean);
+
+        for (let cmp of companies) {
+
+            const existing = await PLRDBGAO.findOne({
+                where: {
+                    GAOF01: corporateId,
+                    GAOF02: cmp
+                },
+                transaction
+            });
+
+            if (!existing) {
+
+                /* ➕ INSERT NEW */
+                await PLRDBGAO.create({
+                    GAOF01: corporateId,
+                    GAOF02: cmp,
+                    GAOF03: Number(custBP || 0),
+                    GAOF04: Number(custRS || 0),
+                    GAOF05: Number(usrFld || 0),
+                    GAOF06: Number(usrMstr || 0)
+                }, { transaction });
+
+            } else {
+
+                /* 🔄 UPDATE EXISTING */
+                await PLRDBGAO.update({
+
+                    GAOF03: (existing.GAOF03 || 0) + Number(custBP || 0),
+                    GAOF04: (existing.GAOF04 || 0) + Number(custRS || 0),
+                    GAOF05: (existing.GAOF05 || 0) + Number(usrFld || 0),
+                    GAOF06: (existing.GAOF06 || 0) + Number(usrMstr || 0)
+
+                }, {
+                    where: {
+                        GAOF01: corporateId,
+                        GAOF02: cmp
+                    },
+                    transaction
+                });
+            }
+        }
+    }
+}
+async function applyPlanLogic(corporateId, payload, transaction) {
+
+    const { planId } = payload;
+
+    /* =========================
+       1️⃣ FETCH CORPORATE
+    ========================= */
+    const corp = await PLRDBA01.findOne({
+        where: { A01F03: corporateId },
+        transaction
+    });
+
+    if (!corp) {
+        throw new Error('Corporate not found during approval');
+    }
+
+    /* =========================
+       2️⃣ VALIDATE PLAN
+    ========================= */
+    const planInfo = await PLRDBA02.findOne({
+        where: { A02F01: planId },
+        transaction
+    });
+
+    if (!planInfo) {
+        throw new Error('Plan not found during approval');
+    }
+
+    /* =========================
+       3️⃣ DATE CALCULATION
+    ========================= */
+    const today = new Date();
+
+    let baseDate = corp.A01F13 ? new Date(corp.A01F13) : today;
+
+    // If expired → start fresh
+    if (!corp.A01F13 || baseDate < today) {
+        baseDate = today;
+    }
+
+    let newExpiry = null;
+
+    /* =========================
+       4️⃣ PLAN RULES
+    ========================= */
+    if (Number(planId) === 2) {
+        baseDate.setDate(baseDate.getDate() + 7);
+        newExpiry = baseDate;
+    }
+    else if (Number(planId) === 6) {
+        newExpiry = null; // unlimited
+    }
+    else if (Number(planId) === 7) {
+        baseDate.setFullYear(baseDate.getFullYear() + 1);
+        newExpiry = baseDate;
+    }
+    else {
+        baseDate.setFullYear(baseDate.getFullYear() + 1);
+        newExpiry = baseDate;
+    }
+
+    /* =========================
+       5️⃣ UPDATE CORPORATE
+    ========================= */
+    await PLRDBA01.update({
+        A02F01: planId,
+        A01F12: today,
+        A01F13: newExpiry
+    }, {
+        where: { A01F03: corporateId },
+        transaction
+    });
+}
+async function applyModuleLogic(corporateId, payload, transaction) {
+
+    const {
+        moduleId,
+        setUpId
+    } = payload;
+
+    /* =========================
+       1️⃣ FETCH CORPORATE
+    ========================= */
+    const corp = await PLRDBA01.findOne({
+        where: { A01F03: corporateId },
+        transaction
+    });
+
+    if (!corp) {
+        throw new Error('Corporate not found during approval');
+    }
+
+    const corpUnq = String(corp.A01F01).trim();
+
+    /* =========================
+       2️⃣ BUILD SDB NAME
+    ========================= */
+    const parts = corporateId.split('-');
+
+    let sdbName =
+        parts.length === 3
+            ? `${parts[0]}${parts[1]}${parts[2]}SDB`
+            : `${parts[0]}${parts[1]}SDB`;
+
+    if (sdbName === 'PLP00001SDB') {
+        sdbName = 'A00001SDB';
+    }
+
+    const admi = new ADMIController(sdbName);
+    const m81 = new M81Controller(sdbName);
+
+    /* =========================
+       3️⃣ GET SUPER USER
+    ========================= */
+    const superUser = await admi.findOne({
+        ADMIF06: 2,
+        ADMICORP: corpUnq
+    });
+
+    if (!superUser) {
+        throw new Error('Super user not found');
+    }
+
+    /* =========================
+       4️⃣ NORMALIZE INPUT
+    ========================= */
+    const modules = String(moduleId || '')
+        .split(',')
+        .map(m => m.trim())
+        .filter(Boolean);
+
+    const uniqueModules = [...new Set(modules)];
+
+    const setups = String(setUpId || '')
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+
+    const uniqueSetups = [...new Set(setups)];
+
+    /* =========================
+       5️⃣ MODULE ACTIVATION
+    ========================= */
+    if (uniqueModules.length > 0) {
+
+        let existingModules = superUser.ADMIMOD
+            ? superUser.ADMIMOD.split(',').map(m => m.trim())
+            : [];
+
+        const updatedModules = [...new Set([
+            ...existingModules,
+            ...uniqueModules
+        ])];
+
+        await admi.update(
+            { ADMIMOD: updatedModules.join(',') },
+            { ADMIF00: superUser.ADMIF00 }
+        );
+    }
+
+    /* =========================
+       6️⃣ SETUP ACTIVATION
+    ========================= */
+    if (uniqueSetups.length > 0) {
+
+        const m81Row = await m81.findOne({
+            M81UNQ: superUser.ADMIF00.toString()
+        });
+
+        let existingSetups = m81Row?.M81SID
+            ? m81Row.M81SID.split(',').map(s => s.trim())
+            : [];
+
+        const updatedSetups = [...new Set([
+            ...existingSetups,
+            ...uniqueSetups
+        ])];
+
+        await m81.update(
+            { M81SID: updatedSetups.join(',') },
+            { M81UNQ: superUser.ADMIF00.toString() }
+        );
+    }
+}
+function getPrefix(roleId) {
+    switch (Number(roleId)) {
+        case 1: return 'ADMIN';
+        case 2: return 'CMPUSER';
+        case 3: return 'DEALER';
+        case 4: return 'RESELLER';
+        case 5: return 'Accountant';
+        default: return 'UNKNOWN';
+    }
+}
 
 class AdminDashboardController {
 
@@ -203,6 +505,12 @@ class AdminDashboardController {
                         response,
                         res
                     );
+
+                case 'Q':   // 👈 Pending Requests
+                    return AdminDashboardController.getPendingRequests(pa, response, res);
+
+                case 'AP':  // 👈 Approve Request
+                    return AdminDashboardController.approveRequest(pa, response, res, decoded);
                 default:
                     response.status = 'FAIL';
                     response.message = 'Invalid action';
@@ -561,6 +869,7 @@ class AdminDashboardController {
             return res.status(500).json({ encryptedResponse });
         }
     }
+
     static async getAllCorporateUsers(req, res) {
         let response = { status: 'SUCCESS', message: '', data: null };
         let encryptedResponse;
@@ -675,12 +984,56 @@ class AdminDashboardController {
                     'A01F13',
                     'A01F10',
                     'A01F19',
+                    'A02F01',
                     'A01F20'
                 ],
                 where: whereCondition,
                 order: [['A01F03', 'ASC']]
             });
+            // ✅ Extract corporateIds
+            const corporateIds = corporates.map(c => c.A01F03);
 
+            // ✅ Get pending counts ONLY for these corporates
+            const pendingCounts = await EP_PAYREQ.findAll({
+                attributes: [
+                    'PRQF01',
+                    [Sequelize.fn('COUNT', Sequelize.col('PRQF01')), 'total']
+                ],
+                where: {
+                    PRQF07: 'P',
+                    PRQF01: {
+                        [Op.in]: corporateIds
+                    }
+                },
+                group: ['PRQF01'],
+                raw: true
+            });
+
+            // ✅ Convert to map
+            const pendingMap = {};
+            for (let row of pendingCounts) {
+                pendingMap[row.PRQF01?.trim().toUpperCase()] = parseInt(row.total);
+            }
+
+            const files = await EP_FILE.findAll({
+                attributes: ['FILE02', 'FILE03', 'FILE09', 'FILE06'],
+                raw: true
+            });
+
+            const fileMap = {};
+
+            const normalize = (val) => val?.trim().toUpperCase();
+
+            for (let f of files) {
+                const key = normalize(f.FILE09);
+
+                fileMap[key] = {
+                    fileName: f.FILE02,
+                    base64: f.FILE03,
+                    description: f.FILE06,
+                };
+            }
+            // const corporateKey = normalize(row.A01F03);
             /* ------------------------------
              * 5. MAP RESPONSE (🔥 FINAL LOGIC)
              * ---------------------------- */
@@ -688,12 +1041,14 @@ class AdminDashboardController {
 
                 const ownerId = row.A01F19;
                 const ownerDetails = userMap[ownerId] || {};
+                const corporateKey = normalize(row.A01F03);
 
                 return {
                     corpUnq: row.A01F01?.trim() || null,
                     corporateId: row.A01F03?.trim() || null,
                     companyName: row.A01F02?.trim() || null,
                     status: row.A01F20 === 'P' ? 'P' : 'A',
+                    planId: row.A02F01,
                     subscription: {
                         startDate: row.A01F12,
                         endDate: row.A01F13
@@ -702,7 +1057,9 @@ class AdminDashboardController {
 
                     // ✅ Instead of exposing A01F19
                     ownerRole: ownerDetails.role || null,
-                    ownerName: ownerDetails.name || null
+                    ownerName: ownerDetails.name || null,
+                    file: fileMap[corporateKey] || null,
+                    pendingRequests: pendingMap[row.A01F03?.trim().toUpperCase()] || 0
                 };
             });
 
@@ -732,7 +1089,7 @@ class AdminDashboardController {
              * ========================= */
             const corp = await PLRDBA01.findOne({
                 where: { A01F03: corpId },
-                attributes: ['A01F01', 'A01F02']
+                attributes: ['A01F01', 'A01F02', 'A01F12', 'A01F13']
             });
 
             if (!corp) {
@@ -854,6 +1211,7 @@ class AdminDashboardController {
 
             const totalBranches = branchCountResult[0]?.total || 0;
 
+
             /* =========================
              * 6B. COUNT COMPANIES
              * ========================= */
@@ -874,6 +1232,7 @@ class AdminDashboardController {
             /* =========================
              * 7. FINAL RESPONSE
              * ========================= */
+            console.log("Corp Data:", corp.toJSON());
             response.data = {
                 corporateId: corpId,
                 companyName: corp.A01F02?.trim(),
@@ -881,7 +1240,10 @@ class AdminDashboardController {
 
                 totalBranches,
                 totalCompanies,
-
+                subscription: {
+                    startDate: corp.A01F12,
+                    endDate: corp.A01F13
+                },
                 totalUsers: users.length,
 
                 usersStatus: {
@@ -1009,7 +1371,7 @@ class AdminDashboardController {
              * ========================= */
             const corp = await PLRDBA01.findOne({
                 where: { A01F03: corpId },
-                attributes: ['A01F01', 'A01F02']
+                attributes: ['A01F01', 'A01F02', 'A01F12', 'A01F13']
             });
 
             if (!corp) {
@@ -1307,6 +1669,7 @@ class AdminDashboardController {
                     active: activeCount,
                     inactive: inactiveCount
                 },
+                subscription: { startDate: corp.A01F12, endDate: corp.A01F13 },
 
                 roleStatus: {
                     superUsers: superUsers.length,
@@ -1394,13 +1757,13 @@ class AdminDashboardController {
                 });
             }
 
-            if (!req.file && !paymentDescription) {
-                response.status = 'FAIL';
-                response.message = 'Either file or description required';
-                return res.status(400).json({
-                    encryptedResponse: encryptor.encrypt(JSON.stringify(response))
-                });
-            }
+            // if (!req.file && !paymentDescription) {
+            //     response.status = 'FAIL';
+            //     response.message = 'Either file or description required';
+            //     return res.status(400).json({
+            //         encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+            //     });
+            // }
 
             /* =========================
                🔄 UPDATE CORPORATE
@@ -2157,6 +2520,60 @@ class AdminDashboardController {
             }
 
             /* =========================
+               5.5️⃣ UPDATE DBSER_INFO (SERVER USAGE)
+            ========================= */
+
+            try {
+
+                const ip = corp.A01F52; // ✅ THIS IS YOUR MATCHING FIELD
+
+                console.log("SERVER DEBUG:", {
+                    ip
+                });
+
+                if (ip) {
+
+                    await sequelizeRDB.query(`
+            UPDATE DBSER_INFO
+            SET INFO_10 = CASE 
+                WHEN INFO_10 > 0 THEN INFO_10 - 1 
+                ELSE 0 
+            END
+            WHERE INFO_02 = :ip
+        `, {
+                        replacements: { ip },
+                        type: Sequelize.QueryTypes.UPDATE
+                    });
+
+                    console.log(`Updated DBSER_INFO for IP: ${ip}`);
+                }
+
+            } catch (err) {
+                console.error('Failed to update DBSER_INFO:', err.message);
+            }
+            /* =========================
+            5.6️⃣ DELETE PLRDBGAO (IMPORTANT)
+            ========================= */
+            try {
+
+                const deletedRows = await PLRDBGAO.destroy({
+                    where: { GAOF01: corporateId }
+                });
+
+                // console.log(`Deleted ${deletedRows} rows from PLRDBGAO`);
+                if (deletedRows === 0) {
+                    console.warn('No GAO records found for this corporate');
+                } else {
+                    console.log(`Deleted ${deletedRows} rows from PLRDBGAO`);
+                }
+
+            } catch (err) {
+                console.error('Failed to delete PLRDBGAO rows:', err.message);
+            }
+
+
+
+            /* =========================
                6️⃣ DELETE FROM RDB
             ========================= */
             await PLRDBA01.destroy({
@@ -2166,6 +2583,7 @@ class AdminDashboardController {
             /* =========================
                ✅ RESPONSE
             ========================= */
+            response.status = "SUCCESS"
             response.message = 'Corporate and all databases deleted successfully';
 
             return res.status(200).json({
@@ -2183,6 +2601,293 @@ class AdminDashboardController {
             });
         }
     }
+
+    //show pending request of corporate
+    static async getPendingRequests(pa, response, res) {
+        try {
+
+            let response = { status: 'SUCCESS', message: '', data: null };
+
+            const { corporateId, page = 1, limit = 10 } = pa;
+
+            const safeParse = (val) => {
+                try {
+                    if (!val) return {};
+                    if (typeof val === 'object') return val;
+                    return JSON.parse(val);
+                } catch {
+                    return {};
+                }
+            };
+
+            /* =========================
+               🔍 WHERE FILTER
+            ========================= */
+            const whereClause = {
+                PRQF07: 'P'
+            };
+
+            if (corporateId) {
+                whereClause.PRQF01 = corporateId;
+            }
+
+            /* =========================
+               📄 PAGINATION CALC
+            ========================= */
+            const offset = (page - 1) * limit;
+
+            /* =========================
+               📦 FETCH REQUESTS
+            ========================= */
+            const { rows: requests, count } = await EP_PAYREQ.findAndCountAll({
+                where: whereClause,
+                order: [['PRQF00', 'DESC']],
+                offset,
+                limit,
+                raw: true
+            });
+
+            /* =========================
+               📁 FETCH FILES (OPTIMIZED)
+            ========================= */
+            const requestIds = requests.map(r => r.PRQF00);
+
+            let fileMap = {};
+
+            if (requestIds.length > 0) {
+                const files = await EP_FILE.findAll({
+                    where: {
+                        FILE08: requestIds
+                    },
+                    raw: true
+                });
+
+                for (let f of files) {
+                    if (f.FILE08) {
+                        fileMap[f.FILE08] = f;
+                    }
+                }
+            }
+
+            /* =========================
+               📤 RESPONSE BUILD
+            ========================= */
+            response.data = requests.map(r => ({
+                requestId: r.PRQF00,
+                corporateId: r.PRQF01,
+                type: r.PRQF02,
+                amount: r.PRQF05,
+                description: r.PRQF06,
+                status: r.PRQF07,
+
+                payload: safeParse(r.PRQF03),
+                payment: safeParse(r.PRQF04),
+
+                file: fileMap[r.PRQF00]
+                    ? {
+                        fileName: fileMap[r.PRQF00].FILE02,
+                        base64: fileMap[r.PRQF00].FILE03
+                    }
+                    : null
+            }));
+
+            /* =========================
+               📊 META (IMPORTANT)
+            ========================= */
+            response.meta = {
+                total: count,
+                page: Number(page),
+                limit: Number(limit),
+                totalPages: Math.ceil(count / limit)
+            };
+
+            response.status = 'SUCCESS';
+            response.message = requests.length
+                ? 'Pending requests fetched'
+                : 'No pending requests found';
+
+            return res.status(200).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+            });
+
+        } catch (err) {
+
+            console.error('getPendingRequests error:', err);
+
+            response.status = 'FAIL';
+            response.message = err.message;
+
+            return res.status(500).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+            });
+        }
+    }
+
+    //approve payment request of corporate
+    static async approveRequest(pa, response, res, decoded) {
+
+        const { requestId, decision } = pa;
+
+        const transaction = await sequelizeRDB.transaction();
+
+        try {
+
+            /* =========================
+               0️⃣ VALIDATE INPUT
+            ========================= */
+            if (!['A', 'R'].includes(decision)) {
+                throw new Error('Invalid decision');
+            }
+
+            /* =========================
+               1️⃣ FETCH REQUEST
+            ========================= */
+            const reqRow = await EP_PAYREQ.findOne({
+                where: { PRQF00: requestId },
+                transaction
+            });
+
+            if (!reqRow) throw new Error('Request not found');
+
+            if (reqRow.PRQF07 !== 'P') {
+                throw new Error('Request already processed');
+            }
+
+            /* =========================
+               2️⃣ GET ACCOUNTANT USER
+            ========================= */
+            const userRecord = await EP_USER.findOne({
+                where: {
+                    UTF04: decoded.userId,
+                    UTF07: 'N'
+                },
+                transaction
+            });
+
+            if (!userRecord) throw new Error('User not found');
+
+            const approverId = userRecord.UTF01;
+
+            /* =========================
+               3️⃣ HANDLE REJECT
+            ========================= */
+            if (decision === 'R') {
+
+                await EP_PAYREQ.update({
+                    PRQF07: 'R',
+                    PRQF09: approverId,
+                    // PRQF11: new Date().toISOString().slice(0, 23).replace('T', ' ')
+                    // PRQF11: new Date()
+                    PRQF11: Sequelize.literal('GETDATE()')
+                }, {
+                    where: { PRQF00: requestId },
+                    transaction
+                });
+
+                await transaction.commit();
+
+                response.status = 'SUCCESS';
+                response.message = 'Request rejected';
+
+                return res.status(200).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                });
+            }
+
+            /* =========================
+               4️⃣ PARSE DATA (SAFE)
+            ========================= */
+            const type = reqRow.PRQF02;
+            const corporateId = reqRow.PRQF01;
+
+            function safeParse(json) {
+                try {
+                    return typeof json === 'string' ? JSON.parse(json) : json;
+                } catch (e) {
+                    return {};
+                }
+            }
+            const payload = safeParse(reqRow.PRQF03);
+            // const payment = safeParse(reqRow.PRQF04);
+            const payment = safeParse(reqRow.PRQF04) || {};
+
+            /* =========================
+               5️⃣ APPLY LOGIC
+            ========================= */
+
+            if (type === 'PLAN') {
+                await applyPlanLogic(corporateId, payload, transaction);
+            }
+            else if (type === 'LIMIT') {
+                await applyLimitLogic(corporateId, payload, transaction);
+            }
+            else if (type === 'MODULE') {
+                await applyModuleLogic(corporateId, payload, transaction);
+            }
+            else {
+                throw new Error('Invalid request type');
+            }
+
+            /* =========================
+               6️⃣ INSERT PAYMENT
+            ========================= */
+            const prefix = getPrefix(decoded.roleId);
+
+            await PLRDBPYMT.create({
+                PYMT01: corporateId,
+                PYMT02: 0,
+                PYMT03: payment.referenceNo || (`${prefix}_${Date.now()}`),
+                PYMT04: 'OFFLINE',
+                // PYMT05: payment.amount || 0,
+                PYMT05: parseFloat(reqRow.PRQF05 || payment.amount || 0),
+                PYMT06: 'SUCCESS',
+                PYMT07: payment.paymentMethod || 'CASH',
+                PYMT09: reqRow.PRQF06,
+                PYMT10: null
+            }, { transaction });
+
+            /* =========================
+               7️⃣ MARK APPROVED
+            ========================= */
+            await EP_PAYREQ.update({
+                PRQF07: 'A',
+                PRQF09: approverId,
+                PRQF11: Sequelize.literal('GETDATE()')
+                // PRQF11: new Date()
+            }, {
+                where: { PRQF00: requestId },
+                transaction
+            });
+
+            await transaction.commit();
+
+            response.status = 'SUCCESS';
+            response.message = 'Request approved successfully';
+
+            return res.status(200).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+            });
+
+        } catch (err) {
+
+            console.error('approveRequest error:', err);
+
+            if (!transaction.finished) {
+                await transaction.rollback();
+            }
+
+            response.status = 'FAIL';
+            response.message = err.message;
+
+            return res.status(500).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+            });
+        }
+    }
+
+
+
+
 }
 
 module.exports = AdminDashboardController;

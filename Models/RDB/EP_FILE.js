@@ -35,6 +35,14 @@ module.exports = (sequelize, DataTypes) => {
         FILE07: {  // 🆕 source
             type: DataTypes.STRING(50),
             allowNull: true
+        },
+        FILE08: {  // 🔥 LINK TO TRANSACTION
+            type: DataTypes.INTEGER,
+            allowNull: true
+        },
+        FILE09: { 
+            type: DataTypes.STRING(20),
+            allowNull: true
         }
 
     }, {

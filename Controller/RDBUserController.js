@@ -39,19 +39,19 @@ const encryptor = new Encryptor();
 class RDBUserController {
     static cachedRoles = null;
 
-static async checkRoleAccess(roleId) {
+    static async checkRoleAccess(roleId) {
 
-    if (!this.cachedRoles) {
-        const roles = await UserTypes.findAll({
-            attributes: ['ID'],
-            raw: true
-        });
+        if (!this.cachedRoles) {
+            const roles = await UserTypes.findAll({
+                attributes: ['ID'],
+                raw: true
+            });
 
-        this.cachedRoles = roles.map(r => Number(r.ID));
+            this.cachedRoles = roles.map(r => Number(r.ID));
+        }
+
+        return this.cachedRoles.includes(Number(roleId));
     }
-
-    return this.cachedRoles.includes(Number(roleId));
-}
 
     // 🔥 MAIN ENTRY (same pattern as your system)
 
@@ -82,15 +82,15 @@ static async checkRoleAccess(roleId) {
             // }
             const roleId = Number(decoded.roleId);
 
-const isAllowed = await RDBUserController.checkRoleAccess(roleId);
+            const isAllowed = await RDBUserController.checkRoleAccess(roleId);
 
-if (!isAllowed) {
-    response.status = 'FAIL';
-    response.message = 'Access denied';
-    return res.status(403).json({
-        encryptedResponse: encryptor.encrypt(JSON.stringify(response))
-    });
-}
+            if (!isAllowed) {
+                response.status = 'FAIL';
+                response.message = 'Access denied';
+                return res.status(403).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                });
+            }
 
 
             // const decoded1 = await TokenService.validateToken(token);

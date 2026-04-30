@@ -48,7 +48,7 @@ class Database {
                         trustServerCertificate: true
                     }
                 },
-                pool:{
+                pool: {
                     max: 5,
                     min: 0,
                     acquire: 30000,
@@ -110,7 +110,44 @@ class Database {
                         trustServerCertificate: true
                     }
                 },
-                pool:{
+                pool: {
+                    max: 5,
+                    min: 0,
+                    acquire: 30000,
+                    idle: 10000
+                },
+                logging: process.env.LOG_LEVEL === 'info' ? console.log : false
+            }
+        };
+
+
+        // Create a new Sequelize instance for the provided database
+        this.connections[dbName] = new Sequelize(
+            dbName,  // Database name from environment
+            dbConfig[dbName].username,
+            dbConfig[dbName].password,
+            dbConfig[dbName]
+        );
+
+        return this.connections[dbName];
+    }
+
+    createDynamicPool(username, password, host, dbName) {
+        const dbConfig = {
+            [dbName]: {
+                username: username,
+                password: password,
+                host: host,
+                dialect: 'mssql',
+                dialectOptions: {
+                    options: {
+                        encrypt: false,
+                        requestTimeOut: 300000,
+                        enableArithAbort: true,
+                        trustServerCertificate: true
+                    }
+                },
+                pool: {
                     max: 5,
                     min: 0,
                     acquire: 30000,

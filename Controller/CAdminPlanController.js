@@ -4,16 +4,23 @@ const definePLRDBA01 = require('../Models/RDB/PLRDBA01');
 const definePLRDBPYMT = require('../Models/RDB/PLRDBPYMT');
 const definePLRDBA02 = require('../Models/RDB/PLRDBA02');
 const definePLRDBPLREL = require('../Models/RDB/PLRDBPLREL');
+const defineEP_USER = require('../Models/RDB/EP_USER');
+
 const TokenService = require('../Services/tokenServices');
 const Encryptor = require('../Services/encryptor');
 
+// const defineEP_FILE = require('../Models/RDB/EP_FILE');
 const definePLRDBGAO = require('../Models/RDB/PLRDBGAO'); // Model factory
 const ADMIController = require('./ADMIController');
 const M81Controller = require('./M81Controller');
 const EP_USERController = require('./EP_USERController');
 const defineEPTRNS = require('../Models/RDB/EP_TRNS');
+const defineEP_PAYREQ = require('../Models/RDB/EP_PAYREQ');
+const defineEP_FILE = require('../Models/RDB/EP_FILE');
+const { error } = require('console');
 
 const sequelizeRDB = db.getConnection('RDB');
+const EP_USER = defineEP_USER(sequelizeRDB);
 
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 const PLRDBPYMT = definePLRDBPYMT(sequelizeRDB);
@@ -21,6 +28,8 @@ const PLRDBA02 = definePLRDBA02(sequelizeRDB);
 const PLRDBPLREL = definePLRDBPLREL(sequelizeRDB);
 const PLRDBGAO = definePLRDBGAO(sequelizeRDB);
 const EP_TRNS = defineEPTRNS(sequelizeRDB);
+const EP_FILE = defineEP_FILE(sequelizeRDB, require('sequelize').DataTypes);
+const EP_PAYREQ = defineEP_PAYREQ(sequelizeRDB, require('sequelize').DataTypes);
 
 
 const encryptor = new Encryptor();
@@ -156,9 +165,9 @@ class CAdminPlanController {
                     }))
                 });
             }
-
+            const encryptedPa = req.body.pa || req.query.pa;
             /* 🔓 DECRYPT QUERY */
-            if (!req.query.pa) {
+            if (!encryptedPa) {
                 response.status = 'FAIL';
                 response.message = 'Encrypted parameter missing';
                 return res.status(400).json({
@@ -166,8 +175,21 @@ class CAdminPlanController {
                 });
             }
 
-            const decrypted = encryptor.decrypt(req.query.pa);
+            // const decrypted = encryptor.decrypt(req.query.pa);
+            const decrypted = encryptor.decrypt(encryptedPa);
             const pa = querystring.parse(decodeURIComponent(decrypted));
+            /* =========================
+   📄 FILE HANDLING (NEW)
+========================= */
+            if (req.file) {
+
+                if (!req.file.mimetype.includes('pdf')) {
+                    throw new Error('Only PDF allowed');
+                }
+
+                pa.fileBase64 = req.file.buffer.toString('base64');
+                pa.fileName = req.file.originalname;
+            }
 
             const action = pa.action;
             const corporateId = pa.corporateId;
@@ -348,6 +370,144 @@ class CAdminPlanController {
     /* ===================================================== */
     /* PLAN RENEWAL                                         */
     /* ===================================================== */
+    // static async planRenewal(pa, response, res, decoded) {
+
+    //     const {
+    //         corporateId,
+    //         A02id,
+    //         amount,
+    //         description,
+    //         paymentMethod,
+    //         referenceNo
+    //     } = pa;
+
+    //     const transaction = await sequelizeRDB.transaction();
+
+    //     try {
+
+    //         const corp = await PLRDBA01.findOne({
+    //             where: { A01F03: corporateId },
+    //             transaction
+    //         });
+
+    //         if (!corp) {
+    //             response.status = 'FAIL';
+    //             response.message = 'Corporate not found';
+    //             await transaction.rollback();
+    //             return res.status(404).json({
+    //                 encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+    //             });
+    //         }
+
+    //         // ==============================
+    //         // FETCH PLAN DETAILS
+    //         // ==============================
+
+    //         const planInfo = await PLRDBA02.findOne({
+    //             where: { A02F01: A02id },
+    //             transaction
+    //         });
+
+    //         if (!planInfo) {
+    //             response.status = 'FAIL';
+    //             response.message = 'Plan not found';
+    //             await transaction.rollback();
+    //             return res.status(404).json({
+    //                 encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+    //             });
+    //         }
+
+    //         const today = new Date();
+
+    //         // SaaS Extension Logic:
+    //         // If current expiry is future → extend from expiry
+    //         // If expired or null → start from today
+    //         let baseDate = corp.A01F13 ? new Date(corp.A01F13) : today;
+    //         if (!corp.A01F13 || baseDate < today) {
+    //             baseDate = today;
+    //         }
+
+    //         let newExpiry = null;
+
+    //         // ==============================
+    //         // PLAN VALIDITY RULES
+    //         // ==============================
+
+    //         const planId = parseInt(A02id);
+
+    //         if (planId === 2) {
+    //             // Trial → 7 days
+    //             baseDate.setDate(baseDate.getDate() + 7);
+    //             newExpiry = baseDate;
+    //         }
+    //         else if (planId === 6) {
+    //             // Default → Unlimited
+    //             newExpiry = null;
+    //         }
+    //         else if (planId === 7) {
+    //             // Standard → 1 year
+    //             baseDate.setFullYear(baseDate.getFullYear() + 1);
+    //             newExpiry = baseDate;
+    //         }
+    //         else {
+    //             // Fallback → 1 year
+    //             baseDate.setFullYear(baseDate.getFullYear() + 1);
+    //             newExpiry = baseDate;
+    //         }
+
+    //         // ==============================
+    //         // UPDATE CORPORATE PLAN
+    //         // ==============================
+
+    //         await PLRDBA01.update({
+    //             A02F01: A02id,
+    //             A01F12: today,      // Plan Start Date
+    //             A01F13: newExpiry   // Expiry Date
+    //         }, {
+    //             where: { A01F03: corporateId },
+    //             transaction
+    //         });
+
+    //         const prefix = getPrefix(decoded.roleId);
+    //         // ==============================
+    //         // CREATE PAYMENT ENTRY
+    //         // ==============================
+    //         await PLRDBPYMT.create({
+    //             PYMT01: corporateId,
+    //             PYMT02: 0,
+    //             // PYMT03: referenceNo || ('ADMIN_' + Date.now()),
+    //             PYMT03: referenceNo || (`${prefix}_${Date.now()}`),
+    //             PYMT04: 'OFFLINE',
+    //             PYMT05: parseFloat(amount || 0),
+    //             PYMT06: 'SUCCESS',
+    //             PYMT07: paymentMethod || 'CASH',
+    //             PYMT09: description || 'Plan Renewal',
+    //             PYMT10: newExpiry ? newExpiry.toISOString() : null
+    //         }, { transaction });
+
+    //         await transaction.commit();
+
+    //         response.status = 'SUCCESS';
+    //         response.message = 'Plan renewed successfully';
+
+    //         return res.status(200).json({
+    //             encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+    //         });
+
+    //     } catch (err) {
+
+    //         await transaction.rollback();
+
+    //         console.error(err);
+
+    //         response.status = 'FAIL';
+    //         response.message = 'Failed to renew plan';
+
+    //         return res.status(500).json({
+    //             encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+    //         });
+    //     }
+    // }
     static async planRenewal(pa, response, res, decoded) {
 
         const {
@@ -356,13 +516,18 @@ class CAdminPlanController {
             amount,
             description,
             paymentMethod,
-            referenceNo
+            referenceNo,
+            fileBase64,
+            fileName
         } = pa;
 
         const transaction = await sequelizeRDB.transaction();
 
         try {
 
+            /* =========================
+               1️⃣ VALIDATE CORPORATE
+            ========================= */
             const corp = await PLRDBA01.findOne({
                 where: { A01F03: corporateId },
                 transaction
@@ -371,16 +536,17 @@ class CAdminPlanController {
             if (!corp) {
                 response.status = 'FAIL';
                 response.message = 'Corporate not found';
-                await transaction.rollback();
+
+                if (!transaction.finished) await transaction.rollback();
+
                 return res.status(404).json({
                     encryptedResponse: encryptor.encrypt(JSON.stringify(response))
                 });
             }
 
-            // ==============================
-            // FETCH PLAN DETAILS
-            // ==============================
-
+            /* =========================
+               2️⃣ VALIDATE PLAN
+            ========================= */
             const planInfo = await PLRDBA02.findOne({
                 where: { A02F01: A02id },
                 transaction
@@ -389,84 +555,95 @@ class CAdminPlanController {
             if (!planInfo) {
                 response.status = 'FAIL';
                 response.message = 'Plan not found';
-                await transaction.rollback();
+
+                if (!transaction.finished) await transaction.rollback();
+
                 return res.status(404).json({
                     encryptedResponse: encryptor.encrypt(JSON.stringify(response))
                 });
             }
 
-            const today = new Date();
-
-            // SaaS Extension Logic:
-            // If current expiry is future → extend from expiry
-            // If expired or null → start from today
-            let baseDate = corp.A01F13 ? new Date(corp.A01F13) : today;
-            if (!corp.A01F13 || baseDate < today) {
-                baseDate = today;
-            }
-
-            let newExpiry = null;
-
-            // ==============================
-            // PLAN VALIDITY RULES
-            // ==============================
-
-            const planId = parseInt(A02id);
-
-            if (planId === 2) {
-                // Trial → 7 days
-                baseDate.setDate(baseDate.getDate() + 7);
-                newExpiry = baseDate;
-            }
-            else if (planId === 6) {
-                // Default → Unlimited
-                newExpiry = null;
-            }
-            else if (planId === 7) {
-                // Standard → 1 year
-                baseDate.setFullYear(baseDate.getFullYear() + 1);
-                newExpiry = baseDate;
-            }
-            else {
-                // Fallback → 1 year
-                baseDate.setFullYear(baseDate.getFullYear() + 1);
-                newExpiry = baseDate;
-            }
-
-            // ==============================
-            // UPDATE CORPORATE PLAN
-            // ==============================
-
-            await PLRDBA01.update({
-                A02F01: A02id,
-                A01F12: today,      // Plan Start Date
-                A01F13: newExpiry   // Expiry Date
-            }, {
-                where: { A01F03: corporateId },
+            /* =========================
+               3️⃣ GET USER (IMPORTANT FIX)
+            ========================= */
+            const userRecord = await EP_USER.findOne({
+                where: {
+                    UTF04: decoded.userId,
+                    UTF07: 'N'
+                },
                 transaction
             });
 
-            const prefix = getPrefix(decoded.roleId);
-            // ==============================
-            // CREATE PAYMENT ENTRY
-            // ==============================
-            await PLRDBPYMT.create({
-                PYMT01: corporateId,
-                PYMT02: 0,
-                // PYMT03: referenceNo || ('ADMIN_' + Date.now()),
-                PYMT03: referenceNo || (`${prefix}_${Date.now()}`),
-                PYMT04: 'OFFLINE',
-                PYMT05: parseFloat(amount || 0),
-                PYMT06: 'SUCCESS',
-                PYMT07: paymentMethod || 'CASH',
-                PYMT09: description || 'Plan Renewal',
-                PYMT10: newExpiry ? newExpiry.toISOString() : null
+            if (!userRecord) {
+                throw new Error('User not found');
+            }
+
+            const userInternalId = userRecord.UTF01;
+
+            /* =========================
+               4️⃣ CREATE REQUEST
+            ========================= */
+            const request = await EP_PAYREQ.create({
+                PRQF01: corporateId,
+                PRQF02: 'PLAN',
+
+                PRQF03: JSON.stringify({
+                    planId: Number(A02id)
+                }),
+
+                PRQF04: JSON.stringify({
+                    paymentMethod,
+                    referenceNo,
+                    amount: parseFloat(amount || 0),
+                    requestedAt: new Date().toISOString()
+                }),
+
+                PRQF05: parseFloat(amount || 0),
+                PRQF06: description || 'Plan Renewal Request',
+
+                PRQF07: 'P',
+                PRQF08: userInternalId
+
             }, { transaction });
 
-            await transaction.commit();
+            /* =========================
+               5️⃣ STORE FILE
+            ========================= */
+            if (fileBase64) {
 
+                const file = await EP_FILE.create({
+                    FILE02: fileName || 'payment-proof.pdf',
+                    FILE03: fileBase64,
+                    FILE04: userInternalId,
+                    FILE06: 'Plan payment proof',
+                    FILE07: 'PR',                 // 🔥 consistent with your system
+                    FILE08: request.PRQF00,       // 🔥 link to request
+                    FILE09: corporateId
+                }, { transaction });
+
+                await EP_PAYREQ.update({
+                    PRQF12: file.FILE01
+                }, {
+                    where: { PRQF00: request.PRQF00 },
+                    transaction
+                });
+            }
+
+            /* =========================
+               6️⃣ COMMIT
+            ========================= */
+            if (!transaction.finished) {
+                await transaction.commit();
+            }
+
+            /* =========================
+               7️⃣ RESPONSE
+            ========================= */
             response.status = 'SUCCESS';
-            response.message = 'Plan renewed successfully';
+            response.message = 'Plan request submitted, waiting for accountant approval';
+            response.data = {
+                requestId: request.PRQF00
+            };
 
             return res.status(200).json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify(response))
@@ -474,12 +651,14 @@ class CAdminPlanController {
 
         } catch (err) {
 
-            await transaction.rollback();
+            console.error('planRenewal error:', err);
 
-            console.error(err);
+            if (!transaction.finished) {
+                await transaction.rollback();
+            }
 
             response.status = 'FAIL';
-            response.message = 'Failed to renew plan';
+            response.message = err?.message || 'Failed to create plan request';
 
             return res.status(500).json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify(response))
@@ -489,6 +668,182 @@ class CAdminPlanController {
     /* ===================================================== */
     /* LIMIT INCREASE                                       */
     /* ===================================================== */
+    // static async limitIncrease(pa, response, res, decoded) {
+
+    //     const {
+    //         corporateId,
+    //         additionalUser,
+    //         additionalBranch,
+    //         additionalCompany,
+    //         cmpNum,
+    //         custBP,
+    //         custRS,
+    //         usrFld,
+    //         usrMstr,
+    //         amount,
+    //         description,
+    //         paymentMethod,
+    //         referenceNo
+    //     } = pa;
+
+    //     const transaction = await sequelizeRDB.transaction();
+
+    //     try {
+
+    //         const corp = await PLRDBA01.findOne({
+    //             where: { A01F03: corporateId },
+    //             transaction
+    //         });
+
+    //         if (!corp) {
+    //             throw new Error('Corporate not found');
+    //         }
+
+    //         // ==============================
+    //         // 1️⃣ UPDATE MAIN LIMITS
+    //         // ==============================
+
+    //         await PLRDBA01.update({
+    //             A01F10: Number(corp.A01F10 || 0) + Number(additionalUser || 0),
+    //             A01BRC: Number(corp.A01BRC || 0) + Number(additionalBranch || 0),
+    //             A01CMP: Number(corp.A01CMP || 0) + Number(additionalCompany || 0)
+    //         }, {
+    //             where: { A01F03: corporateId },
+    //             transaction
+    //         });
+
+    //         // ==============================
+    //         // 2️⃣ COMPANY-WISE LIMIT UPDATE
+    //         // ==============================
+
+    //         const companyWiseIncrease =
+    //             Number(custBP || 0) > 0 ||
+    //             Number(custRS || 0) > 0 ||
+    //             Number(usrFld || 0) > 0 ||
+    //             Number(usrMstr || 0) > 0;
+
+    //         if (companyWiseIncrease && !cmpNum) {
+    //             throw new Error('Company number (cmpNum) is required for company-wise limit increase');
+    //         }
+
+    //         let paymentEntity = 0;
+
+    //         if (cmpNum) {
+
+    //             let cmpList = String(cmpNum).includes(',')
+    //                 ? String(cmpNum).split(',')
+    //                 : [cmpNum];
+
+    //             if (cmpList.length === 1) {
+    //                 paymentEntity = Number(cmpList[0]);
+    //             }
+
+    //             for (let cmp of cmpList) {
+
+    //                 cmp = Number(cmp);
+
+    //                 let gaoRow = await PLRDBGAO.findOne({
+    //                     where: { GAOF01: corporateId, GAOF02: cmp },
+    //                     transaction
+    //                 });
+
+    //                 if (!gaoRow) {
+    //                     await PLRDBGAO.create({
+    //                         GAOF01: corporateId,
+    //                         GAOF02: cmp,
+    //                         GAOF03: 2,
+    //                         GAOF04: 0,
+    //                         GAOF05: 5,
+    //                         GAOF06: 0,
+    //                         GAOF07: 50,
+    //                         GAOF08: 0,
+    //                         GAOF09: 5,
+    //                         GAOF10: 0
+    //                     }, { transaction });
+
+    //                     gaoRow = await PLRDBGAO.findOne({
+    //                         where: { GAOF01: corporateId, GAOF02: cmp },
+    //                         transaction
+    //                     });
+    //                 }
+
+    //                 // Safe numeric updates
+
+    //                 if (Number(custBP || 0) > 0) {
+    //                     await PLRDBGAO.update({
+    //                         GAOF03: Number(gaoRow.GAOF03 || 0) + Number(custBP)
+    //                     }, {
+    //                         where: { GAOF01: corporateId, GAOF02: cmp },
+    //                         transaction
+    //                     });
+    //                 }
+
+    //                 if (Number(custRS || 0) > 0) {
+    //                     await PLRDBGAO.update({
+    //                         GAOF05: Number(gaoRow.GAOF05 || 0) + Number(custRS)
+    //                     }, {
+    //                         where: { GAOF01: corporateId, GAOF02: cmp },
+    //                         transaction
+    //                     });
+    //                 }
+
+    //                 if (Number(usrFld || 0) > 0) {
+    //                     await PLRDBGAO.update({
+    //                         GAOF07: Number(gaoRow.GAOF07 || 0) + Number(usrFld)
+    //                     }, {
+    //                         where: { GAOF01: corporateId, GAOF02: cmp },
+    //                         transaction
+    //                     });
+    //                 }
+
+    //                 if (Number(usrMstr || 0) > 0) {
+    //                     await PLRDBGAO.update({
+    //                         GAOF09: Number(gaoRow.GAOF09 || 0) + Number(usrMstr)
+    //                     }, {
+    //                         where: { GAOF01: corporateId, GAOF02: cmp },
+    //                         transaction
+    //                     });
+    //                 }
+    //             }
+    //         }
+
+    //         // ==============================
+    //         // 3️⃣ CREATE PAYMENT ENTRY
+    //         // ==============================
+    //         const prefix = getPrefix(decoded.roleId);
+    //         await PLRDBPYMT.create({
+    //             PYMT01: corporateId,
+    //             PYMT02: paymentEntity,   // 🔥 company if single, else 0
+    //             // PYMT03: referenceNo || ('ADMIN_' + Date.now()),
+    //             PYMT03: referenceNo || (`${prefix}_${Date.now()}`),
+    //             PYMT04: 'OFFLINE',
+    //             PYMT05: Number(amount || 0),
+    //             PYMT06: 'SUCCESS',
+    //             PYMT07: paymentMethod || 'CASH',
+    //             PYMT09: description || 'Limit Increase',
+    //             PYMT10: corp.A01F13 || null
+    //         }, { transaction });
+
+    //         await transaction.commit();
+
+    //         response.status = 'SUCCESS';
+    //         response.message = 'Limits updated successfully';
+
+    //         return res.status(200).json({
+    //             encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+    //         });
+
+    //     } catch (err) {
+
+    //         await transaction.rollback();
+    //         response.status = 'FAIL';
+    //         response.message = err.message;
+
+    //         return res.status(500).json({
+    //             encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+    //         });
+    //     }
+    // }
     static async limitIncrease(pa, response, res, decoded) {
 
         const {
@@ -504,13 +859,18 @@ class CAdminPlanController {
             amount,
             description,
             paymentMethod,
-            referenceNo
+            referenceNo,
+            fileBase64,
+            fileName
         } = pa;
 
         const transaction = await sequelizeRDB.transaction();
 
         try {
 
+            /* =========================
+               1️⃣ VALIDATE CORPORATE
+            ========================= */
             const corp = await PLRDBA01.findOne({
                 where: { A01F03: corporateId },
                 transaction
@@ -520,23 +880,9 @@ class CAdminPlanController {
                 throw new Error('Corporate not found');
             }
 
-            // ==============================
-            // 1️⃣ UPDATE MAIN LIMITS
-            // ==============================
-
-            await PLRDBA01.update({
-                A01F10: Number(corp.A01F10 || 0) + Number(additionalUser || 0),
-                A01BRC: Number(corp.A01BRC || 0) + Number(additionalBranch || 0),
-                A01CMP: Number(corp.A01CMP || 0) + Number(additionalCompany || 0)
-            }, {
-                where: { A01F03: corporateId },
-                transaction
-            });
-
-            // ==============================
-            // 2️⃣ COMPANY-WISE LIMIT UPDATE
-            // ==============================
-
+            /* =========================
+               2️⃣ VALIDATE COMPANY LOGIC
+            ========================= */
             const companyWiseIncrease =
                 Number(custBP || 0) > 0 ||
                 Number(custRS || 0) > 0 ||
@@ -547,108 +893,94 @@ class CAdminPlanController {
                 throw new Error('Company number (cmpNum) is required for company-wise limit increase');
             }
 
-            let paymentEntity = 0;
+            /* =========================
+               3️⃣ GET USER (INTERNAL ID)
+            ========================= */
+            const userRecord = await EP_USER.findOne({
+                where: {
+                    UTF04: decoded.userId,
+                    UTF07: 'N'
+                },
+                transaction
+            });
 
-            if (cmpNum) {
-
-                let cmpList = String(cmpNum).includes(',')
-                    ? String(cmpNum).split(',')
-                    : [cmpNum];
-
-                if (cmpList.length === 1) {
-                    paymentEntity = Number(cmpList[0]);
-                }
-
-                for (let cmp of cmpList) {
-
-                    cmp = Number(cmp);
-
-                    let gaoRow = await PLRDBGAO.findOne({
-                        where: { GAOF01: corporateId, GAOF02: cmp },
-                        transaction
-                    });
-
-                    if (!gaoRow) {
-                        await PLRDBGAO.create({
-                            GAOF01: corporateId,
-                            GAOF02: cmp,
-                            GAOF03: 2,
-                            GAOF04: 0,
-                            GAOF05: 5,
-                            GAOF06: 0,
-                            GAOF07: 50,
-                            GAOF08: 0,
-                            GAOF09: 5,
-                            GAOF10: 0
-                        }, { transaction });
-
-                        gaoRow = await PLRDBGAO.findOne({
-                            where: { GAOF01: corporateId, GAOF02: cmp },
-                            transaction
-                        });
-                    }
-
-                    // Safe numeric updates
-
-                    if (Number(custBP || 0) > 0) {
-                        await PLRDBGAO.update({
-                            GAOF03: Number(gaoRow.GAOF03 || 0) + Number(custBP)
-                        }, {
-                            where: { GAOF01: corporateId, GAOF02: cmp },
-                            transaction
-                        });
-                    }
-
-                    if (Number(custRS || 0) > 0) {
-                        await PLRDBGAO.update({
-                            GAOF05: Number(gaoRow.GAOF05 || 0) + Number(custRS)
-                        }, {
-                            where: { GAOF01: corporateId, GAOF02: cmp },
-                            transaction
-                        });
-                    }
-
-                    if (Number(usrFld || 0) > 0) {
-                        await PLRDBGAO.update({
-                            GAOF07: Number(gaoRow.GAOF07 || 0) + Number(usrFld)
-                        }, {
-                            where: { GAOF01: corporateId, GAOF02: cmp },
-                            transaction
-                        });
-                    }
-
-                    if (Number(usrMstr || 0) > 0) {
-                        await PLRDBGAO.update({
-                            GAOF09: Number(gaoRow.GAOF09 || 0) + Number(usrMstr)
-                        }, {
-                            where: { GAOF01: corporateId, GAOF02: cmp },
-                            transaction
-                        });
-                    }
-                }
+            if (!userRecord) {
+                throw new Error('User not found');
             }
 
-            // ==============================
-            // 3️⃣ CREATE PAYMENT ENTRY
-            // ==============================
-            const prefix = getPrefix(decoded.roleId);
-            await PLRDBPYMT.create({
-                PYMT01: corporateId,
-                PYMT02: paymentEntity,   // 🔥 company if single, else 0
-                // PYMT03: referenceNo || ('ADMIN_' + Date.now()),
-                PYMT03: referenceNo || (`${prefix}_${Date.now()}`),
-                PYMT04: 'OFFLINE',
-                PYMT05: Number(amount || 0),
-                PYMT06: 'SUCCESS',
-                PYMT07: paymentMethod || 'CASH',
-                PYMT09: description || 'Limit Increase',
-                PYMT10: corp.A01F13 || null
+            const userInternalId = userRecord.UTF01;
+
+            /* =========================
+               4️⃣ CREATE REQUEST (🔥 CORE CHANGE)
+            ========================= */
+            const request = await EP_PAYREQ.create({
+                PRQF01: corporateId,
+                PRQF02: 'LIMIT',
+
+                PRQF03: JSON.stringify({
+                    additionalUser,
+                    additionalBranch,
+                    additionalCompany,
+                    cmpNum,
+                    custBP,
+                    custRS,
+                    usrFld,
+                    usrMstr
+                }),
+
+                PRQF04: JSON.stringify({
+                    paymentMethod,
+                    referenceNo,
+                    amount: Number(amount || 0),
+                    requestedAt: new Date().toISOString()
+                }),
+
+                PRQF05: Number(amount || 0),
+                PRQF06: description || 'Limit Increase Request',
+
+                PRQF07: 'P',
+                PRQF08: userInternalId
+
             }, { transaction });
 
-            await transaction.commit();
+            /* =========================
+               5️⃣ STORE FILE (OPTIONAL)
+            ========================= */
+            if (fileBase64) {
 
+                const file = await EP_FILE.create({
+                    FILE02: fileName || 'payment-proof.pdf',
+                    FILE03: fileBase64,
+                    FILE04: userInternalId,
+                    FILE06: 'Limit increase payment proof',
+                    FILE07: 'PR',
+                    FILE08: request.PRQF00,
+                    FILE09: corporateId
+                }, { transaction });
+
+                await EP_PAYREQ.update({
+                    PRQF12: file.FILE01
+                }, {
+                    where: { PRQF00: request.PRQF00 },
+                    transaction
+                });
+            }
+
+            /* =========================
+               6️⃣ COMMIT
+            ========================= */
+            if (!transaction.finished) {
+                await transaction.commit();
+            }
+
+            /* =========================
+               7️⃣ RESPONSE
+            ========================= */
             response.status = 'SUCCESS';
-            response.message = 'Limits updated successfully';
+            response.message = 'Limit increase request submitted for approval';
+            response.data = {
+                requestId: request.PRQF00
+            };
 
             return res.status(200).json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify(response))
@@ -656,7 +988,12 @@ class CAdminPlanController {
 
         } catch (err) {
 
-            await transaction.rollback();
+            console.error('limitIncrease error:', err);
+
+            if (!transaction.finished) {
+                await transaction.rollback();
+            }
+
             response.status = 'FAIL';
             response.message = err.message;
 
@@ -764,6 +1101,155 @@ class CAdminPlanController {
             });
         }
     }
+    // static async moduleActivation(pa, response, res, decoded) {
+
+    //     const {
+    //         corporateId,
+    //         moduleId,
+    //         setUpId,
+    //         amount,
+    //         description,
+    //         paymentMethod,
+    //         referenceNo
+    //     } = pa;
+
+    //     const transaction = await sequelizeRDB.transaction();
+
+    //     try {
+
+    //         const corp = await PLRDBA01.findOne({
+    //             where: { A01F03: corporateId },
+    //             transaction
+    //         });
+
+    //         if (!corp) {
+    //             response.status = 'FAIL';
+    //             response.message = 'Corporate not found';
+    //             await transaction.rollback();
+    //             return res.status(404).json({
+    //                 encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+    //             });
+    //         }
+
+    //         const corpUnq = String(corp.A01F01).trim();
+
+    //         const parts = corporateId.split('-');
+    //         let sdbName =
+    //             parts.length === 3
+    //                 ? `${parts[0]}${parts[1]}${parts[2]}SDB`
+    //                 : `${parts[0]}${parts[1]}SDB`;
+
+    //         if (sdbName === 'PLP00001SDB')
+    //             sdbName = 'A00001SDB';
+
+    //         const admi = new ADMIController(sdbName);
+    //         const m81 = new M81Controller(sdbName);
+
+    //         /* 1️⃣ GET SUPER USER */
+    //         const superUser = await admi.findOne({
+    //             ADMIF06: 2,
+    //             ADMICORP: corpUnq
+    //         });
+
+    //         if (!superUser) {
+    //             response.status = 'FAIL';
+    //             response.message = 'Super user not found';
+    //             await transaction.rollback();
+    //             return res.status(400).json({
+    //                 encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+    //             });
+    //         }
+
+    //         /* 2️⃣ NORMALIZE INPUT (IMPORTANT) */
+
+    //         const modules = String(moduleId || '')
+    //             .split(',')
+    //             .map(m => m.trim())
+    //             .filter(Boolean);
+
+    //         const uniqueModules = [...new Set(modules)];
+
+    //         const setups = String(setUpId || '')
+    //             .split(',')
+    //             .map(s => s.trim())
+    //             .filter(Boolean);
+
+    //         const uniqueSetups = [...new Set(setups)];
+
+    //         /* 3️⃣ MODULE ACTIVATION */
+
+    //         if (uniqueModules.length > 0) {
+
+    //             let existingModules = superUser.ADMIMOD
+    //                 ? superUser.ADMIMOD.split(',').map(m => m.trim())
+    //                 : [];
+
+    //             const updatedModules = [...new Set([...existingModules, ...uniqueModules])];
+
+    //             await admi.update(
+    //                 { ADMIMOD: updatedModules.join(',') },
+    //                 { ADMIF00: superUser.ADMIF00 }
+    //             );
+    //         }
+
+    //         /* 4️⃣ SETUP ACTIVATION */
+
+    //         if (uniqueSetups.length > 0) {
+
+    //             const m81Row = await m81.findOne({
+    //                 M81UNQ: superUser.ADMIF00.toString()
+    //             });
+
+    //             let existingSetups = m81Row?.M81SID
+    //                 ? m81Row.M81SID.split(',').map(s => s.trim())
+    //                 : [];
+
+    //             const updatedSetups = [...new Set([...existingSetups, ...uniqueSetups])];
+
+    //             await m81.update(
+    //                 { M81SID: updatedSetups.join(',') },
+    //                 { M81UNQ: superUser.ADMIF00.toString() }
+    //             );
+    //         }
+
+    //         /* 5️⃣ PAYMENT ENTRY */
+    //         const prefix = getPrefix(decoded.roleId);
+    //         await PLRDBPYMT.create({
+    //             PYMT01: corporateId,
+    //             PYMT02: 0,
+    //             // PYMT03: referenceNo || ('ADMIN_MOD_' + Date.now()),
+    //             PYMT03: referenceNo || (`${prefix}_${Date.now()}`),
+    //             PYMT04: 'OFFLINE',
+    //             PYMT05: parseFloat(amount || 0),
+    //             PYMT06: 'SUCCESS',
+    //             PYMT07: paymentMethod || 'CASH',
+    //             PYMT09: description || `Modules: ${uniqueModules.join(',') || 'None'} | Setups: ${uniqueSetups.join(',') || 'None'}`,
+    //             PYMT10: corp.A01F13 || null
+    //         }, { transaction });
+
+    //         await transaction.commit();
+
+    //         response.status = 'SUCCESS';
+    //         response.message = 'Module / Setup activated successfully';
+
+    //         return res.status(200).json({
+    //             encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+    //         });
+
+    //     } catch (err) {
+
+    //         await transaction.rollback();
+
+    //         console.error(err);
+
+    //         response.status = 'FAIL';
+    //         response.message = 'Failed to activate module';
+
+    //         return res.status(500).json({
+    //             encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+    //         });
+    //     }
+    // }
     static async moduleActivation(pa, response, res, decoded) {
 
         const {
@@ -773,127 +1259,126 @@ class CAdminPlanController {
             amount,
             description,
             paymentMethod,
-            referenceNo
+            referenceNo,
+            fileBase64,
+            fileName
         } = pa;
 
         const transaction = await sequelizeRDB.transaction();
 
         try {
 
+            /* =========================
+               1️⃣ VALIDATE CORPORATE
+            ========================= */
             const corp = await PLRDBA01.findOne({
                 where: { A01F03: corporateId },
                 transaction
             });
 
             if (!corp) {
-                response.status = 'FAIL';
-                response.message = 'Corporate not found';
-                await transaction.rollback();
-                return res.status(404).json({
-                    encryptedResponse: encryptor.encrypt(JSON.stringify(response))
-                });
+                throw new Error('Corporate not found');
             }
 
-            const corpUnq = String(corp.A01F01).trim();
-
-            const parts = corporateId.split('-');
-            let sdbName =
-                parts.length === 3
-                    ? `${parts[0]}${parts[1]}${parts[2]}SDB`
-                    : `${parts[0]}${parts[1]}SDB`;
-
-            if (sdbName === 'PLP00001SDB')
-                sdbName = 'A00001SDB';
-
-            const admi = new ADMIController(sdbName);
-            const m81 = new M81Controller(sdbName);
-
-            /* 1️⃣ GET SUPER USER */
-            const superUser = await admi.findOne({
-                ADMIF06: 2,
-                ADMICORP: corpUnq
-            });
-
-            if (!superUser) {
-                response.status = 'FAIL';
-                response.message = 'Super user not found';
-                await transaction.rollback();
-                return res.status(400).json({
-                    encryptedResponse: encryptor.encrypt(JSON.stringify(response))
-                });
-            }
-
-            /* 2️⃣ NORMALIZE INPUT (IMPORTANT) */
-
+            /* =========================
+               2️⃣ VALIDATE INPUT
+            ========================= */
             const modules = String(moduleId || '')
                 .split(',')
                 .map(m => m.trim())
                 .filter(Boolean);
-
-            const uniqueModules = [...new Set(modules)];
 
             const setups = String(setUpId || '')
                 .split(',')
                 .map(s => s.trim())
                 .filter(Boolean);
 
-            const uniqueSetups = [...new Set(setups)];
-
-            /* 3️⃣ MODULE ACTIVATION */
-
-            if (uniqueModules.length > 0) {
-
-                let existingModules = superUser.ADMIMOD
-                    ? superUser.ADMIMOD.split(',').map(m => m.trim())
-                    : [];
-
-                const updatedModules = [...new Set([...existingModules, ...uniqueModules])];
-
-                await admi.update(
-                    { ADMIMOD: updatedModules.join(',') },
-                    { ADMIF00: superUser.ADMIF00 }
-                );
+            if (modules.length === 0 && setups.length === 0) {
+                throw new Error('At least one module or setup is required');
             }
 
-            /* 4️⃣ SETUP ACTIVATION */
+            /* =========================
+               3️⃣ GET USER (INTERNAL ID)
+            ========================= */
+            const userRecord = await EP_USER.findOne({
+                where: {
+                    UTF04: decoded.userId,
+                    UTF07: 'N'
+                },
+                transaction
+            });
 
-            if (uniqueSetups.length > 0) {
-
-                const m81Row = await m81.findOne({
-                    M81UNQ: superUser.ADMIF00.toString()
-                });
-
-                let existingSetups = m81Row?.M81SID
-                    ? m81Row.M81SID.split(',').map(s => s.trim())
-                    : [];
-
-                const updatedSetups = [...new Set([...existingSetups, ...uniqueSetups])];
-
-                await m81.update(
-                    { M81SID: updatedSetups.join(',') },
-                    { M81UNQ: superUser.ADMIF00.toString() }
-                );
+            if (!userRecord) {
+                throw new Error('User not found');
             }
 
-            /* 5️⃣ PAYMENT ENTRY */
-            const prefix = getPrefix(decoded.roleId);
-            await PLRDBPYMT.create({
-                PYMT01: corporateId,
-                PYMT02: 0,
-                // PYMT03: referenceNo || ('ADMIN_MOD_' + Date.now()),
-                PYMT03: referenceNo || (`${prefix}_${Date.now()}`),
-                PYMT04: 'OFFLINE',
-                PYMT05: parseFloat(amount || 0),
-                PYMT06: 'SUCCESS',
-                PYMT07: paymentMethod || 'CASH',
-                PYMT09: description || `Modules: ${uniqueModules.join(',') || 'None'} | Setups: ${uniqueSetups.join(',') || 'None'}`,
-                PYMT10: corp.A01F13 || null
+            const userInternalId = userRecord.UTF01;
+
+            /* =========================
+               4️⃣ CREATE REQUEST (🔥 CORE)
+            ========================= */
+            const request = await EP_PAYREQ.create({
+                PRQF01: corporateId,
+                PRQF02: 'MODULE',
+
+                PRQF03: JSON.stringify({
+                    moduleId: modules,
+                    setUpId: setups
+                }),
+
+                PRQF04: JSON.stringify({
+                    paymentMethod,
+                    referenceNo,
+                    amount: Number(amount || 0),
+                    requestedAt: new Date().toISOString()
+                }),
+
+                PRQF05: Number(amount || 0),
+                PRQF06: description || `Modules: ${modules.join(',')} | Setups: ${setups.join(',')}`,
+
+                PRQF07: 'P',
+                PRQF08: userInternalId
+
             }, { transaction });
 
-            await transaction.commit();
+            /* =========================
+               5️⃣ STORE FILE (OPTIONAL)
+            ========================= */
+            if (fileBase64) {
 
+                const file = await EP_FILE.create({
+                    FILE02: fileName || 'payment-proof.pdf',
+                    FILE03: fileBase64,
+                    FILE04: userInternalId,
+                    FILE06: 'Module activation payment proof',
+                    FILE07: 'PR',
+                    FILE08: request.PRQF00,
+                    FILE09: corporateId
+                }, { transaction });
+
+                await EP_PAYREQ.update({
+                    PRQF12: file.FILE01
+                }, {
+                    where: { PRQF00: request.PRQF00 },
+                    transaction
+                });
+            }
+
+            /* =========================
+               6️⃣ COMMIT
+            ========================= */
+            if (!transaction.finished) {
+                await transaction.commit();
+            }
+
+            /* =========================
+               7️⃣ RESPONSE
+            ========================= */
             response.status = 'SUCCESS';
-            response.message = 'Module / Setup activated successfully';
+            response.message = 'Module activation request submitted for approval';
+            response.data = {
+                requestId: request.PRQF00
+            };
 
             return res.status(200).json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify(response))
@@ -901,12 +1386,14 @@ class CAdminPlanController {
 
         } catch (err) {
 
-            await transaction.rollback();
+            console.error('moduleActivation error:', err);
 
-            console.error(err);
+            if (!transaction.finished) {
+                await transaction.rollback();
+            }
 
             response.status = 'FAIL';
-            response.message = 'Failed to activate module';
+            response.message = err.message;
 
             return res.status(500).json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify(response))
@@ -1265,6 +1752,110 @@ class CAdminPlanController {
             return res.status(500).json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify(response))
             });
+        }
+    }
+
+    static async approve(pa, response, res, decoded) {
+        const { requestId, decision } = pa;
+        const transaction = await sequelizeRDB.transaction()
+        try {
+            if (![A, R].includes(decision)) {
+                throw new Error("invalid decision");
+            }
+            const reqRow = await EP_PAYREQ.findOne({
+                where: { PRQF00: requestId },
+                transaction
+            });
+            if (!reqRow) { throw new Error("request not found ") }
+
+
+            if (reqRow.PRQF07 !== 'P') {
+                throw new Error('Request already processed');
+            }
+
+            const userRecord = await EP_USER.findOne({
+                where: {
+                    UTF04: decoded.userId,
+                    UTF07: "N"
+                },
+                transaction
+            });
+            if (!userRecord) throw new Error('user not found')
+
+            const approverID = userRecord.UTF01;
+
+            if (decision === 'R') {
+                await EP_PAYREQ.update({
+                    PRQF07: 'R',
+                    PRQF09: approverID,
+                    PRQF11: ''
+                },
+                    {
+                        where: {
+                            PRQF00: requestId
+                        },
+                        transaction
+                    });
+                    await transaction.commit();
+
+                    response.status = 'SUCCESS';
+                    response.message = 'Request rejected'
+
+                    return res.status(200).json({
+                        encryptedResponse:encryptor.encrypt(JSON.stringify(response))
+                    })
+            }
+
+            const type = reqRow.PRQF02;
+
+            function safeParse(json){
+                try {
+                    return typeof json === 'string'? JSON.parse(json):json;
+                } catch (error) {
+                    return {}
+                }
+            }
+            const payload = safeParse(reqRow.PRQF03);
+            const payment = safeParse(reqRow.PRQF04) || {};
+
+            await PLRDBPYMT.create({
+                PYMT00:corporateId,
+                PYMT02:0
+            },{
+                transaction
+            })
+
+            await EP_PAYREQ.update({
+                PRQF07:'A',
+                PRQF09:approverID,
+                PRQF11:''
+            },{
+                where: {PRQF00:requestId},
+                transaction
+            })
+
+            await transaction.commit();
+
+            response.status = 'SUCCESS',
+            response.message = 'request approved successfull'
+
+            return res.status(200).json({
+                encryptedResponse:encryptor.encrypt(JSON.stringify(response))
+            })
+        } catch (error) {
+            console.error('approve request');
+
+            if(!transaction.finished){
+                await transaction.rollback();
+
+            }
+
+            response.status = 'fail',
+            response.message = err.message
+
+            return res.status(500).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+            })
         }
     }
 }

@@ -223,10 +223,12 @@ class handleCompany {
                                 oM00.oEntDict["M00"].DEDATE = endDate; //MApp.DTOS(endDate, true);   // Financial year end date
                                 oDic = await oM00.GetDictionary(decoded, qS, oUser.lCode, '', oYear);
                                 let path = await PLRDBA01.findOne({
-                                    A01F03: decoded.corpId
+                                    where: {
+                                        A01F03: decoded.corpId
+                                    }
                                 })
                                 let formattedCmpNo = CmpNo.toString().padStart(4, '0');
-                                oDic["M00"]._CMPLOGO = `${path.FTPPATH}${decoded.corpId}/${formattedCmpNo}/images/${oDic["M00"]._CMPLOGO}`;
+                                oDic ["M00"]._CMPLOGO = `${path.FTPPATH}/${decoded.corpId}/${formattedCmpNo}/images/${oDic["M00"]._CMPLOGO}`;
                             }
                             //M00 Entry
                         }
@@ -305,7 +307,7 @@ class handleCompany {
                             existingCmp = existingCmp.filter(item => item !== CmpNo.toString());
                             let UpdatedCmpList = await brc.update({
                                 BRCCOMP: existingCmp.join(',')
-                            },{
+                            }, {
                                 BRCODE: branch.BRCODE
                             })
                         }
@@ -389,9 +391,15 @@ class handleCompany {
             response.message = 'No token provided, authorization denied.'
             response.status = 'FAIL'
             const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-            return res.status(401).json({ encryptedResponse });
+            return res.status(403).json({ encryptedResponse });
         } else {
             decoded = await TokenService.validateToken(token);
+            if (!decoded) {
+                response.message = 'Token Expired'
+                response.status = 'FAIL'
+                const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                return res.status(403).json({ encryptedResponse });
+            }
         }
         let sdbSeq = (decoded.corpId).split('-');
         let sdbdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
@@ -573,7 +581,7 @@ class handleCompany {
                             return res.status(400).json({ encryptedResponse: encryptedResponse });
                         }
                     }
-                    let saveCmp = await cMaster.SaveCompany(decoded.corpId, '', '', false, '',true);
+                    let saveCmp = await cMaster.SaveCompany(decoded.corpId, '', '', false, '', true);
                     cSData = JSON.parse(cSData);
                     if (!saveCmp.result) {
                         // let BRCOntroller = new BranchController(false, 'A', '', `${saveCmp.CmpNum}-HOME-BRC`, cSData["M00"]._16, '', decoded.corpId, 'Y', saveCmp.CmpNum)

@@ -190,7 +190,7 @@ class WalletController {
     /* =========================
        🏦 WITHDRAW REQUEST
     ========================= */
-   
+
     static async requestWithdraw(req, res) {
         try {
 
@@ -247,7 +247,8 @@ class WalletController {
                 await EP_FILE.create({
                     FILE02: req.file.originalname,
                     FILE03: base64,
-                    FILE04: dealerId
+                    FILE04: dealerId,
+                    FILE08: txn.TRN01
                 });
             }
 
@@ -339,7 +340,43 @@ class WalletController {
             });
         }
     }
-   
+    static async getFileByTransaction(req, res) {
+        try {
+            const token = req.headers['authorization']?.split(' ')[1];
+            const decoded = await TokenService.validateToken(token);
+
+            const roleId = Number(decoded.roleId);
+
+            /* =========================
+               🔐 ADMIN ONLY ACCESS
+            ========================= */
+
+            if (![1, 2].includes(roleId)) {
+                return res.status(403).send("Only admin can view this file");
+            }
+
+            const { trnId } = req.params;
+
+            const file = await EP_FILE.findOne({
+                where: { FILE08: trnId }
+            });
+
+            if (!file) {
+                return res.status(404).send("File not found");
+            }
+
+            const buffer = Buffer.from(file.FILE03, 'base64');
+
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `inline; filename=${file.FILE02}`);
+
+            return res.send(buffer);
+
+        } catch (err) {
+            return res.status(500).send(err.message);
+        }
+    }
+
     static async getDealerTransactions(res, decoded) {
         try {
 
@@ -360,22 +397,38 @@ class WalletController {
                1️⃣ RAW QUERY (JOIN)
             ========================= */
 
+            //     const rows = await sequelizeRDB.query(`
+            //     SELECT 
+            //         t.*,
+            //         u.UTF02 AS dealerName
+            //     FROM EP_TRNS t
+            //     LEFT JOIN EP_USER u 
+            //         ON t.TRN02 = u.UTF01
+            //     WHERE ${whereClause}
+            //     ORDER BY t.TRN01 DESC
+            // `, {
+            //         type: Sequelize.QueryTypes.SELECT
+            //     });
+
             const rows = await sequelizeRDB.query(`
-            SELECT 
-                t.*,
-                u.UTF02 AS dealerName
-            FROM EP_TRNS t
-            LEFT JOIN EP_USER u 
-                ON t.TRN02 = u.UTF01
-            WHERE ${whereClause}
-            ORDER BY t.TRN01 DESC
-        `, {
+    SELECT 
+        t.*,
+        u.UTF02 AS dealerName,
+        f.FILE02 AS fileName,
+        f.FILE03 AS fileBase64
+    FROM EP_TRNS t
+    LEFT JOIN EP_USER u 
+        ON t.TRN02 = u.UTF01
+    LEFT JOIN EP_FILE f
+        ON t.TRN01 = f.FILE08
+    WHERE ${whereClause}
+    ORDER BY t.TRN01 DESC
+`, {
                 type: Sequelize.QueryTypes.SELECT
             });
-
             /* =========================
-               2️⃣ SUMMARY
-            ========================= */
+                   2️⃣ SUMMARY
+                ========================= */
 
             let totalRequested = 0;
             let totalApproved = 0;
@@ -390,17 +443,36 @@ class WalletController {
                 if (t.TRN05 === 'COMPLETED') totalApproved += amount;
                 if (t.TRN05 === 'PENDING') totalPending += amount;
 
+                // return {
+                //     id: t.TRN01,
+                //     dealerId: t.TRN02,
+                //     dealerName: t.dealerName || null, // 🔥 FIXED
+                //     amount,
+                //     method: t.TRN04,
+                //     status: t.TRN05,
+                //     requestDate: t.TRN07,
+                //     approvedDate: t.TRN06,
+                //     reference: t.TRN09,
+                //     type: t.TRN15,
+                //     fileUrl: `/file/${t.TRN01}`
+                // };
                 return {
                     id: t.TRN01,
                     dealerId: t.TRN02,
-                    dealerName: t.dealerName || null, // 🔥 FIXED
+                    dealerName: t.dealerName || null,
                     amount,
                     method: t.TRN04,
                     status: t.TRN05,
                     requestDate: t.TRN07,
                     approvedDate: t.TRN06,
                     reference: t.TRN09,
-                    type: t.TRN15
+                    type: t.TRN15,
+
+                    // 🔐 ONLY ADMIN GETS FILE
+                    file: [1, 2].includes(roleId) && t.fileBase64 ? {
+                        fileName: t.fileName,
+                        base64: t.fileBase64
+                    } : null
                 };
             });
 
