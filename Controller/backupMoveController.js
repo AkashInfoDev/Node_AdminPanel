@@ -248,8 +248,14 @@ const backupToDrive = async (req, res) => {
 
         /* ========= DOWNLOAD ========= */
         // const localDir = path.join("/tmp", "downloads", fileName);
-        const localDir = path.join("/tmp", "downloads"); // directory only
-        await fs.promises.mkdir(localDir, { recursive: true });
+        const localDir = path.join("/tmp", "downloads");
+
+        try {
+            await fs.promises.mkdir(localDir, { recursive: true });
+            console.log("Directory created:", localDir);
+        } catch (err) {
+            console.error("Error creating directory:", err);
+        }
 
         const bakPath = path.join(localDir, fileName); // full path including file
         // URL to download
