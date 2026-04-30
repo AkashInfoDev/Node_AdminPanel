@@ -242,7 +242,9 @@ const backupToDrive = async (req, res) => {
             BACKUP DATABASE [${databaseName}]
             TO DISK = 'C:\\files\\${databaseName}.bak'
             WITH FORMAT, INIT, COPY_ONLY
-        `);
+        `,{
+            type: QueryTypes.RAW
+        });
 
         /* ========= DOWNLOAD ========= */
         // const localDir = path.join("/tmp", "downloads", fileName);
