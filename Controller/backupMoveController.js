@@ -248,7 +248,7 @@ const backupToDrive = async (req, res) => {
 
         /* ========= DOWNLOAD ========= */
         // const localDir = path.join("/tmp", "downloads", fileName);
-        const localDir = path.join("..", "..", "..", "downloads", fileName);
+        // const localDir = path.join("..", "..", "..", "downloads", fileName);
 
         // try {
         //     await fs.promises.mkdir(localDir, { recursive: true });
@@ -257,8 +257,10 @@ const backupToDrive = async (req, res) => {
         //     console.error("Error creating directory:", err);
         // }
 
-        const bakPath = path.join(localDir, fileName); // full path including file
+        // const bakPath = path.join(localDir, fileName); // full path including file
         // URL to download
+        let localDir;
+        let bakPath;
         const fileUrl = `https://files.epluserp.cloud/${fileName}`;
 
         await new Promise((resolve, reject) => {
@@ -270,8 +272,8 @@ const backupToDrive = async (req, res) => {
                 }
 
                 // Define the directory and file path for saving the file
-                const localDir = path.join("downloads", fileName);
-                const bakPath = path.join(localDir, fileName);
+                localDir = path.join("..", "downloads", fileName);
+                bakPath = path.join(localDir, fileName);
                 fs.promises.mkdir(localDir, { recursive: true })
                     .then(() => {
                         const fileStream = fs.createWriteStream(bakPath);
