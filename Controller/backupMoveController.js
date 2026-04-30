@@ -272,7 +272,7 @@ const backupToDrive = async (req, res) => {
                 }
 
                 // Define the directory and file path for saving the file
-                localDir = path.join("..", "..", "downloads", fileName);
+                localDir = path.join("..", "..", "downloads");
                 bakPath = path.join(localDir, fileName);
                 fs.promises.mkdir(localDir, { recursive: true })
                     .then(() => {
