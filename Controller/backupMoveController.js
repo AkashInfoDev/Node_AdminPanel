@@ -240,7 +240,7 @@ const backupToDrive = async (req, res) => {
         /* ========= BACKUP ========= */
         await sequelizeMASTER.query(`
             BACKUP DATABASE [${databaseName}]
-            TO DISK = 'C:\\files\\${databaseName}.bak'
+            TO DISK =  N'C:\\files\\${databaseName}.bak'
             WITH FORMAT, INIT, COPY_ONLY
         `,{
             type: QueryTypes.RAW
