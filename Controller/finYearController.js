@@ -641,9 +641,12 @@ const backupZipToDrive = async (req, res) => {
            6️⃣ FETCH EXISTING TABLES (ONCE)
         =============================== */
         const existingTablesRaw = await sequelizeMASTER.query(`
+            USE ${sourceDatabase};
             SELECT TABLE_NAME
-            FROM ${sourceDatabase}.INFORMATION_SCHEMA.TABLES
-        `, { type: QueryTypes.SELECT });
+            FROM INFORMATION_SCHEMA.TABLES;
+            `, {
+                type: QueryTypes.SELECT
+            });
 
         const tableSet = new Set(existingTablesRaw.map(t => t.TABLE_NAME));
 
@@ -778,7 +781,7 @@ async function cleanupFiles(zipFilePath, backupFolder) {
     try {
         await Promise.all([
             fs.promises.rm(backupFolder, { recursive: true, force: true }),
-            fs.promises.unlink(zipFilePath).catch(() => {})
+            fs.promises.unlink(zipFilePath).catch(() => { })
         ]);
     } catch (err) {
         console.error("Cleanup error:", err);
