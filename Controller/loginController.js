@@ -1601,11 +1601,12 @@ class UserController {
                         let m82 = new M82Controller(companyResult.SDBdbname);
                         await m82.create(cUserID, parseInt(companyResult.CmpNum), '', '', '', '', '', '', '', 'Y', (new Date().getFullYear() % 100).toString(), 'A');
                         let cmp = new CMPController(companyResult.SDBdbname);
-                        await cmp.create(parseInt(companyResult.CmpNum), companyName, 'SQL', 'No Group', cUserID, formatDate(new Date()), '45.195.159.72', 'aiAdmin', 'aaBC@#23', 'DATA', null);
                         // Fetch user info based on company name
                         let userInfo = await PLRDBA01.findOne({
                             where: { A01F02: companyName }
                         });
+                        await cmp.create(parseInt(companyResult.CmpNum), companyName, 'SQL', 'No Group', cUserID, formatDate(new Date()), userInfo.A01F52, userInfo.A01F53, userInfo.A01F54, 'DATA', null);
+
 
                         // Fetch all existing admin users
                         let existing = await admi.findAll();

@@ -228,7 +228,7 @@ class handleCompany {
                                     }
                                 })
                                 let formattedCmpNo = CmpNo.toString().padStart(4, '0');
-                                oDic ["M00"]._CMPLOGO = `${path.FTPPATH}/${decoded.corpId}/${formattedCmpNo}/images/${oDic["M00"]._CMPLOGO}`;
+                                oDic["M00"]._CMPLOGO = `${path.FTPPATH}/${decoded.corpId}/${formattedCmpNo}/images/${oDic["M00"]._CMPLOGO}`;
                             }
                             //M00 Entry
                         }
@@ -474,6 +474,11 @@ class handleCompany {
                     }
                 }
             }
+            let purchasedCmp = await PLRDBA01.findOne({
+                where: {
+                    A01F03: decoded.corpId
+                }
+            });
             if (cSData) {
                 // cSData["M00"]._CMPLOGO = req.body.img
                 let cMaster = new CmpMaster(decoded.userId, decoded.corpId, LangType, cAction, JSON.parse(cSData), decoded, sdbdbname);
@@ -489,6 +494,11 @@ class handleCompany {
                     let GST00006 = await dbConn.query(`UPDATE YR${listOfYr[0].FIELD01}F02 SET FIELD07 = '${jsonData['M00']['_16']}' WHERE FIELD01 = 'GST00006'`, {
                         type: QueryTypes.UPDATE
                     });
+                    await cmp.update({
+                        CMPF02: jsonData['M00'].FIELD02
+                    },{
+                        CMPF01: saveCmp.CmpNum
+                    })
                     if (!saveCmp.result) {
                         if (req.files[0]?.originalname) {
                             let uploadFile = new FTPService(decoded, req.files[0].originalname, saveCmp.CmpNum);
@@ -568,11 +578,6 @@ class handleCompany {
                         let totCMP = await m82.findAll({
                             M82ADA: 'A'
                         });
-                        let purchasedCmp = await PLRDBA01.findOne({
-                            where: {
-                                A01F03: decoded.corpId
-                            }
-                        });
 
                         if (purchasedCmp.A01CMP <= totCMP.length) {
                             response.status = 'Fail'
@@ -630,7 +635,7 @@ class handleCompany {
                         await rel.create(admin.ADMICORP, admin.ADMIF01, parseInt(saveCmp.CmpNum), '');
                         await m82.create(cUserID, parseInt(saveCmp.CmpNum), '', '', '', '', '', '', '', 'N', (new Date().getFullYear() % 100).toString(), 'A'
                         );
-                        await cmp.create(parseInt(saveCmp.CmpNum), cSData['M00'].FIELD02, 'SQL', cSData['M00'].FIELD11, cUserID, formatDate(new Date()), '45.195.159.72', 'aiAdmin', 'aaBC@#23', 'DATA', null
+                        await cmp.create(parseInt(saveCmp.CmpNum), cSData['M00'].FIELD02, 'SQL', cSData['M00'].FIELD11, cUserID, formatDate(new Date()), purchasedCmp.A01F52, purchasedCmp.A01F53, purchasedCmp.A01F54, 'DATA', null
                         );
                         await PLRDBGAO.create({
                             GAOF01: decoded.corpId,
