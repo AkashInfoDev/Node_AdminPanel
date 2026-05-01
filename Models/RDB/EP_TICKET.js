@@ -45,6 +45,12 @@ module.exports = (sequelize, DataTypes) => {
         TKT09: {
             type: DataTypes.DATE,
             allowNull: true
+        },
+
+        // ✅ ADD THIS
+        TKT10: {
+            type: DataTypes.INTEGER,
+            allowNull: true
         }
 
     }, {
