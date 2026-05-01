@@ -215,10 +215,11 @@ async function sendLogOutMail({ to, corpId, otp, subject }) {
 }
 
 const sendEmailWithAttachment = async (to, attachmentPath, filename, smtpConfig = {}) => {
+    const port = Number(smtpConfig._PORTNO || smtpConfig.port);
     const transporter = nodemailer.createTransport({
         host: smtpConfig._EMSERVER ? smtpConfig._EMSERVER : smtpConfig.host, // not _EMSERVER
         port: smtpConfig._PORTNO ? smtpConfig._PORTNO : Number(smtpConfig.port), // ensure it's a number
-        secure: (smtpConfig._PORTNO ? smtpConfig._PORTNO : Number(smtpConfig.port)) === 465, //secure: smtpConfig.port == 587 ? false : true,//Number(smtpConfig.port) === 465, // SSL for 465
+        secure: port === 465, //secure: smtpConfig.port == 587 ? false : true,//Number(smtpConfig.port) === 465, // SSL for 465
         auth: {
             user: smtpConfig._EMFROM ? smtpConfig._EMFROM : smtpConfig.user, // not _EMFROM
             pass: smtpConfig._EMPASSWD ? smtpConfig._EMPASSWD : smtpConfig.pass  // not _EMPASSWD
@@ -300,6 +301,7 @@ const sendEmailWithAttachment = async (to, attachmentPath, filename, smtpConfig 
         return info;
 
     } catch (error) {
+        console.log(error);
         console.error("❌ SMTP ERROR:", {
             message: error.message,
             code: error.code,
