@@ -23,6 +23,7 @@ const { sendEmailWithAttachment } = require('../Services/mailServices');
 const { generateDatabaseName } = require('../Services/queryService');
 const { error } = require('console');
 const encryptor = new Encryptor();
+const pLimit = require("p-limit");
 
 /* ================= GOOGLE OAUTH ================= */
 const oauth2Client = new google.auth.OAuth2(
@@ -228,6 +229,336 @@ function validateEmails(emailArray) {
     }
 }
 
+// const backupZipToDrive = async (req, res) => {
+
+//     const sendResponse = (statusCode, status, message, data = null) => {
+//         const response = { status, message, data };
+//         const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+//         return res.status(statusCode).json({ encryptedResponse });
+//     };
+
+//     // let response = { data: null, message: '', status: 'Success' };
+//     // let encryptedResponse;
+//     const ftpClient = new ftp.Client();
+//     ftpClient.ftp.verbose = false;
+
+//     try {
+
+//         /* ===============================
+//            1️⃣ PAYLOAD VALIDATION
+//         =============================== */
+
+//         if (!req.body.pa) {
+//             return sendResponse(400, "FAIL", "Missing payload");
+//         }
+
+//         const parameterString = encryptor.decrypt(req.body.pa);
+//         const decodedParam = decodeURIComponent(parameterString);
+//         const p1 = JSON.parse(decodedParam);
+
+//         // const { companyID, yearNo, action } = p1;
+//         // const { companyID, yearNo, action, emails } = p1;
+//         const { companyID, yearNo, action, emails, smtp } = p1;
+
+//         if (!companyID || !yearNo) {
+//             return sendResponse(400, "FAIL", "companyID and yearNo required");
+//         }
+
+
+//         /* ===============================
+//            2️⃣ TOKEN VALIDATION
+//         =============================== */
+
+//         const token = req.headers.authorization?.split(" ")[1];
+
+//         if (!token) {
+//             return sendResponse(401, "FAIL", "Authorization token missing");
+//         }
+
+//         const decoded = await validateToken(token);
+
+//         if (!decoded || !decoded.corpId) {
+//             return sendResponse(401, "FAIL", "Invalid token or corporateID missing");
+//         }
+//         const corporateID = decoded.corpId;
+
+//         let refresh_token = null;
+
+//         if (action === "G") {
+
+//             console.log("🔍 Fetching Google token from DB...");
+
+//             const corpData = await PLRDBA01.findOne({
+//                 where: { A01F03: corporateID }
+//             });
+
+//             if (!corpData || !corpData.A01F18?.trim()) {
+//                 throw new Error("Auth token not found for this corporate");
+//             }
+
+//             refresh_token = corpData.A01F18.trim();
+
+//             console.log("✅ Token fetched (length):", refresh_token.length);
+//         }
+//         /* ===============================
+//            3️⃣ GENERATE DATABASE NAME
+//         =============================== */
+
+//         const corporateLastFive = corporateID.slice(-5);
+//         const formattedCompanyID = companyID.toString().padStart(4, "0");
+
+//         const sourceDatabase = `A${corporateLastFive}CMP${formattedCompanyID}`;
+//         const newDatabaseName = `CMP${formattedCompanyID}_${yearNo}`;
+
+//         console.log("Source DB:", sourceDatabase);
+//         console.log("Temp DB:", newDatabaseName);
+
+//         /* ===============================
+//            4️⃣ FETCH TABLE LIST
+//         =============================== */
+
+//         const tableData = await PLSYS14.findAll({
+//             where: { S14F06: { [Op.in]: ['Y', 'F'] } },
+//             attributes: ['S14F02']
+//         });
+
+//         if (!tableData || tableData.length === 0) {
+//             return sendResponse(404, "FAIL", "No tables configured for backup");
+//         }
+
+
+
+//         const tempDir = path.join("/tmp", "downloads");
+//         console.log("Temp Diractory", tempDir);
+
+
+//         if (!fs.existsSync(tempDir)) {
+//             fs.mkdirSync(tempDir, { recursive: true });
+//         }
+
+//         // const backupFilePath = path.join(tempDir, `${newDatabaseName}.bak`);
+
+//         const backupFolder = path.join(tempDir, newDatabaseName);
+
+//         if (!fs.existsSync(backupFolder)) {
+//             fs.mkdirSync(backupFolder, { recursive: true });
+//         }
+
+//         /* ===============================
+//         6️⃣ EXPORT TABLES TO SQL FILES
+//         =============================== */
+
+//         for (const row of tableData) {
+
+//             const tablePrefix = row.S14F02.trim();
+//             const tableName = `YR${yearNo}${tablePrefix}`;
+
+//             console.log(`Processing ${tableName}`);
+
+//             const check = await sequelizeMASTER.query(`
+//                 SELECT 1
+//                 FROM ${sourceDatabase}.INFORMATION_SCHEMA.TABLES
+//                 WHERE TABLE_NAME = '${tableName}'
+//                 `);
+
+//             if (check[0].length === 0) {
+//                 console.log(`Skipping missing table: ${tableName}`);
+//                 continue;
+//             }
+
+//             await exportTableData(sourceDatabase, tableName, backupFolder);
+//         }
+//         await exportCMPF01Data(sourceDatabase, backupFolder, yearNo);
+
+
+//         const zipFilePath = path.join(tempDir, `${newDatabaseName}.zip`);
+//         await zipFolder(backupFolder, zipFilePath);
+
+//         if (!fs.existsSync(zipFilePath)) {
+//             throw new Error("Zip file creation failed");
+//         }
+
+//         /* ===============================
+//            🔟 GOOGLE DRIVE AUTH
+//         =============================== */
+
+
+
+//         if (action === "G") {
+//             if (!refresh_token) {
+//                 throw new Error("Google Drive token missing");
+//             }
+//             oauth2Client.setCredentials({ refresh_token });
+//         }
+
+//         let comp = null;
+
+//         if (action === "G") {
+//             const root = await getOrCreateFolder("eplus");
+//             const corp = await getOrCreateFolder(corporateID, root);
+//             comp = await getOrCreateFolder(companyID.toString(), corp);
+//         }
+
+//         const zipFileName = path.basename(zipFilePath);
+//         if (action === "G") {
+//             /* ===============================
+//                1️⃣1️⃣ DELETE OLD FILE FROM DRIVE
+//             =============================== */
+
+//             const existing = await drive.files.list({
+//                 q: `name='${zipFileName}' and '${comp}' in parents and trashed=false`,
+//                 fields: "files(id)"
+//             });
+
+//             for (const f of existing.data.files) {
+//                 await drive.files.delete({ fileId: f.id });
+//             }
+
+//             /* ===============================
+//                1️⃣2️⃣ UPLOAD TO DRIVE
+//             =============================== */
+
+//             const driveFile = await drive.files.create({
+//                 requestBody: {
+//                     name: zipFileName,
+//                     parents: [comp]
+//                 },
+//                 media: {
+//                     mimeType: "application/zip",
+//                     body: fs.createReadStream(zipFilePath)
+//                 },
+//                 fields: "id"
+//             });
+
+//             /* ===============================
+//                1️⃣3️⃣ CLEANUP LOCAL FILES
+//             =============================== */
+
+//             if (fs.existsSync(zipFilePath)) {
+//                 fs.unlinkSync(zipFilePath);
+//             }
+
+//             if (fs.existsSync(backupFolder)) {
+//                 fs.rmSync(backupFolder, { recursive: true, force: true });
+//             }
+//         } else if (action === "E") {
+
+//             const fileName = path.basename(zipFilePath);
+
+//             if (!emails) {
+//                 throw new Error("Emails are required for mail action");
+//             }
+
+//             // ✅ Convert + validate
+//             let emailArray = Array.isArray(emails)
+//                 ? emails.map(e => e.trim())
+//                 : emails.split(",").map(e => e.trim());
+
+//             validateEmails(emailArray);
+
+//             const emailList = emailArray.join(",");
+
+//             console.log("📧 Sending backup to:", emailList);
+
+//             // ✅ Send mail with SMTP support
+//             await sendEmailWithAttachment(
+//                 emailList,
+//                 zipFilePath,
+//                 fileName,
+//                 smtp
+//             );
+
+//             /* CLEANUP */
+//             if (fs.existsSync(zipFilePath)) {
+//                 fs.unlinkSync(zipFilePath);
+//             }
+
+//             if (fs.existsSync(backupFolder)) {
+//                 fs.rmSync(backupFolder, { recursive: true, force: true });
+//             }
+
+//             let response = {};
+
+//             response.status = "SUCCESS";
+//             response.message = "Backup sent to provided emails";
+
+//             encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+//             return res.status(200).json({ encryptedResponse });
+//         }
+//         else if (action === "D") {
+
+//             const fileName = path.basename(zipFilePath);
+
+//             // ✅ IMPORTANT: expose filename to frontend
+//             res.setHeader(
+//                 "Content-Disposition",
+//                 `attachment; filename="${fileName}"`
+//             );
+
+//             res.setHeader(
+//                 "Access-Control-Expose-Headers",
+//                 "Content-Disposition"
+//             );
+
+//             return res.download(zipFilePath, fileName, async (err) => {
+
+//                 if (err) {
+//                     console.error("Download error:", err);
+//                 }
+
+//                 /* ===============================
+//                    CLEANUP AFTER DOWNLOAD
+//                 =============================== */
+
+//                 try {
+//                     if (fs.existsSync(zipFilePath)) {
+//                         fs.unlinkSync(zipFilePath);
+//                     }
+
+//                     if (fs.existsSync(backupFolder)) {
+//                         fs.rmSync(backupFolder, { recursive: true, force: true });
+//                     }
+
+//                     console.log("🧹 Cleanup done after download");
+
+//                 } catch (cleanupErr) {
+//                     console.error("Cleanup error:", cleanupErr);
+//                 }
+//             });
+//         }
+
+//         /* ===============================
+//            1️⃣4️⃣ SUCCESS RESPONSE
+//         =============================== */
+
+//         return sendResponse(
+//             200,
+//             "SUCCESS",
+//             "Financial backup created successfully",
+//             {
+//                 corporateID,
+//                 companyID,
+//                 sourceDatabase,
+//                 backupDatabase: newDatabaseName
+//             }
+//         );
+
+//     } catch (err) {
+//         console.error("backupToDrive error:", err);
+
+//         return sendResponse(
+//             500,
+//             "FAIL",
+//             "Internal server error"
+//         );
+//     }
+//     //  finally {
+
+//     //     ftpClient.close();
+
+//     // }
+// };
+
 const backupZipToDrive = async (req, res) => {
 
     const sendResponse = (statusCode, status, message, data = null) => {
@@ -236,188 +567,145 @@ const backupZipToDrive = async (req, res) => {
         return res.status(statusCode).json({ encryptedResponse });
     };
 
-    // let response = { data: null, message: '', status: 'Success' };
-    // let encryptedResponse;
-    const ftpClient = new ftp.Client();
-    ftpClient.ftp.verbose = false;
-
     try {
-
         /* ===============================
            1️⃣ PAYLOAD VALIDATION
         =============================== */
-
         if (!req.body.pa) {
             return sendResponse(400, "FAIL", "Missing payload");
         }
 
         const parameterString = encryptor.decrypt(req.body.pa);
         const decodedParam = decodeURIComponent(parameterString);
-        const p1 = JSON.parse(decodedParam);
-
-        // const { companyID, yearNo, action } = p1;
-        // const { companyID, yearNo, action, emails } = p1;
-        const { companyID, yearNo, action, emails, smtp } = p1;
+        const { companyID, yearNo, action, emails, smtp } = JSON.parse(decodedParam);
 
         if (!companyID || !yearNo) {
             return sendResponse(400, "FAIL", "companyID and yearNo required");
         }
 
-
         /* ===============================
            2️⃣ TOKEN VALIDATION
         =============================== */
-
         const token = req.headers.authorization?.split(" ")[1];
-
         if (!token) {
             return sendResponse(401, "FAIL", "Authorization token missing");
         }
 
         const decoded = await validateToken(token);
-
-        if (!decoded || !decoded.corpId) {
-            return sendResponse(401, "FAIL", "Invalid token or corporateID missing");
+        if (!decoded?.corpId) {
+            return sendResponse(401, "FAIL", "Invalid token");
         }
+
         const corporateID = decoded.corpId;
 
+        /* ===============================
+           3️⃣ GOOGLE TOKEN (IF NEEDED)
+        =============================== */
         let refresh_token = null;
 
         if (action === "G") {
-
-            console.log("🔍 Fetching Google token from DB...");
-
             const corpData = await PLRDBA01.findOne({
                 where: { A01F03: corporateID }
             });
 
-            if (!corpData || !corpData.A01F18?.trim()) {
-                throw new Error("Auth token not found for this corporate");
+            if (!corpData?.A01F18?.trim()) {
+                throw new Error("Google token missing");
             }
 
             refresh_token = corpData.A01F18.trim();
-
-            console.log("✅ Token fetched (length):", refresh_token.length);
+            oauth2Client.setCredentials({ refresh_token });
         }
-        /* ===============================
-           3️⃣ GENERATE DATABASE NAME
-        =============================== */
 
+        /* ===============================
+           4️⃣ DATABASE NAMES
+        =============================== */
         const corporateLastFive = corporateID.slice(-5);
         const formattedCompanyID = companyID.toString().padStart(4, "0");
 
         const sourceDatabase = `A${corporateLastFive}CMP${formattedCompanyID}`;
         const newDatabaseName = `CMP${formattedCompanyID}_${yearNo}`;
 
-        console.log("Source DB:", sourceDatabase);
-        console.log("Temp DB:", newDatabaseName);
-
         /* ===============================
-           4️⃣ FETCH TABLE LIST
+           5️⃣ TABLE CONFIG
         =============================== */
-
         const tableData = await PLSYS14.findAll({
             where: { S14F06: { [Op.in]: ['Y', 'F'] } },
             attributes: ['S14F02']
         });
 
-        if (!tableData || tableData.length === 0) {
-            return sendResponse(404, "FAIL", "No tables configured for backup");
-        }
-
-
-
-        const tempDir = path.join("/tmp", "downloads");
-        console.log("Temp Diractory", tempDir);
-
-
-        if (!fs.existsSync(tempDir)) {
-            fs.mkdirSync(tempDir, { recursive: true });
-        }
-
-        // const backupFilePath = path.join(tempDir, `${newDatabaseName}.bak`);
-
-        const backupFolder = path.join(tempDir, newDatabaseName);
-
-        if (!fs.existsSync(backupFolder)) {
-            fs.mkdirSync(backupFolder, { recursive: true });
+        if (!tableData?.length) {
+            return sendResponse(404, "FAIL", "No tables configured");
         }
 
         /* ===============================
-        6️⃣ EXPORT TABLES TO SQL FILES
+           6️⃣ FETCH EXISTING TABLES (ONCE)
         =============================== */
+        const existingTablesRaw = await sequelizeMASTER.query(`
+            SELECT TABLE_NAME
+            FROM ${sourceDatabase}.INFORMATION_SCHEMA.TABLES
+        `, { type: QueryTypes.SELECT });
 
-        for (const row of tableData) {
+        const tableSet = new Set(existingTablesRaw.map(t => t.TABLE_NAME));
 
-            const tablePrefix = row.S14F02.trim();
-            const tableName = `YR${yearNo}${tablePrefix}`;
+        /* ===============================
+           7️⃣ PATH SETUP
+        =============================== */
+        const tempDir = path.join("/tmp", "downloads");
+        const backupFolder = path.join(tempDir, newDatabaseName);
+        const zipFilePath = path.join(tempDir, `${newDatabaseName}.zip`);
 
-            console.log(`Processing ${tableName}`);
+        await fs.promises.mkdir(backupFolder, { recursive: true });
 
-            const check = await sequelizeMASTER.query(`
-                SELECT 1
-                FROM ${sourceDatabase}.INFORMATION_SCHEMA.TABLES
-                WHERE TABLE_NAME = '${tableName}'
-                `);
+        /* ===============================
+           8️⃣ PARALLEL EXPORT (LIMITED)
+        =============================== */
+        const limit = pLimit(5); // tune based on server
 
-            if (check[0].length === 0) {
-                console.log(`Skipping missing table: ${tableName}`);
-                continue;
-            }
+        await Promise.all(
+            tableData.map(row =>
+                limit(async () => {
+                    const prefix = row.S14F02.trim();
+                    const tableName = `YR${yearNo}${prefix}`;
 
-            await exportTableData(sourceDatabase, tableName, backupFolder);
-        }
+                    if (!tableSet.has(tableName)) return;
+
+                    return exportTableData(sourceDatabase, tableName, backupFolder);
+                })
+            )
+        );
+
         await exportCMPF01Data(sourceDatabase, backupFolder, yearNo);
 
-
-        const zipFilePath = path.join(tempDir, `${newDatabaseName}.zip`);
+        /* ===============================
+           9️⃣ ZIP CREATION
+        =============================== */
         await zipFolder(backupFolder, zipFilePath);
 
-        if (!fs.existsSync(zipFilePath)) {
-            throw new Error("Zip file creation failed");
-        }
-
         /* ===============================
-           🔟 GOOGLE DRIVE AUTH
+           🔟 GOOGLE DRIVE
         =============================== */
-
-
-
-        if (action === "G") {
-            if (!refresh_token) {
-                throw new Error("Google Drive token missing");
-            }
-            oauth2Client.setCredentials({ refresh_token });
-        }
-
         let comp = null;
 
         if (action === "G") {
             const root = await getOrCreateFolder("eplus");
             const corp = await getOrCreateFolder(corporateID, root);
             comp = await getOrCreateFolder(companyID.toString(), corp);
-        }
 
-        const zipFileName = path.basename(zipFilePath);
-        if (action === "G") {
-            /* ===============================
-               1️⃣1️⃣ DELETE OLD FILE FROM DRIVE
-            =============================== */
+            const zipFileName = path.basename(zipFilePath);
 
             const existing = await drive.files.list({
                 q: `name='${zipFileName}' and '${comp}' in parents and trashed=false`,
                 fields: "files(id)"
             });
 
-            for (const f of existing.data.files) {
-                await drive.files.delete({ fileId: f.id });
-            }
+            // ✅ parallel delete
+            await Promise.all(
+                existing.data.files.map(f =>
+                    drive.files.delete({ fileId: f.id })
+                )
+            );
 
-            /* ===============================
-               1️⃣2️⃣ UPLOAD TO DRIVE
-            =============================== */
-
-            const driveFile = await drive.files.create({
+            await drive.files.create({
                 requestBody: {
                     name: zipFileName,
                     parents: [comp]
@@ -425,138 +713,77 @@ const backupZipToDrive = async (req, res) => {
                 media: {
                     mimeType: "application/zip",
                     body: fs.createReadStream(zipFilePath)
-                },
-                fields: "id"
-            });
-
-            /* ===============================
-               1️⃣3️⃣ CLEANUP LOCAL FILES
-            =============================== */
-
-            if (fs.existsSync(zipFilePath)) {
-                fs.unlinkSync(zipFilePath);
-            }
-
-            if (fs.existsSync(backupFolder)) {
-                fs.rmSync(backupFolder, { recursive: true, force: true });
-            }
-        } else if (action === "E") {
-
-            const fileName = path.basename(zipFilePath);
-
-            if (!emails) {
-                throw new Error("Emails are required for mail action");
-            }
-
-            // ✅ Convert + validate
-            let emailArray = Array.isArray(emails)
-                ? emails.map(e => e.trim())
-                : emails.split(",").map(e => e.trim());
-
-            validateEmails(emailArray);
-
-            const emailList = emailArray.join(",");
-
-            console.log("📧 Sending backup to:", emailList);
-
-            // ✅ Send mail with SMTP support
-            await sendEmailWithAttachment(
-                emailList,
-                zipFilePath,
-                fileName,
-                smtp
-            );
-
-            /* CLEANUP */
-            if (fs.existsSync(zipFilePath)) {
-                fs.unlinkSync(zipFilePath);
-            }
-
-            if (fs.existsSync(backupFolder)) {
-                fs.rmSync(backupFolder, { recursive: true, force: true });
-            }
-
-            let response = {};
-
-            response.status = "SUCCESS";
-            response.message = "Backup sent to provided emails";
-
-            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-            return res.status(200).json({ encryptedResponse });
-        }
-        else if (action === "D") {
-
-            const fileName = path.basename(zipFilePath);
-
-            // ✅ IMPORTANT: expose filename to frontend
-            res.setHeader(
-                "Content-Disposition",
-                `attachment; filename="${fileName}"`
-            );
-
-            res.setHeader(
-                "Access-Control-Expose-Headers",
-                "Content-Disposition"
-            );
-
-            return res.download(zipFilePath, fileName, async (err) => {
-
-                if (err) {
-                    console.error("Download error:", err);
-                }
-
-                /* ===============================
-                   CLEANUP AFTER DOWNLOAD
-                =============================== */
-
-                try {
-                    if (fs.existsSync(zipFilePath)) {
-                        fs.unlinkSync(zipFilePath);
-                    }
-
-                    if (fs.existsSync(backupFolder)) {
-                        fs.rmSync(backupFolder, { recursive: true, force: true });
-                    }
-
-                    console.log("🧹 Cleanup done after download");
-
-                } catch (cleanupErr) {
-                    console.error("Cleanup error:", cleanupErr);
                 }
             });
         }
 
         /* ===============================
-           1️⃣4️⃣ SUCCESS RESPONSE
+           1️⃣1️⃣ EMAIL
         =============================== */
+        else if (action === "E") {
 
+            if (!emails) throw new Error("Emails required");
+
+            const emailArray = Array.isArray(emails)
+                ? emails.map(e => e.trim())
+                : emails.split(",").map(e => e.trim());
+
+            validateEmails(emailArray);
+
+            await sendEmailWithAttachment(
+                emailArray.join(","),
+                zipFilePath,
+                path.basename(zipFilePath),
+                smtp
+            );
+        }
+
+        /* ===============================
+           1️⃣2️⃣ DOWNLOAD
+        =============================== */
+        else if (action === "D") {
+
+            const fileName = path.basename(zipFilePath);
+
+            res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+            res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
+
+            return res.download(zipFilePath, fileName, async () => {
+                await cleanupFiles(zipFilePath, backupFolder);
+            });
+        }
+
+        /* ===============================
+           1️⃣3️⃣ CLEANUP
+        =============================== */
+        await cleanupFiles(zipFilePath, backupFolder);
+
+        /* ===============================
+           1️⃣4️⃣ RESPONSE
+        =============================== */
         return sendResponse(
             200,
             "SUCCESS",
-            "Financial backup created successfully",
-            {
-                corporateID,
-                companyID,
-                sourceDatabase,
-                backupDatabase: newDatabaseName
-            }
+            "Backup created successfully",
+            { corporateID, companyID, sourceDatabase, backupDatabase: newDatabaseName }
         );
 
     } catch (err) {
-        console.error("backupToDrive error:", err);
-
-        return sendResponse(
-            500,
-            "FAIL",
-            "Internal server error"
-        );
+        console.error("backupZipToDrive error:", err);
+        return sendResponse(500, "FAIL", "Internal server error");
     }
-    //  finally {
-
-    //     ftpClient.close();
-
-    // }
 };
+
+async function cleanupFiles(zipFilePath, backupFolder) {
+    try {
+        await Promise.all([
+            fs.promises.rm(backupFolder, { recursive: true, force: true }),
+            fs.promises.unlink(zipFilePath).catch(() => {})
+        ]);
+    } catch (err) {
+        console.error("Cleanup error:", err);
+    }
+}
 
 async function ensureFLDBRCLength(dbConn, tableName) {
 
