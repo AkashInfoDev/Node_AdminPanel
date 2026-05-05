@@ -190,12 +190,117 @@ class BranchController {
 
             } else if (action === 'E') {
                 // EDIT
+                // if (!BRCODE) {
+                //     if (!this.lbool) {
+                //         return false;
+                //     } else {
+                //         response.message = 'BRCODE required for edit'
+                //         response.status = 'FAIL'
+                //         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                //         return res.status(400).json({ encryptedResponse });
+                //     }
+                // }
+
+                // const branch = await tblbrc.findOne({ BRCODE: BRCODE });
+                // if (!branch) {
+                //     response.message = 'Branch not found';
+                //     response.status = 'FAIL'
+                //     encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                //     return res.status(404).json({ encryptedResponse });
+                // }
+
+                // let BRCORP = branch.BRCORP;
+                // if (corpId) {
+                //     const corpRow = await PLRDBA01.findOne({ where: { A01F03: corpId } });
+                //     if (!corpRow) {
+                //         if (!lbool) {
+                //             return false;
+                //         } else {
+                //             response.message = 'Corporate ID not found';
+                //             response.status = 'FAIL'
+                //             encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                //             return res.status(400).json({ encryptedResponse });
+                //         }
+                //     }
+                //     BRCORP = corpRow.A01F01;
+                // }
+                // if (branch.BRCCOMP) {
+                //     let cmplist = (branch.BRCCOMP).split(',');
+                //     for (const cl of cmplist) {
+                //         let existingCmp = (BRCCOMP).split(',');
+                //         if (existingCmp.includes(cl))
+                //             continue;
+                //         let crnum = corpId.split('-')
+                //         let SDBdbname = crnum[0] + crnum[1] + crnum[2] + "SDB"
+                //         let dbName = generateDatabaseName(corpId, cl);
+                //         let dbConn = db.createPool(dbName);
+                //         let m82 = new M82Controller(SDBdbname);
+                //         let cmpdet = await m82.findOne({ M82F02: parseInt(cl) });
+                //         let defYr = cmpdet.M82YRN;
+                //         let listOfYr = await dbConn.query('SELECT FIELD01 FROM CMPF01', {
+                //             type: QueryTypes.SELECT
+                //         });
+                //         let connectedRows;
+                //         if (listOfYr) {
+                //             for (const ly of listOfYr) {
+                //                 connectedRows = await dbConn.query(`SELECT * FROM YR${ly.FIELD01}T41 WHERE FLDBRC = '${branch.BRCODE}'`, {
+                //                     type: QueryTypes.SELECT
+                //                 });
+                //                 if (connectedRows.length > 0) {
+                //                     response.message = 'This Branch Contains Transaction in ' + cl + 'Company';
+                //                     response.status = 'FAIL'
+                //                     encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                //                     return res.status(200).json({ encryptedResponse });
+                //                 }
+                //             }
+                //         }
+                //     }
+                // }
+
+                // let mainBRC = await tblbrc.findOne({
+
+                //     BRCORP: BRCORP,
+                //     BRDEF: 'Y'
+                // });
+
+                // const updatedBRNAME = BRNAME || branch.BRNAME;
+                // const updatedBRGST = BRGST ? BRGST : mainBRC.BRGST;
+                // let statecode = updatedBRGST.split('').slice(0, 2).join('');
+                // let stateid = await PLSTATE.findOne({
+                //     where: {
+                //         PLSF01: {
+                //             [Op.like]: `%${statecode}`  // Matches any value where PLSF01 ends with '24'
+                //         }
+                //     }
+                // });
+                // const updatedBRSTATE = stateid?.PLSF01 || branch.BRSTATE;
+                // branch.BRNAME = updatedBRNAME;
+                // branch.BRGST = updatedBRGST;
+                // // branch.BRCORP = BRCORP; 
+                // branch.BRSTATE = updatedBRSTATE;
+                // branch.BRCCOMP = this.brccomp;
+                // let updatedBrc = {
+                //     BRNAME: BRNAME,
+                //     BRGST: BRGST,
+                //     BRCORP: BRCORP,
+                //     BRSTATE: BRSTATE,
+                //     BRCCOMP: BRCCOMP
+                // }
+
+                // await tblbrc.update(updatedBrc, {
+                //     BRCODE: BRCODE
+                // });
+
+                // response.data = branch
+                // encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                // return res.status(200).json({ encryptedResponse });
+
                 if (!BRCODE) {
                     if (!this.lbool) {
                         return false;
                     } else {
-                        response.message = 'BRCODE required for edit'
-                        response.status = 'FAIL'
+                        response.message = 'BRCODE required for edit';
+                        response.status = 'FAIL';
                         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                         return res.status(400).json({ encryptedResponse });
                     }
@@ -204,7 +309,7 @@ class BranchController {
                 const branch = await tblbrc.findOne({ BRCODE: BRCODE });
                 if (!branch) {
                     response.message = 'Branch not found';
-                    response.status = 'FAIL'
+                    response.status = 'FAIL';
                     encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                     return res.status(404).json({ encryptedResponse });
                 }
@@ -217,81 +322,105 @@ class BranchController {
                             return false;
                         } else {
                             response.message = 'Corporate ID not found';
-                            response.status = 'FAIL'
+                            response.status = 'FAIL';
                             encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                             return res.status(400).json({ encryptedResponse });
                         }
                     }
                     BRCORP = corpRow.A01F01;
                 }
-                if (branch.BRCCOMP) {
-                    let cmplist = (branch.BRCCOMP).split(',');
+
+                // Check if BRCCOMP has changed
+                let isBrcCompChanged
+                if (this.lbool) {
+                    isBrcCompChanged = this.brccomp !== BRCCOMP;
+                } else {
+                    let brcCmpDetails = await tblbrc.findOne({ BRCODE: branch.BRCODE },
+                        {},
+                        ['BRCCOMP']
+                    )
+                    this.brccomp = brcCmpDetails?.BRCCOMP;
+                    isBrcCompChanged = this.brccomp !== BRCCOMP;
+                }
+
+                if (isBrcCompChanged && branch.BRCCOMP) {
+                    const cmplist = this?.brccomp.split(',');
+                    const existingCmp = BRCCOMP.split(',');
+                    const crnum = corpId.split('-');
+                    let sdbSeq = (decoded.corpId).split('-');
+                    let SDBdbname = sdbSeq.length == 3 ? sdbSeq[0] + sdbSeq[1] + sdbSeq[2] + 'SDB' : sdbSeq[0] + sdbSeq[1] + 'SDB';
+
                     for (const cl of cmplist) {
-                        let existingCmp = (BRCCOMP).split(',');
-                        if (existingCmp.includes(cl))
-                            continue;
-                        let crnum = corpId.split('-')
-                        let SDBdbname = crnum[0] + crnum[1] + crnum[2] + "SDB"
-                        let dbName = generateDatabaseName(corpId, cl);
-                        let dbConn = db.createPool(dbName);
-                        let m82 = new M82Controller(SDBdbname);
-                        let cmpdet = await m82.findOne({ M82F02: parseInt(cl) });
-                        let defYr = cmpdet.M82YRN;
-                        let listOfYr = await dbConn.query('SELECT FIELD01 FROM CMPF01', {
+                        if (existingCmp.includes(cl)) continue;
+
+                        const dbName = generateDatabaseName(corpId, cl);
+                        const dbConn = db.createPool(dbName); // consider caching pools if needed
+                        const m82 = new M82Controller(SDBdbname);
+                        const cmpdet = await m82.findOne({ M82F02: parseInt(cl) });
+                        const defYr = cmpdet.M82YRN;
+
+                        const listOfYr = await dbConn.query('SELECT FIELD01 FROM CMPF01', {
                             type: QueryTypes.SELECT
                         });
-                        let connectedRows;
-                        if (listOfYr) {
-                            for (const ly of listOfYr) {
-                                connectedRows = await dbConn.query(`SELECT * FROM YR${ly.FIELD01}T41 WHERE FLDBRC = '${branch.BRCODE}'`, {
-                                    type: QueryTypes.SELECT
-                                });
-                                if (connectedRows.length > 0) {
-                                    response.message = 'This Branch Contains Transaction in ' + cl + 'Company';
-                                    response.status = 'FAIL'
-                                    encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-                                    return res.status(200).json({ encryptedResponse });
-                                }
-                            }
+
+                        const connectedResults = await Promise.all(
+                            listOfYr.map(ly =>
+                                dbConn.query(
+                                    `SELECT 1 FROM YR${ly.FIELD01}T41 WHERE FLDBRC = '${branch.BRCODE}'`,
+                                    { type: QueryTypes.SELECT }
+                                )
+                            )
+                        );
+
+                        if (connectedResults.some(rows => rows.length > 0)) {
+                            response.message = `This Branch Contains Transaction in ${cl} Company`;
+                            response.status = 'FAIL';
+                            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                            return res.status(200).json({ encryptedResponse });
                         }
                     }
                 }
 
-                let mainBRC = await tblbrc.findOne({
-
+                const mainBRC = await tblbrc.findOne({
                     BRCORP: BRCORP,
                     BRDEF: 'Y'
                 });
 
+                // Update other fields regardless of BRCCOMP change
                 const updatedBRNAME = BRNAME || branch.BRNAME;
-                const updatedBRGST = BRGST ? BRGST : mainBRC.BRGST;
-                let statecode = updatedBRGST.split('').slice(0, 2).join('');
-                let stateid = await PLSTATE.findOne({
+                const updatedBRGST = BRGST || mainBRC.BRGST;
+                const statecode = updatedBRGST.slice(0, 2);
+                const stateid = await PLSTATE.findOne({
                     where: {
-                        PLSF01: {
-                            [Op.like]: `%${statecode}`  // Matches any value where PLSF01 ends with '24'
-                        }
+                        PLSF01: { [Op.like]: `%${statecode}` }
                     }
                 });
                 const updatedBRSTATE = stateid?.PLSF01 || branch.BRSTATE;
+
+                // Apply updates
                 branch.BRNAME = updatedBRNAME;
                 branch.BRGST = updatedBRGST;
-                // branch.BRCORP = BRCORP; 
+                // branch.BRCORP = BRCORP; // keep as per original logic
                 branch.BRSTATE = updatedBRSTATE;
-                branch.BRCCOMP = this.brccomp;
-                let updatedBrc = {
+
+                // Only update BRCCOMP if it changed
+                if (isBrcCompChanged) {
+                    branch.BRCCOMP = this.brccomp;
+                }
+
+                const updatedBrc = {
                     BRNAME: BRNAME,
                     BRGST: BRGST,
                     BRCORP: BRCORP,
-                    BRSTATE: BRSTATE,
-                    BRCCOMP: BRCCOMP
-                }
+                    BRSTATE: BRSTATE
+                };
 
-                await tblbrc.update(updatedBrc, {
-                    BRCODE: BRCODE
-                });
+                // Include BRCCOMP in update only if changed
+                if (isBrcCompChanged) updatedBrc.BRCCOMP = BRCCOMP;
 
-                response.data = branch
+                await tblbrc.update(updatedBrc, { BRCODE: BRCODE });
+
+                response.data = branch;
                 encryptedResponse = encryptor.encrypt(JSON.stringify(response));
                 return res.status(200).json({ encryptedResponse });
 
