@@ -185,7 +185,7 @@ class CompanyService {
                 where:{
                     INFO_11: 'Y'
                 }
-            })
+            });
 
             // Create company record
             const createCMP = await PLRDBA01.create({
