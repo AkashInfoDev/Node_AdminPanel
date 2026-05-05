@@ -622,7 +622,7 @@ const backupZipToDrive = async (req, res) => {
         const corporateLastFive = corporateID.slice(-5);
         const formattedCompanyID = companyID.toString().padStart(4, "0");
 
-        const sourceDatabase = `A${corporateLastFive}CMP${formattedCompanyID}`;
+        const sourceDatabase = corporateID.startsWith("A") ? `A${corporateLastFive}CMP${formattedCompanyID}` : `EP${corporateLastFive}CMP${formattedCompanyID}`;
         const newDatabaseName = `CMP${formattedCompanyID}_${yearNo}`;
 
         /* ===============================

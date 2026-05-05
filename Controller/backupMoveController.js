@@ -796,7 +796,9 @@ const backupToDrive = async (req, res) => {
             res.setHeader(
                 "Content-Disposition",
                 `attachment; filename="${databaseName}.zip"`
+
             );
+            res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
 
             return res.send(zipBuffer);
         }
@@ -824,347 +826,566 @@ const backupToDrive = async (req, res) => {
     }
 };
 
+// const restoreBak = async (req, res) => {
+
+//     let response = { status: "SUCCESS", message: "", data: null };
+//     let encryptedResponse;
+
+//     const ftpClient = new ftp.Client();
+
+//     let tempDir = null;
+//     let remoteFtpPath = null;
+//     let remoteFileName = null;
+
+//     const transaction = await sequelizeMASTER.transaction();
+
+//     try {
+
+//         console.log("🚀 ZIP Restore API HIT");
+
+//         /* ========= PAYLOAD ========= */
+//         if (!req.body.pa) throw new Error("Payload missing");
+
+//         let branchMappings = [];
+//         let skipBranchUpdate = false;
+
+//         try {
+//             if (req.body.pa === "false") {
+//                 skipBranchUpdate = true;
+//             } else {
+//                 const decrypted = encryptor.decrypt(req.body.pa);
+
+//                 if (decrypted === "false") {
+//                     skipBranchUpdate = true;
+//                 } else {
+//                     const p1 = JSON.parse(decodeURIComponent(decrypted));
+//                     branchMappings = p1.BRCODE || [];
+//                 }
+//             }
+//         } catch {
+//             throw new Error("Invalid payload format");
+//         }
+
+
+//         /* ========= TOKEN ========= */
+//         const token = req.headers.authorization?.split(" ")[1];
+//         if (!token) throw new Error("Token missing");
+
+//         const decoded = await validateToken(token);
+//         if (!decoded?.corpId) throw new Error("Invalid token");
+
+//         const corporateID = decoded.corpId;
+
+//         let FTPdetail = await PLRDBA01.findOne({
+//             where: {
+//                 A01F03: corporateID
+//             }
+//         });
+//         /* ========= SDB ========= */
+//         const parts = corporateID.split('-');
+//         let sdbName = parts.length === 3
+//             ? `${parts[0]}${parts[1]}${parts[2]}SDB`
+//             : `${parts[0]}${parts[1]}SDB`;
+
+//         if (sdbName === 'PLP00001SDB') sdbName = 'A00001SDB';
+
+//         const sequelizeSDB = db.getConnection(sdbName);
+
+//         /* ========= NEXT COMPANY ========= */
+//         // const result = await sequelizeSDB.query(`
+//         //     SELECT ISNULL(MAX(CMPF01), 0) + 1 AS nextCompany
+//         //     FROM PLSDBCMP
+//         // `, { type: QueryTypes.SELECT });
+
+//         // const nextCompanyID = result[0].nextCompany;
+
+//         const companies = await sequelizeSDB.query(`
+//     SELECT CMPF01 FROM PLSDBCMP
+// `, { type: QueryTypes.SELECT });
+
+//         const usedIds = companies
+//             .map(c => Number(c.CMPF01))
+//             .filter(n => !isNaN(n) && n > 0);
+
+//         let nextCompanyID = 1;
+
+//         while (true) {
+
+//             // 🔹 Check if ID used in table
+//             const existsInTable = usedIds.includes(nextCompanyID);
+
+//             // 🔹 Check if DB already exists
+//             let CmpDBName = corporateID.split('-');
+//             const dbName = corporateID == 'PL-P-00001' ? `A${corporateID.slice(-5)}CMP${nextCompanyID.toString().padStart(4, "0")}` : `${CmpDBName.join('')}CMP${nextCompanyID.toString().padStart(4, "0")}`;
+
+//             let sequelizeDynamic = db.createDynamicPool(FTPdetail.A01F53, FTPdetail.A01F54, FTPdetail.A01F52, 'MASTER');
+
+//             const dbCheck =
+//                 await sequelizeDynamic.query(`
+//                     SELECT DB_ID(:dbName) as dbid
+//                     `, {
+//                     replacements: { dbName },
+//                     type: QueryTypes.SELECT
+//                 });
+
+//             const existsInDB = dbCheck[0].dbid !== null;
+
+//             // ✅ If both free → use it
+//             if (!existsInTable && !existsInDB) {
+//                 break;
+//             }
+
+//             nextCompanyID++;
+//         }
+
+//         console.log("🆕 Final Safe CompanyID:", nextCompanyID);
+
+//         /* ========= FILE ========= */
+//         const file = req.files?.[0];
+//         if (!file) throw new Error("No file uploaded");
+
+//         if (path.extname(file.originalname) !== ".zip") {
+//             throw new Error("Only ZIP file allowed");
+//         }
+
+//         /* ========= TEMP ========= */
+//         tempDir = path.join("/tmp", "zip_" + Date.now());
+//         await fs.promises.mkdir(tempDir, { recursive: true });
+
+//         const zipPath = path.join(tempDir, file.originalname);
+//         await fs.promises.writeFile(zipPath, file.buffer);
+
+//         await fs.createReadStream(zipPath)
+//             .pipe(unzipper.Extract({ path: tempDir }))
+//             .promise();
+
+//         const files = fs.readdirSync(tempDir);
+//         const bakFile = files.find(f => path.extname(f) === ".bak");
+//         if (!bakFile) throw new Error("No .bak file found");
+
+//         const bakPath = path.join(tempDir, bakFile);
+
+
+
+//         /* ========= FTP ========= */
+//         await ftpClient.access({
+//             host: FTPdetail.A01F52,
+//             user: FTPdetail.FTPUID,
+//             password: FTPdetail.FTPPWD,
+//             port: 21,  // Try 990 for implicit FTPS if 21 doesn't work
+//             secure: true,  // Use FTPS (Explicit FTPS)
+//             secureOptions: { rejectUnauthorized: false },  // Disable certificate validation (only for dev)
+//             passive: true,  // Passive mode (recommended for most cases)
+//             debug: (message) => console.log(message),  // Enable debug messages for more insight
+//         });
+
+//         // remoteFileName = `${Date.now()}_${bakFile}`;
+//         // remoteFtpPath = `/html/eplus/${remoteFileName}`;
+//         // const sqlPath = `/var/www/html/eplus/${remoteFileName}`;
+
+//         // await ftpClient.uploadFrom(fs.createReadStream(bakPath), remoteFtpPath);
+//         let CmpDBName = corporateID.split('-');
+
+//         /* ========= DB NAME ========= */
+//         const newDatabaseName = corporateID == 'PL-P-00001' ?
+//             `A${corporateID.slice(-5)}CMP${nextCompanyID.toString().padStart(4, "0")}` :
+//             `${CmpDBName.join('')}CMP${nextCompanyID.toString().padStart(4, "0")}`;
+
+//         /* ========= DROP ========= */
+//         let sequelizeDynamic = db.createDynamicPool(FTPdetail.A01F53, FTPdetail.A01F54, FTPdetail.A01F52, 'MASTER');
+
+//         await sequelizeDynamic.query(`
+//             IF DB_ID('${newDatabaseName}') IS NOT NULL
+//             BEGIN
+//                 ALTER DATABASE [${newDatabaseName}]
+//                 SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+//                 DROP DATABASE [${newDatabaseName}];
+//             END
+//         `, { transaction });
+
+//         /* ========= RESTORE ========= */
+//         const fileList = await sequelizeMASTER.query(`
+//             RESTORE FILELISTONLY FROM DISK = '${sqlPath}'
+//         `);
+
+//         const dataFile = fileList[0].find(f => f.Type === 'D');
+//         const logFile = fileList[0].find(f => f.Type === 'L');
+
+//         await sequelizeMASTER.query(`
+//             RESTORE DATABASE [${newDatabaseName}]
+//             FROM DISK = '${sqlPath}'
+//             WITH 
+//                 MOVE '${dataFile.LogicalName}' TO '/var/opt/mssql/data/${newDatabaseName}.mdf',
+//                 MOVE '${logFile.LogicalName}' TO '/var/opt/mssql/data/${newDatabaseName}_log.ldf',
+//                 REPLACE
+//         `);
+
+//         // .mdf → data
+//         //   .ldf → logs
+//         /* ========= COMPANY ========= */
+//         const [cmpData] = await sequelizeMASTER.query(`
+//             SELECT TOP 1 FIELD02 as companyName
+//             FROM ${newDatabaseName}.dbo.CMPM00
+//         `, { type: QueryTypes.SELECT });
+
+//         const companyName = cmpData?.companyName || `Company ${nextCompanyID}`;
+
+//         /* ========= REGISTER ========= */
+//         await sequelizeSDB.query(`
+//             INSERT INTO PLSDBCMP (CMPF01, CMPF02, CMPF03, CMPF04,
+//             CMPF11, CMPF12, CMPF21, CMPF22, CMPF23, CMPF24)
+//             VALUES (:companyID, :companyName, 'SQL', 'No Group',
+//             'U0000000', GETDATE(),
+//             '94.176.235.105','aipharma_aakash','Aipharma@360','DATA')
+//         `, { replacements: { companyID: nextCompanyID, companyName } });
+
+//         await sequelizeSDB.query(`
+//             INSERT INTO PLSDBM82 (M82F01, M82F02, M82CMP, M82YRN, M82ADA)
+//             VALUES ('U0000000', :companyID, 'N', '26', 'A')
+//         `, { replacements: { companyID: nextCompanyID } });
+
+//         await sequelizeMASTER.query(`
+//             UPDATE ${newDatabaseName}.dbo.CMPM00
+//             SET FIELD01 = :companyID
+//         `, {
+//             replacements: { companyID: nextCompanyID },
+//             transaction
+//         });
+
+//         console.log("✅ Registration Completed");
+
+//         /* ========= 🔥 UPDATE BRCCOMP FROM PA ========= */
+//         if (branchMappings.length > 0) {
+
+//             for (const branch of branchMappings) {
+
+//                 if (!branch.BRCODENEW) continue;
+
+//                 const existing = await sequelizeSDB.query(`
+//                     SELECT BRCCOMP 
+//                     FROM PLSDBBRC
+//                     WHERE BRCODE = :brcode
+//                 `, {
+//                     replacements: { brcode: branch.BRCODENEW },
+//                     type: QueryTypes.SELECT
+//                 });
+
+//                 if (existing.length === 0) {
+//                     console.log(`⚠ Not found: ${branch.BRCODENEW}`);
+//                     continue;
+//                 }
+
+//                 let compList = (existing[0].BRCCOMP || "")
+//                     .split(',')
+//                     .map(c => c.trim())
+//                     .filter(Boolean);
+
+//                 if (!compList.includes(String(nextCompanyID))) {
+//                     compList.push(String(nextCompanyID));
+//                 }
+
+//                 await sequelizeSDB.query(`
+//                     UPDATE PLSDBBRC
+//                     SET BRCCOMP = :comp
+//                     WHERE BRCODE = :brcode
+//                 `, {
+//                     replacements: {
+//                         comp: compList.join(','),
+//                         brcode: branch.BRCODENEW
+//                     }
+//                 });
+
+//                 console.log(`✅ ${branch.BRCODENEW} → ${compList.join(',')}`);
+//             }
+//         }
+
+//         /* ========= 🔥 FLDBRC REPLACE ========= */
+//         if (!skipBranchUpdate && branchMappings.length > 0) {
+
+//             const tables = await sequelizeMASTER.query(`
+//                 SELECT DISTINCT TABLE_NAME
+//                 FROM ${newDatabaseName}.INFORMATION_SCHEMA.COLUMNS
+//                 WHERE COLUMN_NAME = 'FLDBRC'
+//             `, { type: QueryTypes.SELECT });
+
+//             for (const branch of branchMappings) {
+
+//                 for (const t of tables) {
+
+//                     try {
+//                         await sequelizeMASTER.query(`
+//                             UPDATE ${newDatabaseName}.dbo.[${t.TABLE_NAME}]
+//                             SET FLDBRC = REPLACE(FLDBRC, :oldCode, :newCode)
+//                             WHERE FLDBRC LIKE '%' + :oldCode + '%'
+//                         `, {
+//                             replacements: {
+//                                 oldCode: branch.BRCODEOLD,
+//                                 newCode: branch.BRCODENEW
+//                             },
+//                             transaction
+//                         });
+
+//                     } catch (err) {
+//                         console.log(`❌ ${t.TABLE_NAME}: ${err.message}`);
+//                     }
+//                 }
+//             }
+//         }
+
+//         await transaction.commit();
+
+//         /* ========= FTP DELETE ========= */
+//         for (let i = 0; i < 3; i++) {
+//             try {
+//                 const list = await ftpClient.list("/html/eplus");
+//                 if (list.find(f => f.name === remoteFileName)) {
+//                     await ftpClient.remove(remoteFtpPath);
+//                 }
+//                 break;
+//             } catch {
+//                 await new Promise(r => setTimeout(r, 2000));
+//             }
+//         }
+
+//         if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
+
+//         response.status = 'SUCCESS';
+//         response.message = "ZIP restored successfully";
+//         response.data = { database: newDatabaseName };
+
+//         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+//         return res.status(200).json({ encryptedResponse });
+
+//     } catch (err) {
+
+//         await transaction.rollback();
+//         console.log(err);
+
+//         response.status = "FAIL";
+//         response.message = err.message;
+
+//         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+//         return res.status(500).json({ encryptedResponse });
+
+//     } finally {
+//         ftpClient.close();
+//     }
+// };
+
+
 const restoreBak = async (req, res) => {
-
-    let response = { status: "SUCCESS", message: "", data: null };
-    let encryptedResponse;
-
-    const ftpClient = new ftp.Client();
-
-    let tempDir = null;
-    let remoteFtpPath = null;
-    let remoteFileName = null;
-
-    const transaction = await sequelizeMASTER.transaction();
-
-    try {
-
-        console.log("🚀 ZIP Restore API HIT");
-
-        /* ========= PAYLOAD ========= */
-        if (!req.body.pa) throw new Error("Payload missing");
-
-        let branchMappings = [];
-        let skipBranchUpdate = false;
-
-        try {
-            if (req.body.pa === "false") {
-                skipBranchUpdate = true;
-            } else {
-                const decrypted = encryptor.decrypt(req.body.pa);
-
-                if (decrypted === "false") {
-                    skipBranchUpdate = true;
-                } else {
-                    const p1 = JSON.parse(decodeURIComponent(decrypted));
-                    branchMappings = p1.BRCODE || [];
-                }
-            }
-        } catch {
-            throw new Error("Invalid payload format");
-        }
-
-        /* ========= TOKEN ========= */
-        const token = req.headers.authorization?.split(" ")[1];
-        if (!token) throw new Error("Token missing");
-
-        const decoded = await validateToken(token);
-        if (!decoded?.corpId) throw new Error("Invalid token");
-
-        const corporateID = decoded.corpId;
-
-        /* ========= SDB ========= */
-        const parts = corporateID.split('-');
-        let sdbName = parts.length === 3
-            ? `${parts[0]}${parts[1]}${parts[2]}SDB`
-            : `${parts[0]}${parts[1]}SDB`;
-
-        if (sdbName === 'PLP00001SDB') sdbName = 'A00001SDB';
-
-        const sequelizeSDB = db.getConnection(sdbName);
-
-        /* ========= NEXT COMPANY ========= */
-        // const result = await sequelizeSDB.query(`
-        //     SELECT ISNULL(MAX(CMPF01), 0) + 1 AS nextCompany
-        //     FROM PLSDBCMP
-        // `, { type: QueryTypes.SELECT });
-
-        // const nextCompanyID = result[0].nextCompany;
-
-        const companies = await sequelizeSDB.query(`
-    SELECT CMPF01 FROM PLSDBCMP
-`, { type: QueryTypes.SELECT });
-
-        const usedIds = companies
-            .map(c => Number(c.CMPF01))
-            .filter(n => !isNaN(n) && n > 0);
-
-        let nextCompanyID = 1;
-
-        while (true) {
-
-            // 🔹 Check if ID used in table
-            const existsInTable = usedIds.includes(nextCompanyID);
-
-            // 🔹 Check if DB already exists
-            let CmpDBName = corporateID.split('-');
-            const dbName = corporateID == 'PL-P-00001' ? `A${corporateID.slice(-5)}CMP${nextCompanyID.toString().padStart(4, "0")}` : `${CmpDBName.join('')}CMP${nextCompanyID.toString().padStart(4, "0")}`;
-
-            let sequelizeDynamic = db.createDynamicPool(FTPdetail.A01F53, FTPdetail.A01F54, FTPdetail.A01F52, 'MASTER');
-
-            const dbCheck =
-                await sequelizeDynamic.query(`
-                    SELECT DB_ID(:dbName) as dbid
-                    `, {
-                    replacements: { dbName },
-                    type: QueryTypes.SELECT
-                });
-
-            const existsInDB = dbCheck[0].dbid !== null;
-
-            // ✅ If both free → use it
-            if (!existsInTable && !existsInDB) {
-                break;
-            }
-
-            nextCompanyID++;
-        }
-
-        console.log("🆕 Final Safe CompanyID:", nextCompanyID);
-
-        /* ========= FILE ========= */
-        const file = req.files?.[0];
-        if (!file) throw new Error("No file uploaded");
-
-        if (path.extname(file.originalname) !== ".zip") {
-            throw new Error("Only ZIP file allowed");
-        }
-
-        /* ========= TEMP ========= */
-        tempDir = path.join("/tmp", "zip_" + Date.now());
-        await fs.promises.mkdir(tempDir, { recursive: true });
-
-        const zipPath = path.join(tempDir, file.originalname);
-        await fs.promises.writeFile(zipPath, file.buffer);
-
-        await fs.createReadStream(zipPath)
-            .pipe(unzipper.Extract({ path: tempDir }))
-            .promise();
-
-        const files = fs.readdirSync(tempDir);
-        const bakFile = files.find(f => path.extname(f) === ".bak");
-        if (!bakFile) throw new Error("No .bak file found");
-
-        const bakPath = path.join(tempDir, bakFile);
-
-        let FTPdetail = await PLRDBA01.findOne({
-            where: {
-                A01F03: corporateID
-            }
-        })
-
-        /* ========= FTP ========= */
-        await ftpClient.access({
-            host: FTPdetail.A01F52,
-            user: FTPdetail.FTPUID,
-            password: FTPdetail.FTPPWD,
-            port: 21,  // Try 990 for implicit FTPS if 21 doesn't work
-            secure: true,  // Use FTPS (Explicit FTPS)
-            secureOptions: { rejectUnauthorized: false },  // Disable certificate validation (only for dev)
-            passive: true,  // Passive mode (recommended for most cases)
-            debug: (message) => console.log(message),  // Enable debug messages for more insight
-        });
-
-        remoteFileName = `${Date.now()}_${bakFile}`;
-        remoteFtpPath = `/html/eplus/${remoteFileName}`;
-        const sqlPath = `/var/www/html/eplus/${remoteFileName}`;
-
-        await ftpClient.uploadFrom(fs.createReadStream(bakPath), remoteFtpPath);
-        let CmpDBName = corporateID.split('-');
-
-        /* ========= DB NAME ========= */
-        const newDatabaseName = corporateID == 'PL-P-00001' ?
-            `A${corporateID.slice(-5)}CMP${nextCompanyID.toString().padStart(4, "0")}` :
-            `${CmpDBName.join('')}CMP${nextCompanyID.toString().padStart(4, "0")}`;
-
-        /* ========= DROP ========= */
-        let sequelizeDynamic = db.createDynamicPool(FTPdetail.A01F53, FTPdetail.A01F54, FTPdetail.A01F52, 'MASTER');
-
-        await sequelizeDynamic.query(`
-            IF DB_ID('${newDatabaseName}') IS NOT NULL
-            BEGIN
-                ALTER DATABASE [${newDatabaseName}]
-                SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
-                DROP DATABASE [${newDatabaseName}];
-            END
-        `, { transaction });
-
-        /* ========= RESTORE ========= */
-        const fileList = await sequelizeMASTER.query(`
-            RESTORE FILELISTONLY FROM DISK = '${sqlPath}'
-        `);
-
-        const dataFile = fileList[0].find(f => f.Type === 'D');
-        const logFile = fileList[0].find(f => f.Type === 'L');
-
-        await sequelizeMASTER.query(`
-            RESTORE DATABASE [${newDatabaseName}]
-            FROM DISK = '${sqlPath}'
-            WITH 
-                MOVE '${dataFile.LogicalName}' TO '/var/opt/mssql/data/${newDatabaseName}.mdf',
-                MOVE '${logFile.LogicalName}' TO '/var/opt/mssql/data/${newDatabaseName}_log.ldf',
-                REPLACE
-        `);
-
-        // .mdf → data
-        //   .ldf → logs
-        /* ========= COMPANY ========= */
-        const [cmpData] = await sequelizeMASTER.query(`
-            SELECT TOP 1 FIELD02 as companyName
-            FROM ${newDatabaseName}.dbo.CMPM00
-        `, { type: QueryTypes.SELECT });
-
-        const companyName = cmpData?.companyName || `Company ${nextCompanyID}`;
-
-        /* ========= REGISTER ========= */
-        await sequelizeSDB.query(`
-            INSERT INTO PLSDBCMP (CMPF01, CMPF02, CMPF03, CMPF04,
-            CMPF11, CMPF12, CMPF21, CMPF22, CMPF23, CMPF24)
-            VALUES (:companyID, :companyName, 'SQL', 'No Group',
-            'U0000000', GETDATE(),
-            '94.176.235.105','aipharma_aakash','Aipharma@360','DATA')
-        `, { replacements: { companyID: nextCompanyID, companyName } });
-
-        await sequelizeSDB.query(`
-            INSERT INTO PLSDBM82 (M82F01, M82F02, M82CMP, M82YRN, M82ADA)
-            VALUES ('U0000000', :companyID, 'N', '26', 'A')
-        `, { replacements: { companyID: nextCompanyID } });
-
-        await sequelizeMASTER.query(`
-            UPDATE ${newDatabaseName}.dbo.CMPM00
-            SET FIELD01 = :companyID
-        `, {
-            replacements: { companyID: nextCompanyID },
-            transaction
-        });
-
-        console.log("✅ Registration Completed");
-
-        /* ========= 🔥 UPDATE BRCCOMP FROM PA ========= */
-        if (branchMappings.length > 0) {
-
-            for (const branch of branchMappings) {
-
-                if (!branch.BRCODENEW) continue;
-
-                const existing = await sequelizeSDB.query(`
-                    SELECT BRCCOMP 
-                    FROM PLSDBBRC
-                    WHERE BRCODE = :brcode
-                `, {
-                    replacements: { brcode: branch.BRCODENEW },
-                    type: QueryTypes.SELECT
-                });
-
-                if (existing.length === 0) {
-                    console.log(`⚠ Not found: ${branch.BRCODENEW}`);
-                    continue;
-                }
-
-                let compList = (existing[0].BRCCOMP || "")
-                    .split(',')
-                    .map(c => c.trim())
-                    .filter(Boolean);
-
-                if (!compList.includes(String(nextCompanyID))) {
-                    compList.push(String(nextCompanyID));
-                }
-
-                await sequelizeSDB.query(`
-                    UPDATE PLSDBBRC
-                    SET BRCCOMP = :comp
-                    WHERE BRCODE = :brcode
-                `, {
-                    replacements: {
-                        comp: compList.join(','),
-                        brcode: branch.BRCODENEW
-                    }
-                });
-
-                console.log(`✅ ${branch.BRCODENEW} → ${compList.join(',')}`);
-            }
-        }
-
-        /* ========= 🔥 FLDBRC REPLACE ========= */
-        if (!skipBranchUpdate && branchMappings.length > 0) {
-
-            const tables = await sequelizeMASTER.query(`
-                SELECT DISTINCT TABLE_NAME
-                FROM ${newDatabaseName}.INFORMATION_SCHEMA.COLUMNS
-                WHERE COLUMN_NAME = 'FLDBRC'
-            `, { type: QueryTypes.SELECT });
-
-            for (const branch of branchMappings) {
-
-                for (const t of tables) {
-
-                    try {
-                        await sequelizeMASTER.query(`
-                            UPDATE ${newDatabaseName}.dbo.[${t.TABLE_NAME}]
-                            SET FLDBRC = REPLACE(FLDBRC, :oldCode, :newCode)
-                            WHERE FLDBRC LIKE '%' + :oldCode + '%'
-                        `, {
-                            replacements: {
-                                oldCode: branch.BRCODEOLD,
-                                newCode: branch.BRCODENEW
-                            },
-                            transaction
-                        });
-
-                    } catch (err) {
-                        console.log(`❌ ${t.TABLE_NAME}: ${err.message}`);
-                    }
-                }
-            }
-        }
-
-        await transaction.commit();
-
-        /* ========= FTP DELETE ========= */
-        for (let i = 0; i < 3; i++) {
-            try {
-                const list = await ftpClient.list("/html/eplus");
-                if (list.find(f => f.name === remoteFileName)) {
-                    await ftpClient.remove(remoteFtpPath);
-                }
-                break;
-            } catch {
-                await new Promise(r => setTimeout(r, 2000));
-            }
-        }
-
-        if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
-
-        response.status = 'SUCCESS';
-        response.message = "ZIP restored successfully";
-        response.data = { database: newDatabaseName };
-
-        encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-        return res.status(200).json({ encryptedResponse });
-
-    } catch (err) {
-
-        await transaction.rollback();
-
-        response.status = "FAIL";
-        response.message = err.message;
-
-        encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-        return res.status(500).json({ encryptedResponse });
-
-    } finally {
-        ftpClient.close();
+  const response = { status: "SUCCESS", message: "", data: null };
+  let encryptedResponse;
+  const ftpClient = new ftp.Client();
+  let transaction;
+
+  try {
+    console.log("🚀 ZIP Restore API HIT");
+
+    /* ========= PAYLOAD ========= */
+    let branchMappings = [];
+    let skipBranchUpdate = false;
+    if (req.body.pa) {
+      try {
+        const decrypted = encryptor.decrypt(req.body.pa);
+        if (decrypted === "false") skipBranchUpdate = true;
+        else branchMappings = JSON.parse(decodeURIComponent(decrypted)).BRCODE || [];
+      } catch {
+        throw new Error("Invalid payload format");
+      }
     }
+
+    /* ========= TOKEN ========= */
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) throw new Error("Token missing");
+    const decoded = await validateToken(token);
+    if (!decoded?.corpId) throw new Error("Invalid token");
+
+    const corporateID = decoded.corpId;
+    const sdbName = corporateID.replace(/-/g, "") + "SDB";
+
+    /* ========= FTP CONFIG ========= */
+    const FTPdetail = await PLRDBA01.findOne({ where: { A01F03: corporateID } });
+    if (!FTPdetail) throw new Error("FTP config not found");
+    const ftpDir = FTPdetail.FTPDIR || "/files";
+
+    /* ========= SDB CONNECTION ========= */
+    const sequelizeSDB = db.getConnection(sdbName);
+
+    /* ========= NEXT COMPANY ========= */
+    const companies = await sequelizeSDB.query(
+      `SELECT CMPF01 FROM ${sdbName}.dbo.PLSDBCMP`,
+      { type: QueryTypes.SELECT }
+    );
+    const usedIds = companies.map(c => Number(c.CMPF01)).filter(n => n > 0);
+    let nextCompanyID = 1;
+    while (usedIds.includes(nextCompanyID)) nextCompanyID++;
+    console.log("🆕 CompanyID:", nextCompanyID);
+
+    /* ========= FILE ========= */
+    const file = req.files?.[0];
+    if (!file) throw new Error("No file uploaded");
+    if (path.extname(file.originalname) !== ".zip") throw new Error("Only ZIP allowed");
+
+    /* ========= FTP CONNECT ========= */
+    await ftpClient.access({
+      host: FTPdetail.A01F52,
+      user: FTPdetail.FTPUID,
+      password: FTPdetail.FTPPWD,
+      secure: true,
+      passive: true,
+      secureOptions: { rejectUnauthorized: false },
+    });
+
+    /* ========= STREAM ZIP → FTP ========= */
+    let remoteFileName = null;
+    const zipStream = Readable.from(file.buffer);
+    await new Promise((resolve, reject) => {
+      let found = false;
+      zipStream
+        .pipe(unzipper.Parse())
+        .on("entry", async entry => {
+          try {
+            if (!found && path.extname(entry.path) === ".bak") {
+              found = true;
+              await ftpClient.ensureDir(ftpDir);
+              await ftpClient.cd(ftpDir);
+              remoteFileName = `${Date.now()}_${path.basename(entry.path)}`;
+              await ftpClient.uploadFrom(entry, remoteFileName);
+              console.log("✅ Upload complete");
+              resolve();
+            } else {
+              entry.autodrain();
+            }
+          } catch (err) {
+            reject(err);
+          }
+        })
+        .on("error", reject);
+    });
+    if (!remoteFileName) throw new Error("No .bak file found");
+    await new Promise(r => setTimeout(r, 1000));
+
+    /* ========= SQL PATH & DB NAME ========= */
+    const sqlPath = `C:\\files\\files\\${remoteFileName}`;
+    const CmpDBName = corporateID.split("-");
+    const newDatabaseName =
+      corporateID === "PL-P-00001"
+        ? `A${corporateID.slice(-5)}CMP${nextCompanyID.toString().padStart(4, "0")}`
+        : `${CmpDBName.join("")}CMP${nextCompanyID.toString().padStart(4, "0")}`;
+
+    /* ========= FORCE CLOSE EXISTING DB ========= */
+    await sequelizeMASTER.query(`
+      IF DB_ID('${newDatabaseName}') IS NOT NULL
+      BEGIN
+        ALTER DATABASE [${newDatabaseName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+      END
+    `);
+
+    /* ========= RESTORE FILE LIST ========= */
+    const fileList = await sequelizeMASTER.query(`RESTORE FILELISTONLY FROM DISK = '${sqlPath}'`);
+    const dataFile = fileList[0].find(f => f.Type === "D");
+    const logFile = fileList[0].find(f => f.Type === "L");
+
+    /* ========= RESTORE DATABASE ========= */
+    await sequelizeMASTER.query(`
+      RESTORE DATABASE [${newDatabaseName}]
+      FROM DISK = '${sqlPath}'
+      WITH MOVE '${dataFile.LogicalName}' TO 'C:\\files\\files\\${newDatabaseName}.mdf',
+           MOVE '${logFile.LogicalName}' TO 'C:\\files\\files\\${newDatabaseName}_log.ldf',
+           REPLACE, RECOVERY
+    `);
+    console.log("✅ Restore done");
+
+    transaction = await sequelizeMASTER.transaction();
+
+    /* ========= COMPANY NAME ========= */
+    const [cmpData] = await sequelizeMASTER.query(
+      `SELECT TOP 1 FIELD02 as companyName FROM ${newDatabaseName}.dbo.CMPM00`
+    );
+    const companyName = cmpData[0]?.companyName || `Company ${nextCompanyID}`;
+
+    /* ========= REGISTER COMPANY ========= */
+    await sequelizeSDB.query(
+      `INSERT INTO ${sdbName}.dbo.PLSDBCMP (CMPF01, CMPF02, CMPF03, CMPF04, CMPF11, CMPF12, CMPF21, CMPF22, CMPF23, CMPF24)
+       VALUES (:companyID, :companyName, 'SQL', 'No Group', 'U0000000', GETDATE(),
+       '94.176.235.105','aipharma_aakash','Aipharma@360','DATA')`,
+      { replacements: { companyID: nextCompanyID, companyName }, transaction }
+    );
+
+    await sequelizeSDB.query(
+      `INSERT INTO ${sdbName}.dbo.PLSDBM82 (M82F01, M82F02, M82CMP, M82YRN, M82ADA)
+       VALUES ('U0000000', :companyID, 'N', '26', 'A')`,
+      { replacements: { companyID: nextCompanyID }, transaction }
+    );
+
+    await sequelizeMASTER.query(
+      `UPDATE ${newDatabaseName}.dbo.CMPM00 SET FIELD01 = :companyID`,
+      { replacements: { companyID: nextCompanyID }, transaction }
+    );
+
+    /* ========= BRANCH UPDATE ========= */
+    if (!skipBranchUpdate && branchMappings.length > 0) {
+      // Update PLSDBBRC in one query per branch
+      const updateBranchesSQL = branchMappings
+        .map(b => `
+          UPDATE ${sdbName}.dbo.PLSDBBRC
+          SET BRCCOMP = CASE
+            WHEN BRCCOMP IS NULL OR BRCCOMP = '' THEN '${nextCompanyID}'
+            WHEN CHARINDEX('${nextCompanyID}', BRCCOMP) = 0 THEN BRCCOMP + ',${nextCompanyID}'
+            ELSE BRCCOMP
+          END
+          WHERE BRCODE = '${b.BRCODENEW}';
+        `)
+        .join("\n");
+      await sequelizeSDB.query(updateBranchesSQL, { transaction });
+
+      /* ========= FLDBRC UPDATE (ONLY NON-EMPTY CELLS) ========= */
+      const tables = await sequelizeMASTER.query(
+        `SELECT TABLE_NAME FROM ${newDatabaseName}.INFORMATION_SCHEMA.COLUMNS WHERE COLUMN_NAME = 'FLDBRC'`
+      );
+
+      for (const t of tables[0]) {
+        // Build CASE for all branch mappings
+        const updates = branchMappings
+          .map(b => `WHEN FLDBRC LIKE '%${b.BRCODEOLD}%' THEN REPLACE(FLDBRC, '${b.BRCODEOLD}', '${b.BRCODENEW}')`)
+          .join(" ");
+
+        // Only update rows where FLDBRC contains oldCode
+        await sequelizeMASTER.query(`
+          UPDATE ${newDatabaseName}.dbo.[${t.TABLE_NAME}]
+          SET FLDBRC = CASE ${updates} ELSE FLDBRC END
+          WHERE ${branchMappings.map(b => `FLDBRC LIKE '%${b.BRCODEOLD}%'`).join(" OR ")}
+        `, { transaction });
+      }
+    }
+
+    await transaction.commit();
+
+    /* ========= CLEANUP ========= */
+    try {
+      await ftpClient.cd(ftpDir);
+      await ftpClient.remove(remoteFileName);
+      console.log("🧹 FTP file deleted:", remoteFileName);
+    } catch (err) {
+      console.error("❌ FTP Cleanup Error:", err);
+    }
+
+    response.message = "Database restored & registered successfully";
+    response.data = { database: newDatabaseName };
+    encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+    return res.status(200).json({ encryptedResponse });
+
+  } catch (err) {
+    if (transaction) await transaction.rollback();
+    console.error("❌ ERROR:", err);
+    response.status = "FAIL";
+    response.message = err.message;
+    encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+    return res.status(500).json({ encryptedResponse });
+  } finally {
+    ftpClient.close();
+  }
 };
 
 const deleteFtpFile = async (req, res) => {
@@ -1187,43 +1408,55 @@ const deleteFtpFile = async (req, res) => {
         if (!decoded?.corpId) throw new Error("Invalid token");
 
         /* ========= PAYLOAD ========= */
-        if (!req.body.fileName) {
+        const { fileName } = req.body;
+
+        if (!fileName) {
             throw new Error("fileName is required");
         }
 
-        const fileName = req.body.fileName;
-
-        // 🔥 Security check (prevent path injection)
-        if (fileName.includes("/") || fileName.includes("..")) {
+        // 🔐 Strong security validation
+        if (
+            fileName.includes("/") ||
+            fileName.includes("\\") ||
+            fileName.includes("..")
+        ) {
             throw new Error("Invalid file name");
         }
 
-        const remotePath = `/html/eplus/${fileName}`;
+        const ftpDir = "/files";
+        const remotePath = `${ftpDir}/${fileName}`;
+
+        console.log("🗑 Target FTP Path:", remotePath);
 
         /* ========= FTP CONNECT ========= */
         await ftpClient.access({
-            host: process.env.FTP_HOST,
-            user: process.env.FTP_USER,
-            password: process.env.FTP_PASS,
-            secure: false
+            host: process.env.FTP_HOST1,
+            user: process.env.FTP_USER1,
+            password: process.env.FTP_PASS1,
+            secure: true, // 🔥 REQUIRED
+            secureOptions: {
+                rejectUnauthorized: false // avoids cert issues
+            }
         });
 
         console.log("✅ FTP Connected");
 
-        /* ========= CHECK FILE EXISTS ========= */
-        const list = await ftpClient.list("/html/eplus");
+        /* ========= CHANGE DIRECTORY ========= */
+        await ftpClient.cd(ftpDir);
 
-        const exists = list.find(f => f.name === fileName);
-
-        if (!exists) {
-            throw new Error("File not found on FTP");
+        /* ========= DELETE FILE ========= */
+        try {
+            await ftpClient.remove(fileName); // since we cd into /files
+        } catch (ftpErr) {
+            // Handle file not found cleanly
+            if (ftpErr.code === 550) {
+                throw new Error("File not found on FTP");
+            }
+            throw ftpErr;
         }
 
-        /* ========= DELETE ========= */
-        await ftpClient.remove(remotePath);
-
         console.log("✅ File deleted:", remotePath);
-        response.status = "SUCCESS";
+
         response.message = "File deleted successfully";
         response.data = { fileName };
 
@@ -1232,10 +1465,10 @@ const deleteFtpFile = async (req, res) => {
 
     } catch (err) {
 
-        console.error("❌ FTP Delete Error:", err.message);
+        console.error("❌ FTP Delete Error:", err);
 
         response.status = "FAIL";
-        response.message = err.message;
+        response.message = err.message || "Delete failed";
 
         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
         return res.status(500).json({ encryptedResponse });
@@ -1290,7 +1523,8 @@ const saveGoogleToken = async (req, res) => {
 
     } catch (err) {
 
-        console.error("❌ ERROR:", err.message);
+        // console.error("❌ ERROR:", err.message);
+        console.error("❌ FULL ERROR:", err);
 
         response.status = "FAIL";
         response.message = err.message;
