@@ -9,9 +9,11 @@ const upload = multer({
 
 const TicketController = require('../Controller/TicketController')
 const CategoryController = require('../Controller/CategoryController');
+const TicketPermissionController = require('../Controller/TicketPermissionController');
 
 router.post('/handleTicket', upload.array('files', 5), TicketController.handleTicket);
 router.get('/handleCategory', CategoryController.manageCategory);
+router.get('/TicketPermission',TicketPermissionController.managePermission);
 
 
 module.exports = router;

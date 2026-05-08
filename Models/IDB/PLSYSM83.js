@@ -4,12 +4,12 @@ module.exports = (sequelize, DataTypes) => {
         M83F00: {
             type: DataTypes.INTEGER,
             autoIncrement: true,
-            primaryKey: true   // required for Sequelize
+            primaryKey: true
         },
 
         M83F01: {
-            type: DataTypes.STRING(100), // MENU NAME
-            allowNull: false
+            type: DataTypes.STRING(100),
+            allowNull: true
         },
 
         M83F02: {
@@ -17,29 +17,39 @@ module.exports = (sequelize, DataTypes) => {
             allowNull: false
         },
 
+        // ALL ACCESS
         M83F03: {
-            type: DataTypes.BOOLEAN, // ADD
-            defaultValue: false
+            type: DataTypes.BOOLEAN,
+            defaultValue: false // ADD ALL
         },
 
         M83F04: {
-            type: DataTypes.BOOLEAN, // EDIT
-            defaultValue: false
+            type: DataTypes.BOOLEAN,
+            defaultValue: false // EDIT ALL
         },
 
         M83F05: {
-            type: DataTypes.BOOLEAN, // DELETE
-            defaultValue: false
+            type: DataTypes.BOOLEAN,
+            defaultValue: false // DELETE ALL
         },
 
         M83F06: {
-            type: DataTypes.BOOLEAN, // VIEW
-            defaultValue: false
+            type: DataTypes.BOOLEAN,
+            defaultValue: false // VIEW ALL
         },
-         M83F08: {
-            type: DataTypes.INTEGER, // menuid
-            defaultValue: false
-        }
+
+        M83F08: {
+            type: DataTypes.INTEGER, // MENU ID
+            allowNull: false
+        },
+
+        // SELF ACCESS
+        M83F09: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false // VIEW SELF
+        },
+
+
 
     }, {
         tableName: 'PLSYSM83',

@@ -289,7 +289,11 @@ class AdminModuleController {
                     }
 
                     let relf04Value = existing.RELF04;
-                    let updatedModuleCode = existing.RELF01;
+
+                    // ✅ Allow edit for ALL module types
+                    let updatedModuleCode = pa.ModuleCode
+                        ? pa.ModuleCode.trim()
+                        : existing.RELF01;
 
                     /* =========================
                        🟢 SETUP TYPE HANDLING
@@ -297,43 +301,51 @@ class AdminModuleController {
                     if (existing.RELF03 === 'S') {
 
                         // 2️⃣ If ModuleCode changed → revert old & activate new
-                        if (pa.ModuleCode && pa.ModuleCode.trim() !== existing.RELF01.trim()) {
+                        if (
+                            pa.ModuleCode &&
+                            pa.ModuleCode.trim() !== existing.RELF01.trim()
+                        ) {
 
                             // 🔴 Revert old setup IDs
                             const oldCodes = extractSetupIds(existing.RELF01);
 
                             if (oldCodes.length > 0) {
+
                                 await sequelizeRDB.query(`
                     UPDATE IDBAPI.dbo.PLSYSF02
                     SET F02PYBL = 'N'
                     WHERE F02F01 IN (:oldCodes)
-                `, { replacements: { oldCodes } });
+                `, {
+                                    replacements: { oldCodes }
+                                });
                             }
 
                             // 🟢 Activate new setup IDs
                             const newCodes = extractSetupIds(pa.ModuleCode);
 
                             if (newCodes.length > 0) {
+
                                 await sequelizeRDB.query(`
                     UPDATE IDBAPI.dbo.PLSYSF02
                     SET F02PYBL = 'Y'
                     WHERE F02F01 IN (:newCodes)
-                `, { replacements: { newCodes } });
+                `, {
+                                    replacements: { newCodes }
+                                });
                             }
-
-                            updatedModuleCode = pa.ModuleCode;
                         }
 
                         // 3️⃣ Update menuId (RELF04)
-                        if (pa.menuId) {
+                        if (pa.menuId !== undefined) {
+
                             relf04Value = pa.menuId
-                                .split(',')
-                                .map(id => id.trim())
-                                .filter(id => id.length)
-                                .sort()
-                                .join(',');
-                        } else {
-                            relf04Value = null;
+                                ? pa.menuId
+                                    .split(',')
+                                    .map(id => id.trim())
+                                    .filter(id => id.length)
+                                    .sort()
+                                    .join(',')
+                                : null;
                         }
                     }
 
@@ -346,11 +358,14 @@ class AdminModuleController {
                             RELF02: price ?? existing.RELF02,
                             RELF04: relf04Value
                         },
-                        { RELF00: moduleID }
+                        {
+                            RELF00: moduleID
+                        }
                     );
 
                     response.status = 'SUCCESS';
                     response.message = 'Module updated successfully';
+
                     return AdminModuleController.send(res, response);
                 }
 

@@ -182,10 +182,10 @@ class CompanyService {
             user = await admi.findOne({ ADMICORP: nextId });
 
             let activeServer = await DBSER_INFO.findOne({
-                where:{
+                where: {
                     INFO_11: 'Y'
                 }
-            });
+            })
 
             // Create company record
             const createCMP = await PLRDBA01.create({
@@ -209,10 +209,10 @@ class CompanyService {
                 A01F51: SBDdbType ? SBDdbType : 'SQL',
                 A01F52: activeServer.INFO_02,
                 A01F53: activeServer.INFO_03,
-                A01F54: activeServer.INFO_04,
+                A01F54: encryptor.decrypt(activeServer.INFO_04),
                 FTPURL: activeServer.INFO_05,
                 FTPUID: activeServer.INFO_06,
-                FTPPWD: activeServer.INFO_07,
+                FTPPWD: encryptor.decrypt(activeServer.INFO_07),
                 FTPDIR: activeServer.INFO_08,
                 FTPPATH: activeServer.INFO_09,
                 A02F01: A02id,
@@ -361,7 +361,7 @@ class CompanyService {
                     FILE04: userRecord.UTF01,
                     FILE06: description,
                     FILE07: source,
-                    FILE09: nextCorpId                    
+                    FILE09: nextCorpId
                 });
             }
             const existing = await admi.findAll({}, [], ['ADMIF01', 'ADMIF05']);

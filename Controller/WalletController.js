@@ -6,12 +6,19 @@ const definePLRDBPYMT = require('../Models/RDB/PLRDBPYMT');
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01');
 const defineEPUser = require('../Models/RDB/EP_USER');
 const defineEP_FILE = require('../Models/RDB/EP_FILE');
+const definePermission = require('../Models/IDB/PLSYSM83');
 
 const Encryptor = require('../Services/encryptor');
 const TokenService = require('../Services/tokenServices');
 
 
 const sequelizeRDB = db.getConnection('RDB');
+const sequelizeIDB = db.getConnection('IDBAPI');
+
+const Permission = definePermission(
+    sequelizeIDB,
+    require('sequelize').DataTypes
+);
 const EP_FILE = defineEP_FILE(sequelizeRDB, require('sequelize').DataTypes);
 
 const EP_TRNS = defineEPTRNS(sequelizeRDB);
@@ -351,9 +358,61 @@ class WalletController {
                🔐 ADMIN ONLY ACCESS
             ========================= */
 
-            if (![1, 2].includes(roleId)) {
-                return res.status(403).send("Only admin can view this file");
+            // if (![1, 2].includes(roleId)) {
+            //     return res.status(403).send("Only admin can view this file");
+            // }
+            /* =========================
+   🔥 PERMISSION FILTER
+========================= */
+
+            // Wallet menu id
+            const MENU_ID = 5;
+
+            const permission = await Permission.findOne({
+                where: {
+                    M83F02: roleId,
+                    M83F08: MENU_ID
+                },
+                raw: true
+            });
+
+            const isView = Number(permission?.M83F06) === 1;
+            const isAll = Number(permission?.M83F09) === 1;
+
+            /* =========================
+               NO ACCESS
+            ========================= */
+
+            if (!isView) {
+
+                return res.status(403).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        status: 'FAIL',
+                        message: 'No wallet view permission'
+                    }))
+                });
             }
+
+            /* =========================
+               SELF ACCESS
+            ========================= */
+
+            if (!isAll) {
+
+                return res.status(403).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        status: 'FAIL',
+                        message: 'Only all-access users can view files'
+                    }))
+                });
+            }
+
+            /* =========================
+               ALL ACCESS
+            ========================= */
+
+            // if isAll = true
+            // no filter needed
 
             const { trnId } = req.params;
 
@@ -388,8 +447,50 @@ class WalletController {
                🔥 ROLE BASED FILTER
             ========================= */
 
-            if (![1, 2].includes(roleId)) {
+            // if (![1, 2].includes(roleId)) {
+            //     const dealerId = await WalletController.getDealerId(decoded);
+            //     whereClause += ` AND t.TRN02 = ${dealerId}`;
+            // }
+            /* =========================
+   🔥 PERMISSION FILTER
+========================= */
+
+            // Wallet menu id
+            const MENU_ID = 5;
+
+            const permission = await Permission.findOne({
+                where: {
+                    M83F02: roleId,
+                    M83F08: MENU_ID
+                },
+                raw: true
+            });
+
+            const isView = Number(permission?.M83F06) === 1;
+            const isAll = Number(permission?.M83F09) === 1;
+
+            /* =========================
+               NO ACCESS
+            ========================= */
+
+            if (!isView) {
+
+                return res.status(403).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        status: 'FAIL',
+                        message: 'No wallet view permission'
+                    }))
+                });
+            }
+
+            /* =========================
+               SELF ACCESS
+            ========================= */
+
+            if (!isAll) {
+
                 const dealerId = await WalletController.getDealerId(decoded);
+
                 whereClause += ` AND t.TRN02 = ${dealerId}`;
             }
 
@@ -433,6 +534,8 @@ class WalletController {
             let totalRequested = 0;
             let totalApproved = 0;
             let totalPending = 0;
+            // const isView = Number(permission?.M83F06) === 1;
+            // const isAll = Number(permission?.M83F09) === 1;
 
             const formatted = rows.map(t => {
 
@@ -469,7 +572,12 @@ class WalletController {
                     type: t.TRN15,
 
                     // 🔐 ONLY ADMIN GETS FILE
-                    file: [1, 2].includes(roleId) && t.fileBase64 ? {
+                    // file: [1, 2].includes(roleId) && t.fileBase64 ? {
+                    //     fileName: t.fileName,
+                    //     base64: t.fileBase64
+                    // } : null
+
+                    file: isAll && t.fileBase64 ? {
                         fileName: t.fileName,
                         base64: t.fileBase64
                     } : null

@@ -17,6 +17,7 @@ const defineEP_USER = require('../Models/RDB/EP_USER');
 const defineEP_FILE = require('../Models/RDB/EP_FILE');
 const ADMIController = require('./ADMIController');
 const M81Controller = require('./M81Controller');
+const definePermission = require('../Models/IDB/PLSYSM83');
 
 const defineEP_PAYREQ = require('../Models/RDB/EP_PAYREQ');
 const QueryService = require('../Services/queryService');
@@ -33,9 +34,13 @@ const definePLRDBGAO = require('../Models/RDB/PLRDBGAO'); // Model factory
 const EP_FILE = defineEP_FILE(sequelizeRDB, require('sequelize').DataTypes);
 const UserTypes = defineUserTypes(sequelizeRDB, require('sequelize').DataTypes);
 const EP_PAYREQ = defineEP_PAYREQ(sequelizeRDB, require('sequelize').DataTypes);
+const sequelizeIDB = db.getConnection('IDBAPI');
 const PLRDBGAO = definePLRDBGAO(sequelizeRDB);
 
-
+const Permission = definePermission(
+    sequelizeIDB,
+    require('sequelize').DataTypes
+);
 
 const encryptor = new Encryptor();
 
@@ -401,7 +406,10 @@ class AdminDashboardController {
                  * C → ALL CORPORATES
                  * ========================== */
                 case 'U':
-                    return AdminDashboardController.getAllCorporateUsers(req, res);
+                    return AdminDashboardController.getAllCorporateUsers1(req, res);
+
+                case 'N':
+                    return AdminDashboardController.getAllCorporateUser2(req, res);
 
 
 
@@ -665,11 +673,79 @@ class AdminDashboardController {
                🔥 ROLE FILTER
             ========================= */
 
+            // let whereCondition = {};
+
+            // if (![1, 2, 5].includes(roleId)) {
+            //     whereCondition.A01F19 = user.UTF01;
+            // }
+            /* =========================
+            🔥 PERMISSION FILTER
+            ========================= */
+
+
             let whereCondition = {};
 
-            if (![1, 2, 5].includes(roleId)) {
+            // Dashboard menu id
+            const MENU_ID = 1;
+
+            const permission = await Permission.findOne({
+                where: {
+                    M83F02: roleId,
+                    M83F08: MENU_ID
+                },
+                raw: true
+            });
+
+            /* =========================
+               NO PERMISSION
+            ========================= */
+
+            // if (!permission || !permission.M83F06) {
+
+            //     response.status = 'FAIL';
+            //     response.message = 'No view permission';
+
+            //     encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+
+            //     return res.status(403).json({ encryptedResponse });
+            // }
+
+            /* =========================
+               SELF ACCESS
+            ========================= */
+
+            const isView = Number(permission?.M83F06) === 1;
+            const isAll = Number(permission?.M83F09) === 1;
+
+            /* =========================
+               NO ACCESS
+            ========================= */
+
+            if (!isView) {
+
+                response.status = 'FAIL';
+                response.message = 'No view permission';
+
+                encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+
+                return res.status(403).json({ encryptedResponse });
+            }
+
+            /* =========================
+               SELF ACCESS
+            ========================= */
+
+            if (!isAll) {
+
                 whereCondition.A01F19 = user.UTF01;
             }
+
+            /* =========================
+               ALL ACCESS
+            ========================= */
+
+            // if isAll = true
+            // no filter needed
 
             /* =========================
                📅 DATE
@@ -776,7 +852,8 @@ class AdminDashboardController {
 
             let txnWhere = {};
 
-            if (![1, 2, 5].includes(roleId)) {
+            if (!isAll) {
+
                 const corporates = await PLRDBA01.findAll({
                     attributes: ['A01F03'],
                     where: whereCondition
@@ -930,46 +1007,596 @@ class AdminDashboardController {
             /* ------------------------------
              * 3. ROLE-BASED FILTER
              * ---------------------------- */
+            /* ------------------------------
+  * 3. PERMISSION-BASED FILTER
+  * ---------------------------- */
+
             let whereCondition = {};
 
-            if (![1, 2, 5].includes(roleId)) {
+            // 🔥 MENU ID
+            const MENU_ID = 2;
 
-                let loggedUser = null;
+            // 🔥 FIND LOGGED USER
+            let loggedUser = null;
 
-                for (let u of users) {
-                    let decryptedId;
+            for (let u of users) {
 
-                    try {
-                        decryptedId = encryptor.decrypt(u.UTF04);
-                    } catch {
-                        decryptedId = u.UTF04;
-                    }
+                let decryptedId;
 
-                    // if (decryptedId === decoded.userId) {
-                    //     loggedUser = u;
-                    //     break;
-                    // }
-                    let tokenUserId;
-
-                    try {
-                        tokenUserId = encryptor.decrypt(decoded.userId);
-                    } catch {
-                        tokenUserId = decoded.userId;
-                    }
-
-                    if (String(decryptedId) === String(tokenUserId)) {
-                        loggedUser = u;
-                        break;
-                    }
+                try {
+                    decryptedId = encryptor.decrypt(u.UTF04);
+                } catch {
+                    decryptedId = u.UTF04;
                 }
 
-                if (!loggedUser) {
-                    throw new Error('User not found');
+                let tokenUserId;
+
+                try {
+                    tokenUserId = encryptor.decrypt(decoded.userId);
+                } catch {
+                    tokenUserId = decoded.userId;
                 }
 
-                // 🔥 Filter corporates by owner
+                if (String(decryptedId) === String(tokenUserId)) {
+                    loggedUser = u;
+                    break;
+                }
+            }
+
+            if (!loggedUser) {
+                throw new Error('User not found');
+            }
+
+            /* ------------------------------
+             * FETCH PERMISSION
+             * ---------------------------- */
+
+            const permission = await Permission.findOne({
+                where: {
+                    M83F02: roleId,
+                    M83F08: MENU_ID
+                },
+                raw: true
+            });
+
+            const isView = Number(permission?.M83F06) === 1;
+            const isAll = Number(permission?.M83F09) === 1;
+
+            /* ------------------------------
+             * NO VIEW ACCESS
+             * ---------------------------- */
+
+            if (!isView) {
+
+                response.status = 'FAIL';
+                response.message = 'No view permission';
+
+                encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+
+                return res.status(403).json({ encryptedResponse });
+            }
+
+            /* ------------------------------
+             * SELF ACCESS
+             * ---------------------------- */
+
+            if (!isAll) {
+
                 whereCondition.A01F19 = loggedUser.UTF01;
             }
+
+            /* ------------------------------
+             * ALL ACCESS
+             * ---------------------------- */
+
+            // if isAll = true
+            // no filter needed
+
+            /* ------------------------------
+             * 4. FETCH CORPORATES
+             * ---------------------------- */
+            const corporates = await PLRDBA01.findAll({
+                attributes: [
+                    'A01F01',
+                    'A01F02',
+                    'A01F03',
+                    'A01F08',
+                    'A01F12',
+                    'A01F13',
+                    'A01F10',
+                    'A01F19',
+                    'A02F01',
+                    'A01F20'
+                ],
+                where: whereCondition,
+                order: [['A01F03', 'ASC']]
+            });
+            // ✅ Extract corporateIds
+            const corporateIds = corporates.map(c => c.A01F03);
+
+            // ✅ Get pending counts ONLY for these corporates
+            const pendingCounts = await EP_PAYREQ.findAll({
+                attributes: [
+                    'PRQF01',
+                    [Sequelize.fn('COUNT', Sequelize.col('PRQF01')), 'total']
+                ],
+                where: {
+                    PRQF07: 'P',
+                    PRQF01: {
+                        [Op.in]: corporateIds
+                    }
+                },
+                group: ['PRQF01'],
+                raw: true
+            });
+
+            // ✅ Convert to map
+            const pendingMap = {};
+            for (let row of pendingCounts) {
+                pendingMap[row.PRQF01?.trim().toUpperCase()] = parseInt(row.total);
+            }
+
+            const files = await EP_FILE.findAll({
+                attributes: ['FILE02', 'FILE03', 'FILE09', 'FILE06'],
+                raw: true
+            });
+
+            const fileMap = {};
+
+            const normalize = (val) => val?.trim().toUpperCase();
+
+            for (let f of files) {
+                const key = normalize(f.FILE09);
+
+                fileMap[key] = {
+                    fileName: f.FILE02,
+                    base64: f.FILE03,
+                    description: f.FILE06,
+                };
+            }
+            // const corporateKey = normalize(row.A01F03);
+            /* ------------------------------
+             * 5. MAP RESPONSE (🔥 FINAL LOGIC)
+             * ---------------------------- */
+            response.data = corporates.map(row => {
+
+                const ownerId = row.A01F19;
+                const ownerDetails = userMap[ownerId] || {};
+                const corporateKey = normalize(row.A01F03);
+
+                return {
+                    corpUnq: row.A01F01?.trim() || null,
+                    corporateId: row.A01F03?.trim() || null,
+                    companyName: row.A01F02?.trim() || null,
+                    status: row.A01F20 === 'P' ? 'P' : 'A',
+                    planId: row.A02F01,
+                    subscription: {
+                        startDate: row.A01F12,
+                        endDate: row.A01F13
+                    },
+                    licensedUsers: row.A01F10 || 0,
+
+                    // ✅ Instead of exposing A01F19
+                    ownerRole: ownerDetails.role || null,
+                    ownerName: ownerDetails.name || null,
+                    file: fileMap[corporateKey] || null,
+                    pendingRequests: pendingMap[row.A01F03?.trim().toUpperCase()] || 0
+                };
+            });
+
+            /* ------------------------------
+             * 6. ENCRYPT RESPONSE
+             * ---------------------------- */
+            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(200).json({ encryptedResponse });
+
+        } catch (err) {
+            console.error('getAllCorporateUsers error:', err.message);
+
+            response.status = 'FAIL';
+            response.message = 'Failed to load corporate list';
+
+            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(500).json({ encryptedResponse });
+        }
+    }
+    static async getAllCorporateUsers1(req, res) {
+        let response = { status: 'SUCCESS', message: '', data: null };
+        let encryptedResponse;
+
+        try {
+            /* ------------------------------
+             * 1. TOKEN VALIDATION
+             * ---------------------------- */
+            const token = req.headers['authorization']?.split(' ')[1];
+
+            if (!token) {
+                response.status = 'FAIL';
+                response.message = 'Authorization token missing';
+                encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                return res.status(401).json({ encryptedResponse });
+            }
+
+            const decoded = await TokenService.validateToken(token);
+            const roleId = Number(decoded.roleId);
+
+            // if (![1, 2, 3, 5].includes(roleId)) {
+            //     response.status = 'FAIL';
+            //     response.message = 'Access denied';
+            //     return res.status(403).json({
+            //         encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+            //     });
+            // }
+            const isAllowed = await AdminDashboardController.checkRoleAccess(roleId);
+
+            if (!isAllowed) {
+                response.status = 'FAIL';
+                response.message = 'Access denied';
+                return res.status(403).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                });
+            }
+
+            /* ------------------------------
+             * 2. FETCH USERS ONCE (🔥 IMPORTANT)
+             * ---------------------------- */
+            const userCtrl = new EP_USERController('RDB');
+
+            const users = await userCtrl.findAll({
+                UTF07: 'N'
+            });
+
+            // 🔥 Create lookup map (O(1))
+            const userMap = {};
+
+            for (let u of users) {
+                userMap[u.UTF01] = {
+                    role: u.UTF03,
+                    name: u.UTF02,
+                    encryptedId: u.UTF04
+                };
+            }
+
+            /* ------------------------------
+             * 3. ROLE-BASED FILTER
+             * ---------------------------- */
+            /* ------------------------------
+  * 3. PERMISSION-BASED FILTER
+  * ---------------------------- */
+
+            let whereCondition = {};
+
+            // 🔥 MENU ID
+            const MENU_ID = 4;
+
+            // 🔥 FIND LOGGED USER
+            let loggedUser = null;
+
+            for (let u of users) {
+
+                let decryptedId;
+
+                try {
+                    decryptedId = encryptor.decrypt(u.UTF04);
+                } catch {
+                    decryptedId = u.UTF04;
+                }
+
+                let tokenUserId;
+
+                try {
+                    tokenUserId = encryptor.decrypt(decoded.userId);
+                } catch {
+                    tokenUserId = decoded.userId;
+                }
+
+                if (String(decryptedId) === String(tokenUserId)) {
+                    loggedUser = u;
+                    break;
+                }
+            }
+
+            if (!loggedUser) {
+                throw new Error('User not found');
+            }
+
+            /* ------------------------------
+             * FETCH PERMISSION
+             * ---------------------------- */
+
+            const permission = await Permission.findOne({
+                where: {
+                    M83F02: roleId,
+                    M83F08: MENU_ID
+                },
+                raw: true
+            });
+
+            const isView = Number(permission?.M83F06) === 1;
+            const isAll = Number(permission?.M83F09) === 1;
+
+            /* ------------------------------
+             * NO VIEW ACCESS
+             * ---------------------------- */
+
+            if (!isView) {
+
+                response.status = 'FAIL';
+                response.message = 'No view permission';
+
+                encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+
+                return res.status(403).json({ encryptedResponse });
+            }
+
+            /* ------------------------------
+             * SELF ACCESS
+             * ---------------------------- */
+
+            if (!isAll) {
+
+                whereCondition.A01F19 = loggedUser.UTF01;
+            }
+
+            /* ------------------------------
+             * ALL ACCESS
+             * ---------------------------- */
+
+            // if isAll = true
+            // no filter needed
+
+            /* ------------------------------
+             * 4. FETCH CORPORATES
+             * ---------------------------- */
+            const corporates = await PLRDBA01.findAll({
+                attributes: [
+                    'A01F01',
+                    'A01F02',
+                    'A01F03',
+                    'A01F08',
+                    'A01F12',
+                    'A01F13',
+                    'A01F10',
+                    'A01F19',
+                    'A02F01',
+                    'A01F20'
+                ],
+                where: whereCondition,
+                order: [['A01F03', 'ASC']]
+            });
+            // ✅ Extract corporateIds
+            const corporateIds = corporates.map(c => c.A01F03);
+
+            // ✅ Get pending counts ONLY for these corporates
+            const pendingCounts = await EP_PAYREQ.findAll({
+                attributes: [
+                    'PRQF01',
+                    [Sequelize.fn('COUNT', Sequelize.col('PRQF01')), 'total']
+                ],
+                where: {
+                    PRQF07: 'P',
+                    PRQF01: {
+                        [Op.in]: corporateIds
+                    }
+                },
+                group: ['PRQF01'],
+                raw: true
+            });
+
+            // ✅ Convert to map
+            const pendingMap = {};
+            for (let row of pendingCounts) {
+                pendingMap[row.PRQF01?.trim().toUpperCase()] = parseInt(row.total);
+            }
+
+            const files = await EP_FILE.findAll({
+                attributes: ['FILE02', 'FILE03', 'FILE09', 'FILE06'],
+                raw: true
+            });
+
+            const fileMap = {};
+
+            const normalize = (val) => val?.trim().toUpperCase();
+
+            for (let f of files) {
+                const key = normalize(f.FILE09);
+
+                fileMap[key] = {
+                    fileName: f.FILE02,
+                    base64: f.FILE03,
+                    description: f.FILE06,
+                };
+            }
+            // const corporateKey = normalize(row.A01F03);
+            /* ------------------------------
+             * 5. MAP RESPONSE (🔥 FINAL LOGIC)
+             * ---------------------------- */
+            response.data = corporates.map(row => {
+
+                const ownerId = row.A01F19;
+                const ownerDetails = userMap[ownerId] || {};
+                const corporateKey = normalize(row.A01F03);
+
+                return {
+                    corpUnq: row.A01F01?.trim() || null,
+                    corporateId: row.A01F03?.trim() || null,
+                    companyName: row.A01F02?.trim() || null,
+                    status: row.A01F20 === 'P' ? 'P' : 'A',
+                    planId: row.A02F01,
+                    subscription: {
+                        startDate: row.A01F12,
+                        endDate: row.A01F13
+                    },
+                    licensedUsers: row.A01F10 || 0,
+
+                    // ✅ Instead of exposing A01F19
+                    ownerRole: ownerDetails.role || null,
+                    ownerName: ownerDetails.name || null,
+                    file: fileMap[corporateKey] || null,
+                    pendingRequests: pendingMap[row.A01F03?.trim().toUpperCase()] || 0
+                };
+            });
+
+            /* ------------------------------
+             * 6. ENCRYPT RESPONSE
+             * ---------------------------- */
+            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(200).json({ encryptedResponse });
+
+        } catch (err) {
+            console.error('getAllCorporateUsers error:', err.message);
+
+            response.status = 'FAIL';
+            response.message = 'Failed to load corporate list';
+
+            encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+            return res.status(500).json({ encryptedResponse });
+        }
+    }
+    static async getAllCorporateUser2(req, res) {
+        let response = { status: 'SUCCESS', message: '', data: null };
+        let encryptedResponse;
+
+        try {
+            /* ------------------------------
+             * 1. TOKEN VALIDATION
+             * ---------------------------- */
+            const token = req.headers['authorization']?.split(' ')[1];
+
+            if (!token) {
+                response.status = 'FAIL';
+                response.message = 'Authorization token missing';
+                encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+                return res.status(401).json({ encryptedResponse });
+            }
+
+            const decoded = await TokenService.validateToken(token);
+            const roleId = Number(decoded.roleId);
+
+            // if (![1, 2, 3, 5].includes(roleId)) {
+            //     response.status = 'FAIL';
+            //     response.message = 'Access denied';
+            //     return res.status(403).json({
+            //         encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+            //     });
+            // }
+            const isAllowed = await AdminDashboardController.checkRoleAccess(roleId);
+
+            if (!isAllowed) {
+                response.status = 'FAIL';
+                response.message = 'Access denied';
+                return res.status(403).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                });
+            }
+
+            /* ------------------------------
+             * 2. FETCH USERS ONCE (🔥 IMPORTANT)
+             * ---------------------------- */
+            const userCtrl = new EP_USERController('RDB');
+
+            const users = await userCtrl.findAll({
+                UTF07: 'N'
+            });
+
+            // 🔥 Create lookup map (O(1))
+            const userMap = {};
+
+            for (let u of users) {
+                userMap[u.UTF01] = {
+                    role: u.UTF03,
+                    name: u.UTF02,
+                    encryptedId: u.UTF04
+                };
+            }
+
+            /* ------------------------------
+             * 3. ROLE-BASED FILTER
+             * ---------------------------- */
+            /* ------------------------------
+  * 3. PERMISSION-BASED FILTER
+  * ---------------------------- */
+
+            let whereCondition = {};
+
+            // 🔥 MENU ID
+            const MENU_ID = 5;
+
+            // 🔥 FIND LOGGED USER
+            let loggedUser = null;
+
+            for (let u of users) {
+
+                let decryptedId;
+
+                try {
+                    decryptedId = encryptor.decrypt(u.UTF04);
+                } catch {
+                    decryptedId = u.UTF04;
+                }
+
+                let tokenUserId;
+
+                try {
+                    tokenUserId = encryptor.decrypt(decoded.userId);
+                } catch {
+                    tokenUserId = decoded.userId;
+                }
+
+                if (String(decryptedId) === String(tokenUserId)) {
+                    loggedUser = u;
+                    break;
+                }
+            }
+
+            if (!loggedUser) {
+                throw new Error('User not found');
+            }
+
+            /* ------------------------------
+             * FETCH PERMISSION
+             * ---------------------------- */
+
+            const permission = await Permission.findOne({
+                where: {
+                    M83F02: roleId,
+                    M83F08: MENU_ID
+                },
+                raw: true
+            });
+
+            const isView = Number(permission?.M83F06) === 1;
+            const isAll = Number(permission?.M83F09) === 1;
+
+            /* ------------------------------
+             * NO VIEW ACCESS
+             * ---------------------------- */
+
+            if (!isView) {
+
+                response.status = 'FAIL';
+                response.message = 'No view permission';
+
+                encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+
+                return res.status(403).json({ encryptedResponse });
+            }
+
+            /* ------------------------------
+             * SELF ACCESS
+             * ---------------------------- */
+
+            if (!isAll) {
+
+                whereCondition.A01F19 = loggedUser.UTF01;
+            }
+
+            /* ------------------------------
+             * ALL ACCESS
+             * ---------------------------- */
+
+            // if isAll = true
+            // no filter needed
 
             /* ------------------------------
              * 4. FETCH CORPORATES

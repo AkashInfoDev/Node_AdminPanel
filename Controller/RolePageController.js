@@ -4,9 +4,16 @@ const Encryptor = require('../Services/encryptor');
 const TokenService = require('../Services/tokenServices');
 const defineUserTypes = require('../Models/RDB/EP_USERTPYES');
 const UserTypes = defineUserTypes(db.getConnection('RDB'), require('sequelize').DataTypes);
+const defineTicketPermission =
+    require('../Models/RDB/EPTICKPER');
 const sequelizeRDB = db.getConnection('IDBAPI');
 
 const definePages = require('../Models/IDB/PLSYSM82');
+const TicketPermission =
+    defineTicketPermission(
+        db.getConnection('RDB'),
+        require('sequelize').DataTypes
+    );
 // const definePLSTATE = require('../Models/IDB/PLSTATE');
 
 // const definePages = require('../Models/IDB/PLSYSM821')
