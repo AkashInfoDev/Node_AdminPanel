@@ -255,6 +255,7 @@ class WalletController {
                     FILE02: req.file.originalname,
                     FILE03: base64,
                     FILE04: dealerId,
+                    FILE07: 'WALLET', // ✅ ADD THIS
                     FILE08: txn.TRN01
                 });
             }
@@ -522,6 +523,7 @@ class WalletController {
         ON t.TRN02 = u.UTF01
     LEFT JOIN EP_FILE f
         ON t.TRN01 = f.FILE08
+        AND (f.FILE07 IS NULL OR f.FILE07 = 'WALLET')
     WHERE ${whereClause}
     ORDER BY t.TRN01 DESC
 `, {

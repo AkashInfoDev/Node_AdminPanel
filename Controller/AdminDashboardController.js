@@ -74,9 +74,9 @@ async function applyLimitLogic(corporateId, payload, transaction) {
     ========================= */
     await PLRDBA01.update({
 
-        A01F14: (corp.A01F14 || 0) + Number(additionalUser || 0),     // Users
-        A01F15: (corp.A01F15 || 0) + Number(additionalBranch || 0),   // Branch
-        A01F16: (corp.A01F16 || 0) + Number(additionalCompany || 0)   // Company
+        A01F10: (corp.A01F10 || 0) + Number(additionalUser || 0),     // Users
+        A01BRC: (corp.A01BRC || 0) + Number(additionalBranch || 0),   // Branch
+        A01CMP: (corp.A01CMP || 0) + Number(additionalCompany || 0)   // Company
 
     }, {
         where: { A01F03: corporateId },
