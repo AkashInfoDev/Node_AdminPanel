@@ -2012,9 +2012,9 @@ class UserController {
             let corpexi = await PLRDBA01.findAll({
                 where: { A01F03: corpId }
             });
-            if (corpId[0]?.A01F20 == 'P') {
+            if (corpexi[0]?.A01F20 == 'P') {
                 response.status = 'FAIL';
-                response.message = 'Registered Corporate ID is still not Activated.';
+                response.message = 'Registered Corporate ID is not Activated.(Please contact Support)';
                 const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
                 return res.status(400).json({ encryptedResponse: encryptedResponse });
             }
