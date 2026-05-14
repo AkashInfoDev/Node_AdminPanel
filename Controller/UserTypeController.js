@@ -25,6 +25,21 @@ const encryptor = new Encryptor();
 
 class UserTypeController {
 
+
+    static async getTypes1(req,res) {
+        let response = { status: 'SUCCESS', message: '', data: null };
+
+        const types = await UserTypes.findAll({
+            order: [['ID', 'ASC']]
+        });
+
+        return res.json({
+            encryptedResponse: encryptor.encrypt(JSON.stringify({
+                status: 'SUCCESS',
+                data: types
+            }))
+        });
+    }
     static cachedAdminRoles = null;
 
     static async checkAdminAccess(roleId) {

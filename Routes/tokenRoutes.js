@@ -4,5 +4,6 @@ const reGenToken = require('../Controller/reGenToken');
 
 // Now this handles /api/User/UserInfo
 router.get('/token', reGenToken.tokenHandler);
+router.get('/user-token', reGenToken.userTokenHandler);
 
 module.exports = router;

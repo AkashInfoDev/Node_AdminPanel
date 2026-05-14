@@ -16,19 +16,19 @@ const UserTypeController = require('../Controller/UserTypeController');
 
 // In your express route:
 // router.get('/adminData',AdminPanel.getUsers); // For Admin Panel of AI
+router.get('/dashboardData', dashboardController.dashboardData);
 router.get('/adminData', AdminDashboardController.dashboardCounts);
-router.get('/dashboardData',dashboardController.dashboardData);
 router.get('/getAllCorporateUsers', AdminDashboardController.getAllCorporateUsers);
 router.get('/getUserList', AdminDashboardController.manageDashboard);
 router.post('/getStatus', upload.single('file'), AdminDashboardController.updateCorporateStatus);
 router.get('/getPlanDetails', AdminPlanController.managePlans);
 router.get('/getModuleDetails', AdminModuleController.manageAddOns);
-// router.get('/Cadminplan', CAdminPlanController.handlePlan);
 router.post('/Cadminplan', upload.single('file'), CAdminPlanController.handlePlan);
 router.get('/CompanyAdminUser', CAdminUserController.manageUser);
 router.get('/wallet', WalletController.handleWallet);
 router.post('/withdraw', upload.single('file'), WalletController.requestWithdraw);
-router.get('/UserRole',UserTypeController.manageUserType)
+router.get('/UserRole', UserTypeController.manageUserType)
 router.post('/deleteCorporateCompletely', AdminDashboardController.deleteCorporateCompletely);
+router.get('/allUserTypes', UserTypeController.getTypes1)
 
 module.exports = router;

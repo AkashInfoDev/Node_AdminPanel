@@ -1,7 +1,12 @@
 const Encryptor = require("../Services/encryptor");
 const TokenService = require("../Services/tokenServices");
+const db = require('../Config/config');
+const defineEP_LOGIN = require('../Models/RDB/EP_LOGIN');
 const jwt = require('jsonwebtoken'); // Make sure you have the jwt package installed.
 const M83Controller = require("./M83Controller");
+const sequelizeRDB = db.getConnection('RDB');
+
+const EP_LOGIN = defineEP_LOGIN(sequelizeRDB);
 
 const encryptor = new Encryptor();
 
@@ -73,6 +78,143 @@ class reGenToken {
             };
             const encryptedResponse = encryptor.encrypt(JSON.stringify(response));
             return res.status(500).json({ encryptedResponse });
+        }
+    }
+    static async userTokenHandler(req, res) {
+
+        const token =
+            req.headers['authorization']?.split(' ')[1];
+
+        if (!token) {
+
+            let response = {
+                message: 'No token provided.',
+                status: 'FAIL'
+            };
+
+            const encryptedResponse =
+                encryptor.encrypt(JSON.stringify(response));
+
+            return res.status(401).json({
+                encryptedResponse
+            });
+        }
+
+        try {
+
+            const decoded = jwt.verify(
+                token,
+                process.env.JWT_SECRET_KEY
+            );
+
+            const currentTime =
+                Math.floor(Date.now() / 1000);
+
+            const expTime = decoded?.exp;
+
+            if (!expTime) {
+
+                let response = {
+                    message: 'Invalid token.',
+                    status: 'FAIL'
+                };
+
+                const encryptedResponse =
+                    encryptor.encrypt(JSON.stringify(response));
+
+                return res.status(400).json({
+                    encryptedResponse
+                });
+            }
+
+            /* ============================================
+               🔄 EXPIRES IN <= 1 HOUR
+            ============================================ */
+
+            if (expTime - currentTime <= 3600) {
+
+                delete decoded.exp;
+                delete decoded.iat;
+
+                const newToken = jwt.sign(
+                    decoded,
+                    process.env.JWT_SECRET_KEY,
+                    {
+                        expiresIn:
+                            process.env.JWT_EXPIRATION
+                    }
+                );
+                let userId;
+
+                try {
+
+                    userId = encryptor.decrypt(decoded.userId);
+
+                } catch {
+
+                    userId = decoded.userId;
+                }
+
+                /* ============================================
+                   🔄 UPDATE LOGIN TOKEN
+                ============================================ */
+
+                await EP_LOGIN.update(
+                    {
+                        LOG04: newToken,
+                        LOG03: new Date()
+                    },
+                    {
+                        where: {
+                            LOG02: userId
+                        }
+                    }
+                );
+
+                let response = {
+                    message: 'New token generated.',
+                    status: 'SUCCESS',
+                    newToken
+                };
+
+                const encryptedResponse =
+                    encryptor.encrypt(JSON.stringify(response));
+
+                return res.status(200).json({
+                    encryptedResponse
+                });
+            }
+
+            /* ============================================
+               ✅ TOKEN STILL VALID
+            ============================================ */
+
+            let response = {
+                message: 'Token is still valid.',
+                status: 'SUCCESS'
+            };
+
+            const encryptedResponse =
+                encryptor.encrypt(JSON.stringify(response));
+
+            return res.status(200).json({
+                encryptedResponse
+            });
+
+        } catch (error) {
+
+            let response = {
+                message: 'Error processing token.',
+                status: 'FAIL',
+                error: error.message
+            };
+
+            const encryptedResponse =
+                encryptor.encrypt(JSON.stringify(response));
+
+            return res.status(500).json({
+                encryptedResponse
+            });
         }
     }
 }

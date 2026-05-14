@@ -6,7 +6,15 @@ class ADMIController {
         this.connection = db.createPool(dbName);
         this.PLSDBADMI = definePLSDBADMI(this.connection);
     }
+
     async create(encryptedUserId, firstName, middleName, lastName, hashedPassword, roleId, email, dob, gender, address, phoneNumber, base64Image, BrcList, CmpList, menuList, cusRole, corpId, lAudit = 'N') {
+        let formattedDob = null;
+        if (dob && dob.includes('-')) {
+
+            const [day, month, year] = dob.split('-');
+
+            formattedDob = `${year}-${month}-${day}`;
+        }
         return await this.PLSDBADMI.create({
             ADMIF01: encryptedUserId,
             ADMIF02: firstName,
@@ -15,7 +23,8 @@ class ADMIController {
             ADMIF05: hashedPassword,
             ADMIF06: roleId,
             ADMIF07: email,
-            ADMIF09: (dob?.toString()) ? dob.toString() : null,
+            // ADMIF09: (dob?.toString()) ? dob.toString() : null,
+            ADMIF09: formattedDob,
             ADMIF10: gender,
             ADMIF12: address,
             ADMIF13: phoneNumber,

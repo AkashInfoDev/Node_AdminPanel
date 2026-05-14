@@ -99,8 +99,6 @@ function generateHash(subject, description) {
 class TicketController {
 
 
-
-
     static async handleTicket(req, res) {
 
         let response = { status: 'SUCCESS', message: '', data: null };
@@ -1497,8 +1495,11 @@ class TicketController {
             }
 
         } else {
-
-            if (roleId !== 1 && ticket.TKT06 !== decoded.Id) {
+            // ![1, 2, 3, 5].includes
+            // if (roleId !== 1 && ticket.TKT06 !== decoded.Id) {
+            //     throw new Error('Access denied');
+            // }
+            if (![1, 2, 3, 5].includes(roleId) && ticket.TKT06 !== decoded.Id) {
                 throw new Error('Access denied');
             }
         }

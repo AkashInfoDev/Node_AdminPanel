@@ -18,7 +18,10 @@ const defineEP_FILE = require('../Models/RDB/EP_FILE');
 const ADMIController = require('./ADMIController');
 const M81Controller = require('./M81Controller');
 const definePermission = require('../Models/IDB/PLSYSM83');
-
+const defineEPTICKET = require('../Models/RDB/EP_TICKET');
+// const PLRDBEXP = definePLRDBEXP(sequelizeRDB);
+const definePLRDBEXP = require("../Models/RDB/PLRDBEXP");
+const PLRDBEXP = definePLRDBEXP(sequelizeRDB);
 const defineEP_PAYREQ = require('../Models/RDB/EP_PAYREQ');
 const QueryService = require('../Services/queryService');
 const Company = require('../PlusData/Class/CmpYrCls/Company');
@@ -30,9 +33,6 @@ const EP_USER = defineEP_USER(sequelizeRDB);
 const defineUserTypes = require('../Models/RDB/EP_USERTPYES');
 // const EP_FILE = require('../Models/RDB/EP_FILE');
 const definePLRDBGAO = require('../Models/RDB/PLRDBGAO'); // Model factory
-
-const definePLRDBEXP = require("../Models/RDB/PLRDBEXP");
-const PLRDBEXP = definePLRDBEXP(sequelizeRDB);
 
 const EP_FILE = defineEP_FILE(sequelizeRDB, require('sequelize').DataTypes);
 const UserTypes = defineUserTypes(sequelizeRDB, require('sequelize').DataTypes);
@@ -559,6 +559,20 @@ class AdminDashboardController {
 
             const decoded = await TokenService.validateToken(token);
             const roleId = Number(decoded.roleId);
+            /* =========================
+            🔓 DECRYPT QUERY PARAMS
+            ========================= */
+
+            let pa = {};
+
+            if (req.query.pa) {
+
+                const decrypted = encryptor.decrypt(req.query.pa);
+
+                pa = querystring.parse(
+                    decodeURIComponent(decrypted)
+                );
+            }
 
             const isAllowed = await AdminDashboardController.checkRoleAccess(roleId);
 
@@ -738,9 +752,27 @@ class AdminDashboardController {
                SELF ACCESS
             ========================= */
 
+            // if (!isAll) {
+
+            //     whereCondition.A01F19 = user.UTF01;
+            // }
             if (!isAll) {
 
-                whereCondition.A01F19 = user.UTF01;
+                // Dealer → own corporates
+                if ([3, 4].includes(roleId)) {
+                    whereCondition.A01F19 = user.UTF01;
+                }
+
+                // Accountant → FINANCIAL ACCESS (NO FILTER)
+                else if (roleId === 5) {
+                    // accountant sees all financial data
+                    // DO NOT APPLY A01F19 FILTER
+                }
+
+                // Normal user → own
+                else {
+                    whereCondition.A01F19 = user.UTF01;
+                }
             }
 
             /* =========================
@@ -749,27 +781,123 @@ class AdminDashboardController {
 
             // if isAll = true
             // no filter needed
+            /* =========================
+            📅 DATE FILTER
+            ========================= */
+
+            const today = new Date();
+
+            today.setHours(0, 0, 0, 0);
+
+            /* =========================
+               DEFAULT LAST 7 DAYS
+            ========================= */
+
+            const defaultFromDate = new Date(today);
+
+            defaultFromDate.setDate(
+                defaultFromDate.getDate() - 7
+            );
+
+            /* =========================
+               FRONTEND DATE FILTER
+            ========================= */
+
+            let fromDate = pa.fromDate
+                ? new Date(pa.fromDate)
+                : defaultFromDate;
+
+            let toDate = pa.toDate
+                ? new Date(pa.toDate)
+                : today;
+
+            /* =========================
+               SAFETY
+            ========================= */
+
+            fromDate.setHours(0, 0, 0, 0);
+
+            toDate.setHours(23, 59, 59, 999);
+
+            /* =========================
+               COMMON DATE FILTER
+            ========================= */
+
+            const formatDateTime = (date) => {
+
+                const pad = (n) =>
+                    n.toString().padStart(2, '0');
+
+                return (
+                    date.getFullYear() + '-' +
+                    pad(date.getMonth() + 1) + '-' +
+                    pad(date.getDate()) + ' ' +
+                    pad(date.getHours()) + ':' +
+                    pad(date.getMinutes()) + ':' +
+                    pad(date.getSeconds())
+                );
+            };
+            const dateFilter = {
+                [Op.between]: [
+                    formatDateTime(fromDate),
+                    formatDateTime(toDate)
+                ]
+            };
+
+            /* =========================
+               COMMON WHERE
+            ========================= */
+
+            const commonWhere = {
+                ...whereCondition,
+                A01F12: dateFilter
+            };
+
+            /* =========================
+               NEXT 7 DAYS
+            ========================= */
+
+            const next7Days = new Date(today);
+
+            next7Days.setDate(
+                next7Days.getDate() + 7
+            );
 
             /* =========================
                📅 DATE
             ========================= */
 
-            const today = new Date();
-            const next7Days = new Date();
-            next7Days.setDate(today.getDate() + 7);
+            // const today = new Date();
+            // const next7Days = new Date();
+            // next7Days.setDate(today.getDate() + 7);
 
             /* =========================
                🏢 CORPORATE STATS
             ========================= */
 
-            const totalCorporates = await PLRDBA01.count({ where: whereCondition });
-
-            const activeCorporates = await PLRDBA01.count({
-                where: { ...whereCondition, A01F13: { [Op.gte]: today } }
+            // const totalCorporates = await PLRDBA01.count({ where: whereCondition });
+            const totalCorporates = await PLRDBA01.count({
+                where: commonWhere
             });
 
+            // const activeCorporates = await PLRDBA01.count({
+            //     where: { ...whereCondition, A01F20: 'A' }
+            // });
+            const activeCorporates = await PLRDBA01.count({
+                where: {
+                    ...commonWhere,
+                    A01F20: 'A'
+                }
+            });
+
+            // const inactiveCorporates = await PLRDBA01.count({
+            //     where: { ...whereCondition, A01F20: 'P' }
+            // });
             const inactiveCorporates = await PLRDBA01.count({
-                where: { ...whereCondition, A01F13: { [Op.lt]: today } }
+                where: {
+                    ...commonWhere,
+                    A01F20: 'P'
+                }
             });
 
             /* =========================
@@ -779,10 +907,24 @@ class AdminDashboardController {
             const activeSubscriptions = activeCorporates;
             const expiredSubscriptions = inactiveCorporates;
 
+            // const expiringSoon = await PLRDBA01.count({
+            //     where: {
+            //         ...whereCondition,
+            //         A01F13: { [Op.between]: [today, next7Days] }
+            //     }
+            // });
             const expiringSoon = await PLRDBA01.count({
+                // where: {
+                //     ...commonWhere,
+                //     A01F13: {
+                //         [Op.between]: [today, next7Days]
+                //     }
+                // }
                 where: {
                     ...whereCondition,
-                    A01F13: { [Op.between]: [today, next7Days] }
+                    A01F13: {
+                        [Op.between]: [today, next7Days]
+                    }
                 }
             });
 
@@ -792,16 +934,27 @@ class AdminDashboardController {
 
             const paymentDone = activeSubscriptions;
 
+            // const paymentPending = await PLRDBA01.count({
+            //     where: {
+            //         ...whereCondition,
+            //         [Op.or]: [
+            //             { A01F13: { [Op.lt]: today } }
+            //         ]
+            //     }
+            // });
+
             const paymentPending = await PLRDBA01.count({
                 where: {
-                    ...whereCondition,
+                    ...commonWhere,
                     [Op.or]: [
-                        { A01F13: { [Op.lt]: today } },
-                        { A01F08: 'D' }
+                        {
+                            A01F13: {
+                                [Op.lt]: today
+                            }
+                        }
                     ]
                 }
             });
-
             /* =========================
                📊 PLAN STATS
             ========================= */
@@ -811,11 +964,21 @@ class AdminDashboardController {
                     'A02F01',
                     [Sequelize.fn('COUNT', Sequelize.col('A02F01')), 'totalUsers']
                 ],
+                // where: {
+                //     ...whereCondition,
+                //     A02F01: { [Op.in]: [2, 6, 7] },
+                //     A01F13: { [Op.gte]: today }
+                // },
                 where: {
-                    ...whereCondition,
-                    A02F01: { [Op.in]: [2, 6, 7] },
-                    A01F13: { [Op.gte]: today }
+                    ...commonWhere,
+                    A02F01: {
+                        [Op.in]: [2, 6, 7]
+                    },
+                    A01F13: {
+                        [Op.gte]: today
+                    }
                 },
+
                 group: ['A02F01']
             });
 
@@ -839,7 +1002,7 @@ class AdminDashboardController {
                     [Sequelize.literal('CAST(A01F12 AS DATE)'), 'date'],
                     [Sequelize.fn('COUNT', Sequelize.col('A01F12')), 'totalUsers']
                 ],
-                where: whereCondition,
+                where: commonWhere,
                 group: [Sequelize.literal('CAST(A01F12 AS DATE)')],
                 order: [[Sequelize.literal('CAST(A01F12 AS DATE)'), 'ASC']]
             });
@@ -854,6 +1017,7 @@ class AdminDashboardController {
             ========================= */
 
             let txnWhere = {};
+            txnWhere.PYMT08 = dateFilter;
 
             if (!isAll) {
 
@@ -886,23 +1050,478 @@ class AdminDashboardController {
                💰 WEEKLY REVENUE
             ========================= */
 
-            const last7Days = new Date();
-            last7Days.setDate(last7Days.getDate() - 7);
 
-            const weeklyRevenueResult = await PLRDBPYMT.findAll({
-                attributes: [
-                    [Sequelize.fn('SUM', Sequelize.col('PYMT05')), 'weeklyRevenue']
-                ],
-                where: {
-                    ...txnWhere,
-                    PYMT06: 'SUCCESS',
-                    PYMT08: { [Op.gte]: last7Days }
-                },
-                raw: true
-            });
+            // const last7Days = new Date();
+            // last7Days.setDate(last7Days.getDate() - 7);
+
+            // const weeklyRevenueResult = await PLRDBPYMT.findAll({
+            //     attributes: [
+            //         [Sequelize.fn('SUM', Sequelize.col('PYMT05')), 'weeklyRevenue']
+            //     ],
+            //     where: {
+            //         ...txnWhere,
+            //         PYMT06: 'SUCCESS',
+            //         // PYMT08: { [Op.gte]: last7Days }
+            //         PYMT08: dateFilter
+            //     },
+            //     raw: true
+            // });
+
+            // const weeklyRevenue =
+            //     parseFloat(weeklyRevenueResult[0]?.weeklyRevenue) || 0;
+            /* =========================
+   💰 REVENUE ANALYTICS
+========================= */
+
+            /* -------------------------
+               TOTAL REVENUE
+            ------------------------- */
+
+            const totalRevenueResult =
+                await PLRDBPYMT.findAll({
+                    attributes: [
+                        [
+                            Sequelize.fn(
+                                'SUM',
+                                Sequelize.col('PYMT05')
+                            ),
+                            'totalRevenue'
+                        ]
+                    ],
+                    where: {
+                        ...txnWhere,
+                        PYMT06: 'SUCCESS',
+                        PYMT08: dateFilter
+                    },
+                    raw: true
+                });
+
+            const totalRevenue =
+                parseFloat(
+                    totalRevenueResult[0]?.totalRevenue
+                ) || 0;
+
+            /* -------------------------
+               TODAY REVENUE
+            ------------------------- */
+
+            const endToday = new Date();
+            endToday.setHours(23, 59, 59, 999);
+
+            const todayRevenueResult =
+                await PLRDBPYMT.findAll({
+                    attributes: [
+                        [
+                            Sequelize.fn(
+                                'SUM',
+                                Sequelize.col('PYMT05')
+                            ),
+                            'todayRevenue'
+                        ]
+                    ],
+                    where: {
+                        ...txnWhere,
+                        PYMT06: 'SUCCESS',
+                        PYMT08: {
+                            [Op.between]: [
+                                today,
+                                endToday
+                            ]
+                        }
+                    },
+                    raw: true
+                });
+
+            const todayRevenue =
+                parseFloat(
+                    todayRevenueResult[0]?.todayRevenue
+                ) || 0;
+
+            /* -------------------------
+               DEALER REVENUE
+            ------------------------- */
+
+            const dealerCorporates =
+                await PLRDBA01.findAll({
+                    attributes: ['A01F03'],
+                    where: isAll
+                        ? {
+                            A01F19: {
+                                [Op.and]: [
+                                    { [Op.ne]: null },
+                                    { [Op.ne]: '' }
+                                ]
+                            }
+                        }
+                        : {
+                            A01F19: user.UTF01
+                        },
+                    raw: true
+                });
+
+            const dealerCorporateIds =
+                dealerCorporates.map(c => c.A01F03);
+
+            const dealerRevenueResult =
+                await PLRDBPYMT.findAll({
+                    attributes: [
+                        [
+                            Sequelize.fn(
+                                'SUM',
+                                Sequelize.col('PYMT05')
+                            ),
+                            'dealerRevenue'
+                        ]
+                    ],
+                    where: {
+                        PYMT01: {
+                            [Op.in]: dealerCorporateIds
+                        },
+                        PYMT06: 'SUCCESS',
+                        PYMT08: dateFilter
+                    },
+                    raw: true
+                });
+
+            const dealerRevenue =
+                parseFloat(
+                    dealerRevenueResult[0]?.dealerRevenue
+                ) || 0;
+
+            /* -------------------------
+               DIRECT REVENUE
+            ------------------------- */
+
+            const directRevenue =
+                totalRevenue - dealerRevenue;
+
+            /* -------------------------
+               WEEKLY REVENUE
+            ------------------------- */
 
             const weeklyRevenue =
-                parseFloat(weeklyRevenueResult[0]?.weeklyRevenue) || 0;
+                totalRevenue;
+            /* =========================
+💰 EXPENSE ANALYTICS
+========================= */
+
+
+            const defineEPTRNS = require('../Models/RDB/EP_TRNS');
+
+            const EP_TRNS = defineEPTRNS(sequelizeRDB);
+            const EP_TICKET =
+                defineEPTICKET(
+                    sequelizeRDB,
+                    Sequelize.DataTypes
+                );
+
+            /* -------------------------
+               TOTAL EXPENSE
+            ------------------------- */
+
+            const totalExpenseResult =
+                await EP_TRNS.findAll({
+                    attributes: [
+                        [
+                            Sequelize.fn(
+                                'SUM',
+                                Sequelize.col('TRN03')
+                            ),
+                            'totalExpense'
+                        ]
+                    ],
+                    where: isAll
+                        ? {
+                            TRN05: 'COMPLETED',
+                            TRN11: 'N',
+                            [Op.and]: Sequelize.literal(`
+    CONVERT(VARCHAR, TRN06, 120)
+    BETWEEN '${formatDateTime(fromDate)}'
+    AND '${formatDateTime(toDate)}'
+`)
+                        }
+                        : {
+                            TRN05: 'COMPLETED',
+                            TRN11: 'N',
+                            TRN02: user.UTF01,
+                            [Op.and]: Sequelize.literal(`
+    CONVERT(VARCHAR, TRN06, 120)
+    BETWEEN '${formatDateTime(fromDate)}'
+    AND '${formatDateTime(toDate)}'
+`)
+                        },
+                    raw: true
+                });
+
+            const totalExpense =
+                parseFloat(
+                    totalExpenseResult[0]?.totalExpense
+                ) || 0;
+
+            let walletStats = null;
+
+            if ([3, 4].includes(roleId)) {
+
+                const WalletController =
+                    require('./WalletController');
+
+                walletStats =
+                    await WalletController
+                        .getDealerWallet(user.UTF01);
+            }
+            /* -------------------------
+               PENDING WITHDRAWALS
+            ------------------------- */
+
+            const pendingWithdrawalsResult =
+                await EP_TRNS.findAll({
+                    attributes: [
+                        [
+                            Sequelize.fn(
+                                'SUM',
+                                Sequelize.col('TRN03')
+                            ),
+                            'pendingWithdrawals'
+                        ]
+                    ],
+                    where: isAll
+                        ? {
+                            TRN05: 'PENDING',
+                            TRN11: 'N',
+                            [Op.and]: Sequelize.literal(`
+    CONVERT(VARCHAR, TRN07, 120)
+    BETWEEN '${formatDateTime(fromDate)}'
+    AND '${formatDateTime(toDate)}'
+`)
+                        }
+                        : {
+                            TRN05: 'PENDING',
+                            TRN11: 'N',
+                            TRN02: user.UTF01,
+                            [Op.and]: Sequelize.literal(`
+    CONVERT(VARCHAR, TRN07, 120)
+    BETWEEN '${formatDateTime(fromDate)}'
+    AND '${formatDateTime(toDate)}'
+`)
+                        },
+                    raw: true
+                });
+
+            const pendingWithdrawals =
+                parseFloat(
+                    pendingWithdrawalsResult[0]
+                        ?.pendingWithdrawals
+                ) || 0;
+
+            /* -------------------------
+               APPROVED WITHDRAWALS
+            ------------------------- */
+
+            const approvedWithdrawals =
+                totalExpense;
+
+            /* =========================
+               ⏳ REQUEST ANALYTICS
+            ========================= */
+
+            const pendingRequests =
+                await EP_PAYREQ.count({
+                    where: isAll
+                        ? {
+                            PRQF07: 'P',
+                            [Op.and]: Sequelize.literal(`
+    CONVERT(VARCHAR, PRQF10, 120)
+    BETWEEN '${formatDateTime(fromDate)}'
+    AND '${formatDateTime(toDate)}'
+`)
+                        }
+                        : {
+                            PRQF07: 'P',
+                            PRQF08: String(user.UTF01),
+                            [Op.and]: Sequelize.literal(`
+    CONVERT(VARCHAR, PRQF10, 120)
+    BETWEEN '${formatDateTime(fromDate)}'
+    AND '${formatDateTime(toDate)}'
+`)
+                        }
+                });
+
+            const approvedRequests =
+                await EP_PAYREQ.count({
+                    where: isAll
+                        ? {
+                            PRQF07: 'A',
+                            [Op.and]: Sequelize.literal(`
+    CONVERT(VARCHAR, PRQF10, 120)
+    BETWEEN '${formatDateTime(fromDate)}'
+    AND '${formatDateTime(toDate)}'
+`)
+                        }
+                        : {
+                            PRQF07: 'A',
+                            PRQF08: String(user.UTF01),
+                            [Op.and]: Sequelize.literal(`
+    CONVERT(VARCHAR, PRQF10, 120)
+    BETWEEN '${formatDateTime(fromDate)}'
+    AND '${formatDateTime(toDate)}'
+`)
+                        }
+                });
+
+            const rejectedRequests =
+                await EP_PAYREQ.count({
+                    where: isAll
+                        ? {
+                            PRQF07: 'R',
+                            [Op.and]: Sequelize.literal(`
+    CONVERT(VARCHAR, PRQF10, 120)
+    BETWEEN '${formatDateTime(fromDate)}'
+    AND '${formatDateTime(toDate)}'
+`)
+                        }
+                        : {
+                            PRQF07: 'R',
+                            PRQF08: String(user.UTF01),
+                            [Op.and]: Sequelize.literal(`
+    CONVERT(VARCHAR, PRQF10, 120)
+    BETWEEN '${formatDateTime(fromDate)}'
+    AND '${formatDateTime(toDate)}'
+`)
+                        }
+                });
+
+            /* -------------------------
+               PENDING REVENUE
+            ------------------------- */
+
+            const pendingRevenueResult =
+                await EP_PAYREQ.findAll({
+                    attributes: [
+                        [
+                            Sequelize.fn(
+                                'SUM',
+                                Sequelize.col('PRQF05')
+                            ),
+                            'pendingRevenue'
+                        ]
+                    ],
+                    where: isAll
+                        ? {
+                            PRQF07: 'P',
+                            [Op.and]: Sequelize.literal(`
+    CONVERT(VARCHAR, PRQF10, 120)
+    BETWEEN '${formatDateTime(fromDate)}'
+    AND '${formatDateTime(toDate)}'
+`)
+                        }
+                        : {
+                            PRQF07: 'P',
+                            PRQF08: String(user.UTF01),
+                            [Op.and]: Sequelize.literal(`
+    CONVERT(VARCHAR, PRQF10, 120)
+    BETWEEN '${formatDateTime(fromDate)}'
+    AND '${formatDateTime(toDate)}'
+`)
+                        },
+                    raw: true
+                });
+
+            const pendingRevenue =
+                parseFloat(
+                    pendingRevenueResult[0]
+                        ?.pendingRevenue
+                ) || 0;
+
+            /* =========================
+       🎫 TICKET ANALYTICS
+    ========================= */
+
+            let ticketWhere = {};
+
+            if (!isAll) {
+
+                ticketWhere.TKT06 = user.UTF01;
+            }
+
+            /* -------------------------
+               TOTAL TICKETS
+            ------------------------- */
+
+            const totalTickets =
+                await EP_TICKET.count({
+                    where: ticketWhere
+                });
+
+            /* -------------------------
+               OPEN TICKETS
+            ------------------------- */
+
+            const openTickets =
+                await EP_TICKET.count({
+                    where: {
+                        ...ticketWhere,
+                        TKT05: 'OPEN'
+                    }
+                });
+
+            /* -------------------------
+               RESOLVED TICKETS
+            ------------------------- */
+
+            const resolvedTickets =
+                await EP_TICKET.count({
+                    where: {
+                        ...ticketWhere,
+                        TKT05: 'RESOLVED'
+                    }
+                });
+
+            /* -------------------------
+               HIGH PRIORITY
+            ------------------------- */
+
+            const highPriorityTickets =
+                await EP_TICKET.count({
+                    where: {
+                        ...ticketWhere,
+                        TKT04: 'HIGH'
+                    }
+                });
+
+            /* -------------------------
+               PENDING ASSIGNMENT
+            ------------------------- */
+
+            const pendingAssignmentTickets =
+                await EP_TICKET.count({
+                    where: {
+                        ...ticketWhere,
+                        TKT10: null
+                    }
+                });
+
+            /* -------------------------
+               TODAY TICKETS
+            ------------------------- */
+
+            const todayTickets =
+                await EP_TICKET.count({
+                    where: {
+                        ...ticketWhere,
+
+                        [Op.and]: Sequelize.literal(`
+                CONVERT(VARCHAR, TKT08, 120)
+                BETWEEN '${formatDateTime(fromDate)}'
+                AND '${formatDateTime(toDate)}'
+            `)
+                    }
+                });
+            /* =========================
+               📈 NET PROFIT
+            ========================= */
+
+            const netProfit =
+                totalRevenue - totalExpense;
 
             let allExp = await PLRDBEXP.findAll({
                 where: {
@@ -940,15 +1559,50 @@ class AdminDashboardController {
                     ibDetail,
                     loginUser
                 },
+                revenueStats: {
+                    totalRevenue,
+                    todayRevenue,
+                    dealerRevenue,
+                    directRevenue
+                },
 
+                expenseStats: {
+                    totalExpense,
+                    pendingWithdrawals,
+                    approvedWithdrawals
+                },
+
+                requestStats: {
+                    pendingRequests,
+                    approvedRequests,
+                    rejectedRequests,
+                    pendingRevenue
+                },
+
+                financeStats: {
+                    netProfit
+                },
+                walletStats,
+                ticketStats: {
+                    totalTickets,
+                    openTickets,
+                    resolvedTickets,
+                    highPriorityTickets,
+                    pendingAssignmentTickets,
+                    todayTickets
+                },
                 ExpanseData: allExp
+
             };
 
             encryptedResponse = encryptor.encrypt(JSON.stringify(response));
             return res.status(200).json({ encryptedResponse });
 
         } catch (err) {
-            console.error('DashboardCounts error:', err.message);
+            console.error(
+                'DashboardCounts Full Error:',
+                err
+            );
 
             response.status = 'FAIL';
             response.message = 'Dashboard load failed';
@@ -2403,12 +3057,85 @@ class AdminDashboardController {
             //     });
             // }
 
+
+            /* =========================
+   📅 SUBSCRIPTION DATE LOGIC
+========================= */
+            let updateData = {
+                A01F20: status
+            };
+
+            if (status === 'A') {
+
+                // 🔍 Find corporate
+                const corp = await PLRDBA01.findOne({
+                    where: {
+                        A01F03: corporateId
+                    }
+                });
+
+                if (!corp) {
+                    response.status = 'FAIL';
+                    response.message = 'Corporate not found';
+
+                    return res.status(404).json({
+                        encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                    });
+                }
+
+                const today = new Date();
+
+                let endDate = null;
+
+                /* =========================
+                   PLAN WISE DATE LOGIC
+                ========================= */
+
+                // Trial Plan → 7 Days
+                if (Number(corp.A02F01) === 2) {
+
+                    endDate = new Date(today);
+                    endDate.setDate(endDate.getDate() + 7);
+                }
+
+                // Standard Plan → 1 Year
+                else if (Number(corp.A02F01) === 7) {
+
+                    endDate = new Date(today);
+                    endDate.setFullYear(endDate.getFullYear() + 1);
+                }
+
+                // Default Plan → 1 Year
+                else if (Number(corp.A02F01) === 6) {
+
+                    endDate = new Date(today);
+                    endDate.setFullYear(endDate.getFullYear() + 1);
+                }
+
+                // Fallback → 1 Year
+                else {
+
+                    endDate = new Date(today);
+                    endDate.setFullYear(endDate.getFullYear() + 1);
+                }
+
+                updateData.A01F12 = today;     // Subscription Start
+                updateData.A01F13 = endDate;   // Subscription End
+            }
             /* =========================
                🔄 UPDATE CORPORATE
             ========================= */
+            // const updated = await PLRDBA01.update(
+            //     { A01F20: status },
+            //     { where: { A01F03: corporateId } }
+            // );
             const updated = await PLRDBA01.update(
-                { A01F20: status },
-                { where: { A01F03: corporateId } }
+                updateData,
+                {
+                    where: {
+                        A01F03: corporateId
+                    }
+                }
             );
 
             if (!updated || updated[0] === 0) {
@@ -3522,10 +4249,6 @@ class AdminDashboardController {
             });
         }
     }
-
-
-
-
 }
 
 module.exports = AdminDashboardController;
