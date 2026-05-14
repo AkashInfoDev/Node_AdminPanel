@@ -31,6 +31,9 @@ const defineUserTypes = require('../Models/RDB/EP_USERTPYES');
 // const EP_FILE = require('../Models/RDB/EP_FILE');
 const definePLRDBGAO = require('../Models/RDB/PLRDBGAO'); // Model factory
 
+const definePLRDBEXP = require("../Models/RDB/PLRDBEXP");
+const PLRDBEXP = definePLRDBEXP(sequelizeRDB);
+
 const EP_FILE = defineEP_FILE(sequelizeRDB, require('sequelize').DataTypes);
 const UserTypes = defineUserTypes(sequelizeRDB, require('sequelize').DataTypes);
 const EP_PAYREQ = defineEP_PAYREQ(sequelizeRDB, require('sequelize').DataTypes);
@@ -901,6 +904,12 @@ class AdminDashboardController {
             const weeklyRevenue =
                 parseFloat(weeklyRevenueResult[0]?.weeklyRevenue) || 0;
 
+            let allExp = await PLRDBEXP.findAll({
+                where: {
+                    EXPF05: 'Y'
+                }
+            })
+
             /* =========================
                ✅ FINAL RESPONSE
             ========================= */
@@ -930,7 +939,9 @@ class AdminDashboardController {
                     csData,
                     ibDetail,
                     loginUser
-                }
+                },
+
+                ExpanseData: allExp
             };
 
             encryptedResponse = encryptor.encrypt(JSON.stringify(response));

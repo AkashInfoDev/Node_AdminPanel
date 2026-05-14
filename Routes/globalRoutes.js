@@ -15,7 +15,8 @@ const Token = require('./tokenRoutes');
 const Google = require("./googleRoutes")
 const reportRoutes = require("./reportRoutes");
 const common = require("./commonRoutes");
-const ticketRoutes = require("./ticketRoutes")
+const ticketRoutes = require("./ticketRoutes");
+const expanseRoutes = require("./expanseRoutes");
 
 // Use loginRoutes under /User path
 router.use('/User', loginRoutes);
@@ -30,9 +31,10 @@ router.use('/Plan', Plan);
 router.use('/admindashboard', dbRoute);
 // router.use('/cron', Cron);
 router.use('/Token', Token);
-router.use('/google', Google)
-router.use('/report', reportRoutes)
-router.use('/common', common)
-router.use('/Ticket',ticketRoutes)
+router.use('/google', Google);
+router.use('/report', reportRoutes);
+router.use('/common', common);
+router.use('/Ticket',ticketRoutes);
+router.use('/expanse',expanseRoutes);
 
 module.exports = router;
