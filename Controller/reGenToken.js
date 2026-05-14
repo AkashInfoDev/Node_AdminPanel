@@ -144,16 +144,7 @@ class reGenToken {
                             process.env.JWT_EXPIRATION
                     }
                 );
-                let userId;
-
-                try {
-
-                    userId = encryptor.decrypt(decoded.userId);
-
-                } catch {
-
-                    userId = decoded.userId;
-                }
+                const dbUserId = decoded.Id;
 
                 /* ============================================
                    🔄 UPDATE LOGIN TOKEN
@@ -166,7 +157,7 @@ class reGenToken {
                     },
                     {
                         where: {
-                            LOG02: userId
+                            LOG02: dbUserId
                         }
                     }
                 );
