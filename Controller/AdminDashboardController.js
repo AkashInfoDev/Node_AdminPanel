@@ -908,7 +908,7 @@ class AdminDashboardController {
                 where: {
                     EXPF05: 'Y'
                 }
-            })
+            });
 
             /* =========================
                ✅ FINAL RESPONSE

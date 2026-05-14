@@ -2,6 +2,7 @@ const db = require('../Config/config'); // Your Database class
 // const definePLSDBADMI = require('../Models/SDB/PLSDBADMI'); // Model factory
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01'); // Model factory
 const definePLRDBA02 = require('../Models/RDB/PLRDBA02');
+const definePLRDBEXP = require('../Models/RDB/PLRDBEXP');
 const Encryptor = require('../Services/encryptor');
 const TokenService = require('../Services/tokenServices');
 const CROLEController = require('./CROLOEController');
@@ -13,6 +14,7 @@ const sequelizeRDB = db.getConnection('RDB');
 // Initialize model using the Sequelize instance
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
 const PLRDBA02 = definePLRDBA02(sequelizeRDB);
+const PLRDBEXP = definePLRDBEXP(sequelizeRDB);
 const encryptor = new Encryptor();
 
 class dashboardController {
@@ -65,7 +67,7 @@ class dashboardController {
                 //     }
                 // }
                 // else 
-                    if(ud.ADMIF00 == au.M81UNQ){
+                if (ud.ADMIF00 == au.M81UNQ) {
                     if (au.M81ADA == 'A') {
                         userDetails.push(ud);
                     }
@@ -93,10 +95,12 @@ class dashboardController {
                 }
             }
         }
-        // let subDetail = await PLSDBM81.findAll({
-        //     where: { M81F03: encryptor.decrypt(userDetails[0].ADMIF01) }
-        // })
-        response.data = { userDetails, compDetail, brcDetail, planDetail };
+        let allExp = await PLRDBEXP.findAll({
+            where: {
+                EXPF05: 'Y'
+            }
+        });
+        response.data = { userDetails, compDetail, brcDetail, planDetail, allExp };
         encryptedResponse = encryptor.encrypt(JSON.stringify(response));
         return res.status(200).json({ encryptedResponse });
     }
