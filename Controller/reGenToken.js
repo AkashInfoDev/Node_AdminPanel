@@ -166,7 +166,7 @@ class reGenToken {
                 await EP_LOGIN.update(
                     {
                         LOG04: newToken,
-                        LOG03: formattedDate
+                        // LOG03: formattedDate
                     },
                     {
                         where: {
