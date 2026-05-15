@@ -33,7 +33,7 @@ const handlePLRDBEXP = async (req, res) => {
                     EXPF02: pa.EXPF02,
                     EXPF03: pa.EXPF03 || null,
                     EXPF04: pa.EXPF04 ? pa.EXPF04.toUpperCase() : null,
-                    EXPF05: "Y"
+                    EXPF05:  pa.EXPF05
                 });
 
                 response.data = newExp;
