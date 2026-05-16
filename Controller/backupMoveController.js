@@ -926,6 +926,21 @@ const restoreBak = async (req, res) => {
             `UPDATE ${newDatabaseName}.dbo.CMPM00 SET FIELD01 = :companyID`,
             { replacements: { companyID: nextCompanyID }, transaction }
         );
+        /* ========= NEW GLOBAL FLOW ========= */
+        if (!skipBranchUpdate && branchMappings.length === 0) {
+
+            console.log("🌍 GLOBAL MODE → Apply to ALL branches");
+
+            await sequelizeSDB.query(`
+        UPDATE ${sdbName}.dbo.PLSDBBRC
+        SET BRCCOMP = CASE
+            WHEN BRCCOMP IS NULL OR BRCCOMP = '' THEN '${nextCompanyID}'
+            WHEN ',' + ISNULL(BRCCOMP, '') + ',' NOT LIKE '%,${nextCompanyID},%' 
+                THEN BRCCOMP + ',${nextCompanyID}'
+            ELSE BRCCOMP
+        END
+    `, { transaction });
+        }
 
         /* ========= BRANCH UPDATE ========= */
         if (!skipBranchUpdate && branchMappings.length > 0) {
