@@ -289,8 +289,9 @@ class UpgradePlan {
 
             // Action M - Update or Activate Modules
             else if (action === 'M') {
-                const { moduleId, paymentMode, setUpId } = pa;
+                let { moduleId, paymentMode, combosetUpId, setUpId } = pa;
 
+                if (combosetUpId) setUpId = combosetUpId;
                 const transactionDetail = await PLRDBRPAY.findOne({
                     where: { RPAYF01: transactionId }
                 });
@@ -344,6 +345,7 @@ class UpgradePlan {
                                 M81SID: setUpId
                             });
                         }
+                        let newADMIMOD = '';
                         if (setUpId.includes(',')) {
                             let sUpId = setUpId.split(',');
                             for (const sId of sUpId) {
@@ -352,12 +354,14 @@ class UpgradePlan {
                                         [Op.like]: `%${sId}%`
                                     }
                                 });
-                                const newADMIMOD = setUpMod.RELF04 ? UserData.ADMIMOD + ',' + setUpMod.RELF04 : UserData.ADMIMOD;
-                                await admi.update({
-                                    ADMIMOD: newADMIMOD
-                                }, {
-                                    ADMIF00: UserData.ADMIF00
-                                });
+                                if (setUpMod) {
+                                    newADMIMOD = setUpMod.RELF04 ? UserData.ADMIMOD + ',' + setUpMod.RELF04 : UserData.ADMIMOD;
+                                    await admi.update({
+                                        ADMIMOD: newADMIMOD
+                                    }, {
+                                        ADMIF00: UserData.ADMIF00
+                                    });
+                                }
                             }
                         } else {
                             let setUpMod = await PLRDBPLREL.findOne({
@@ -365,12 +369,14 @@ class UpgradePlan {
                                     [Op.like]: `%${setUpId}%`
                                 }
                             });
-                            const newADMIMOD = setUpMod.RELF04 ? UserData.ADMIMOD + ',' + setUpMod.RELF04 : UserData.ADMIMOD;
-                            await admi.update({
-                                ADMIMOD: newADMIMOD
-                            }, {
-                                ADMIF00: UserData.ADMIF00
-                            });
+                            if (setUpMod) {
+                                newADMIMOD = setUpMod.RELF04 ? UserData.ADMIMOD + ',' + setUpMod.RELF04 : UserData.ADMIMOD;
+                                await admi.update({
+                                    ADMIMOD: newADMIMOD
+                                }, {
+                                    ADMIF00: UserData.ADMIF00
+                                });
+                            }
                         }
                         if (!moduleId) {
                             const paymentData = UpgradePlan.constructPaymentData(transactionDetail, paymentMode, A02id, decoded.corpId, user.ADMIF00, description, paymentMethod);

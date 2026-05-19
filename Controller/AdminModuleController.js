@@ -21,7 +21,10 @@ function validateComboModule(ModuleType, ModuleCode) {
     //     .map(v => v.trim())
     //     .filter(v => v.length);
 
-    const ids = extractSetupIds(ModuleCode);
+    // const ids = extractSetupIds(ModuleCode);
+    const ids = ModuleCode.includes('/')
+        ? parseComboSetup(ModuleCode)
+        : extractSetupIds(ModuleCode);
 
     if (ids.length < 2)
         return 'Combo module must contain minimum 2 module IDs';
@@ -55,9 +58,38 @@ async function checkDuplicate(ModuleType, ModuleCode) {
 
     if (ModuleType === 'C') {
 
+        // const normalize = str => {
+        //     const ids = extractSetupIds(str);
+        //     return ids.sort().join(',');
+        // };
         const normalize = str => {
-            const ids = extractSetupIds(str);
-            return ids.sort().join(',');
+
+            let ids = [];
+            let setupCodes = [];
+
+            if (str.includes('/')) {
+
+                const [idsPart, setupPart] = str.split('/');
+
+                ids = idsPart
+                    .split(',')
+                    .map(v => v.trim())
+                    .filter(v => v.length);
+
+                setupCodes = setupPart
+                    .split(',')
+                    .map(v => v.trim())
+                    .filter(v => v.length);
+            }
+            else {
+                ids = extractSetupIds(str);
+            }
+
+            // 🔥 Important: include setupCodes also
+            return [
+                ids.sort().join(','),
+                setupCodes.sort().join(',')
+            ].join('|');   // separator to avoid collision
         };
 
         const newCombo = normalize(ModuleCode);
@@ -71,7 +103,43 @@ async function checkDuplicate(ModuleType, ModuleCode) {
     return false;
 }
 
+function parseComboSetup(value) {
+    if (!value) return [];
 
+    // take part before '/'
+    const beforeSlash = value.includes('/')
+        ? value.split('/')[0].trim()
+        : value;
+
+    return beforeSlash
+        .split(',')
+        .map(v => v.trim())
+        .filter(v => v.length);
+}
+function getAllComboCodes(value) {
+    if (!value) return [];
+
+    let ids = [];
+    let setupCodes = [];
+
+    if (value.includes('/')) {
+        const [idsPart, setupPart] = value.split('/');
+
+        ids = idsPart
+            .split(',')
+            .map(v => v.trim())
+            .filter(v => v.length);
+
+        setupCodes = setupPart
+            .split(',')
+            .map(v => v.trim())
+            .filter(v => v.length);
+    } else {
+        ids = parseComboSetup(value);
+    }
+
+    return [...ids, ...setupCodes];
+}
 
 class AdminModuleController {
     static cachedRoles = null;
@@ -245,6 +313,23 @@ class AdminModuleController {
                             });
                         }
                     }
+                    // 🔥 NEW: Combo with setup support
+                    if (ModuleType === 'C' && ModuleCode.includes('/')) {
+
+                        // const codes = parseComboSetup(ModuleCode);
+                        const codes = getAllComboCodes(ModuleCode);
+
+                        if (codes.length > 0) {
+                            await sequelizeRDB.query(`
+            UPDATE IDBAPI.dbo.PLSYSF02
+            SET F02PYBL = 'Y'
+            WHERE F02F01 IN (:codes)
+            AND F02PYBL <> 'Y'
+        `, {
+                                replacements: { codes }
+                            });
+                        }
+                    }
                     let relf04Value = null;
 
                     if (ModuleType === 'S' && pa.menuId) {
@@ -348,6 +433,40 @@ class AdminModuleController {
                                 : null;
                         }
                     }
+                    // 🔥 NEW: Combo with setup support
+                    if (existing.RELF03 === 'C' && existing.RELF01.includes('/')) {
+
+                        if (pa.ModuleCode && pa.ModuleCode.trim() !== existing.RELF01.trim()) {
+
+                            // 🔴 revert old
+                            // const oldCodes = parseComboSetup(existing.RELF01);
+                            const oldCodes = getAllComboCodes(existing.RELF01);
+
+                            if (oldCodes.length > 0) {
+                                await sequelizeRDB.query(`
+                UPDATE IDBAPI.dbo.PLSYSF02
+                SET F02PYBL = 'N'
+                WHERE F02F01 IN (:oldCodes)
+            `, {
+                                    replacements: { oldCodes }
+                                });
+                            }
+
+                            // 🟢 activate new
+                            // const newCodes = parseComboSetup(pa.ModuleCode);
+                            const newCodes = getAllComboCodes(pa.ModuleCode);
+
+                            if (newCodes.length > 0) {
+                                await sequelizeRDB.query(`
+                UPDATE IDBAPI.dbo.PLSYSF02
+                SET F02PYBL = 'Y'
+                WHERE F02F01 IN (:newCodes)
+            `, {
+                                    replacements: { newCodes }
+                                });
+                            }
+                        }
+                    }
 
                     /* =========================
                        🔄 UPDATE RECORD
@@ -388,8 +507,17 @@ class AdminModuleController {
 
                     // const moduleCode = module.RELF01;
                     // const moduleCode = extractSetupCode(module.RELF01);
-                    const codes = extractSetupIds(module.RELF01);
+                    // const codes = extractSetupIds(module.RELF01);
                     const moduleType = module.RELF03;
+                    let codes = [];
+
+                    if (moduleType === 'S') {
+                        codes = extractSetupIds(module.RELF01);
+                    }
+                    else if (moduleType === 'C' && module.RELF01.includes('/')) {
+                        // codes = parseComboSetup(module.RELF01);
+                        codes = getAllComboCodes(module.RELF01);
+                    }
 
                     /* 2️⃣ If Setup module → update PLSYSF02 payable flag */
                     //             if (moduleType === 'S' && moduleCode) {
@@ -415,6 +543,22 @@ class AdminModuleController {
                             replacements: { codes }
                         });
                     }
+                    // 🔥 NEW: Combo with setup support
+                    if (moduleType === 'C' && module.RELF01.includes('/')) {
+
+                        const codes = getAllComboCodes(module.RELF01);
+
+                        if (codes.length > 0) {
+                            await sequelizeRDB.query(`
+            UPDATE IDBAPI.dbo.PLSYSF02
+            SET F02PYBL = 'N'
+            WHERE F02F01 IN (:codes)
+            AND F02PYBL <> 'N'
+        `, {
+                                replacements: { codes }
+                            });
+                        }
+                    }
                     /* 3️⃣ Delete module */
                     const deleted = await ModuleRepo.destroy({ RELF00: moduleID });
 
@@ -428,6 +572,7 @@ class AdminModuleController {
                     response.message = 'Module deleted successfully';
                     return AdminModuleController.send(res, response);
                 }
+
 
                 case 'S': {
 

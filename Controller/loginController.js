@@ -2431,7 +2431,8 @@ class UserController {
                     isActive: inputDate < today ? false : true,
                     userMail: user.ADMIF07,
                     lAudit: user.ADMIF15,
-                    cmpAddOns: cmpAddOns
+                    cmpAddOns: cmpAddOns,
+                    planDetails: corpRow
                 };
                 // let currentTime = new Date();
                 // let newLogin = await m83.create(userId, formatDate(currentTime), '', '', '', token);
@@ -2531,7 +2532,8 @@ class UserController {
                     purchasedSetUpIds: M81Row[0].M81SID,
                     isActive: inputDate < today ? false : true,
                     userMail: user.ADMIF07,
-                    cmpAddOns: cmpAddOns
+                    cmpAddOns: cmpAddOns,
+                    planDetails: corpRow
                 };
                 response.message = 'Login successful';
                 // response.token = token;

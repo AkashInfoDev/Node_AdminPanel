@@ -16,6 +16,8 @@ const definePLSDBM82 = require('../Models/SDB/PLSDBM82');
 const definePLRDBGAO = require('../Models/RDB/PLRDBGAO');
 const defineCRONLOGS = require('../Models/SDB/CRONLOGS');
 const definePLRDBA01 = require('../Models/RDB/PLRDBA01');
+const definePLRDBA02 = require('../Models/RDB/PLRDBA02');
+
 const Year = require('../PlusData/Class/CmpYrCls/Year');
 const Company = require('../PlusData/Class/CmpYrCls/Company');
 const queryService = require('../Services/queryService');
@@ -35,6 +37,8 @@ const sequelizeA00001SDB = db.getConnection('A00001SDB');
 const sequelizeRDB = db.getConnection('RDB');
 const CRONLOGS = defineCRONLOGS(sequelizeA00001SDB);
 const PLRDBA01 = definePLRDBA01(sequelizeRDB);
+const PLRDBA02 = definePLRDBA02(sequelizeRDB);
+
 const PLRDBGAO = definePLRDBGAO(sequelizeRDB);
 
 class handleCompany {
@@ -496,7 +500,7 @@ class handleCompany {
                     });
                     await cmp.update({
                         CMPF02: jsonData['M00'].FIELD02
-                    },{
+                    }, {
                         CMPF01: saveCmp.CmpNum
                     })
                     if (!saveCmp.result) {
@@ -637,16 +641,28 @@ class handleCompany {
                         );
                         await cmp.create(parseInt(saveCmp.CmpNum), cSData['M00'].FIELD02, 'SQL', cSData['M00'].FIELD11, cUserID, formatDate(new Date()), purchasedCmp.A01F52, purchasedCmp.A01F53, encryptor.decrypt(purchasedCmp.A01F54), 'DATA', null
                         );
+                        const featureRows = await PLRDBA02.findAll();
+
+                        const featureMap = {};
+                        featureRows.forEach(row => {
+                            featureMap[row.A02F01] = parseFloat(row.A02F14);
+                        });
+
+                        console.log("FeatureMap:", featureMap);
                         await PLRDBGAO.create({
                             GAOF01: decoded.corpId,
                             GAOF02: parseInt(saveCmp.CmpNum),
-                            GAOF03: 2, //Customized Bill Print(Formate Wise) Free
+                            // GAOF03: 2, //Customized Bill Print(Formate Wise) Free
+                            GAOF03: featureMap[8] || 0,
                             GAOF04: 0,
-                            GAOF05: 5, // Customized Report Setup(Report Wise) Free
+                            // GAOF05: 5, // Customized Report Setup(Report Wise) Free
+                            GAOF05: featureMap[9] || 0,
                             GAOF06: 0,
-                            GAOF07: 50, // User Field(Limit Wise) Free
+                            // GAOF07: 50, // User Field(Limit Wise) Free
+                            GAOF07: featureMap[10] || 0,
                             GAOF08: 0,
-                            GAOF09: 5, // User Master(Limit Wise) Free
+                            // GAOF09: 5, // User Master(Limit Wise) Free
+                            GAOF09: featureMap[11] || 0,
                             GAOF10: 0
                         });
                         // let BRCOntroller = new BranchController(false, 'A', '', `${saveCmp.CmpNum}-HOME-BRC`, cSData["M00"]._16, '', decoded.corpId, 'Y', saveCmp.CmpNum)
