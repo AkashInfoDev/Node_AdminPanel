@@ -106,11 +106,15 @@ class CompanyService {
                 const decrypted = i.A01F02;
                 if (decrypted === companyName) {
                     if (!lbool) {
-                        return res.status(500).json({ message: 'Company Name is Already Registered' })
-                    } else {
-                        response.status = false;
+                        response.status = 'FAIL';
                         response.message = 'Company Name is Already Registered';
-                        return response
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                        return res.status(400).json({ encryptedResponse: encryptedResponse });
+                    } else {
+                        response.status = 'FAIL';
+                        response.message = 'Company Name is Already Registered';
+                        const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                        return res.status(400).json({ encryptedResponse: encryptedResponse });
                     }
                 }
             }
