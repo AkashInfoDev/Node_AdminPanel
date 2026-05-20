@@ -100,24 +100,6 @@ class CompanyService {
 
 
         try {
-            // let existingCompName = await PLRDBA01.findAll();
-            let existingCompName = await PLRDBA01.findAll();
-            for (let i of existingCompName) {
-                const decrypted = i.A01F02;
-                if (decrypted === companyName) {
-                    if (!lbool) {
-                        response.status = 'FAIL';
-                        response.message = 'Company Name is Already Registered';
-                        const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
-                        return res.status(400).json({ encryptedResponse: encryptedResponse });
-                    } else {
-                        response.status = 'FAIL';
-                        response.message = 'Company Name is Already Registered';
-                        const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
-                        return res.status(400).json({ encryptedResponse: encryptedResponse });
-                    }
-                }
-            }
             // Generate new company ID (A01F01)
             const existingSub = await PLRDBA01.findAll({
                 attributes: ['A01F01'],
