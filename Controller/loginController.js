@@ -103,6 +103,17 @@ class AdminController {
                 return AdminController.verifyOTPAndForceLogin(pa, res);
             }
             if (action === 'O') { return AdminController.logoutAdmin(req, res); }
+            if (action === 'FP') {
+                return AdminController.sendForgotPasswordOTP(pa, res);
+            }
+
+            if (action === 'VP') {
+                return AdminController.verifyForgotPasswordOTP(pa, res);
+            }
+
+            if (action === 'RP') {
+                return AdminController.resetAdminPassword(pa, res);
+            }
 
             return res.status(400).json({ message: 'Invalid action parameter' });
 
@@ -953,7 +964,290 @@ class AdminController {
             });
         }
     }
+    static async sendForgotPasswordOTP(pa, res) {
+        try {
+            const { userId } = pa;
 
+            /* =========================
+               ❗ VALIDATION
+            ========================= */
+
+            if (!userId) {
+                throw new Error('userId is required');
+            }
+
+            /* =========================
+               🔐 ENCRYPT ID
+            ========================= */
+
+            const encryptedId = encryptor.encrypt(userId);
+
+            /* =========================
+               👤 FIND USER
+            ========================= */
+
+            const users = await EP_USER.findAll({
+                where: { UTF07: 'N' }
+            });
+
+            let user = null;
+
+            for (let u of users) {
+
+                let decryptedId;
+
+                try {
+                    decryptedId = encryptor.decrypt(u.UTF04);
+                } catch {
+                    decryptedId = u.UTF04;
+                }
+
+                if (decryptedId === userId) {
+                    user = u;
+                    break;
+                }
+            }
+
+            if (!user) throw new Error('User not found');
+
+            if (!user.UTF10) throw new Error('Email not found');
+
+            /* =========================
+               🔢 GENERATE OTP
+            ========================= */
+
+            const otp = Math.floor(100000 + Math.random() * 900000);
+
+            const decryptedId = encryptor.decrypt(user.UTF04);
+
+            const { Sequelize } = require('sequelize');
+
+            await PLRDBOTP.create({
+                CORP_ID: decryptedId,
+                EMAIL: user.UTF10,
+                OTP_CODE: otp.toString(),
+                OTP_EXPIRY: Sequelize.literal("DATEADD(MINUTE, 5, GETDATE())"),
+                OTP_STATUS: 'PENDING',
+                OTP_DESC: 'FP'
+            });
+
+            await sendResetMail({
+                to: user.UTF10,
+                corpId: decryptedId,
+                otp
+            });
+
+            return res.json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    status: 'SUCCESS',
+                    message: 'OTP sent successfully'
+                }))
+            });
+
+        } catch (err) {
+
+            console.error("❌ Forgot Password OTP Error:", err);
+
+            return res.status(500).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    status: 'FAIL',
+                    message: err.message
+                }))
+            });
+        }
+    }
+    static async verifyForgotPasswordOTP(pa, res) {
+        try {
+            const { userId, otp } = pa;
+
+            /* =========================
+               ❗ VALIDATION
+            ========================= */
+            if (!userId || !otp) {
+                throw new Error('userId and otp are required');
+            }
+
+            /* =========================
+               👤 FIND USER (CORRECT WAY)
+               ⚠ decrypt + compare (IMPORTANT)
+            ========================= */
+
+            const users = await EP_USER.findAll({
+                where: { UTF07: 'N' }
+            });
+
+            let user = null;
+
+            for (let u of users) {
+                let decryptedId;
+
+                try {
+                    decryptedId = encryptor.decrypt(u.UTF04);
+                } catch {
+                    decryptedId = u.UTF04;
+                }
+
+                if (decryptedId === userId) {
+                    user = u;
+                    break;
+                }
+            }
+
+            if (!user) throw new Error('User not found');
+
+            const decryptedId = (() => {
+                try {
+                    return encryptor.decrypt(user.UTF04);
+                } catch {
+                    return user.UTF04;
+                }
+            })();
+
+            /* =========================
+               🔍 FIND OTP
+            ========================= */
+
+            const record = await PLRDBOTP.findOne({
+                where: {
+                    CORP_ID: decryptedId,
+                    OTP_CODE: otp,
+                    OTP_STATUS: 'PENDING',
+                    OTP_DESC: 'FP'
+                },
+                order: [['OTPID', 'DESC']]
+            });
+
+            if (!record) {
+                throw new Error('Invalid or already used OTP');
+            }
+
+            /* =========================
+               ⏳ EXPIRY CHECK
+            ========================= */
+
+            const now = new Date();
+            const expiry = new Date(record.OTP_EXPIRY);
+
+            if (now > expiry) {
+                throw new Error('OTP expired');
+            }
+
+            /* =========================
+               🔒 MARK OTP USED
+            ========================= */
+
+            await PLRDBOTP.update(
+                { OTP_STATUS: 'USED' },
+                { where: { OTPID: record.OTPID } }
+            );
+
+            /* =========================
+               ✅ RESPONSE
+            ========================= */
+
+            return res.json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    status: 'SUCCESS',
+                    message: 'OTP verified successfully'
+                }))
+            });
+
+        } catch (err) {
+
+            console.error("❌ Verify Forgot OTP Error:", err);
+
+            return res.status(500).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    status: 'FAIL',
+                    message: err.message
+                }))
+            });
+        }
+    }
+    static async resetAdminPassword(pa, res) {
+        try {
+            const { userId, newPassword } = pa;
+
+            /* =========================
+               ❗ VALIDATION
+            ========================= */
+            if (!userId || !newPassword) {
+                throw new Error('userId and newPassword are required');
+            }
+
+            /* =========================
+               👤 FIND USER (CORRECT WAY)
+               ⚠ decrypt + compare
+            ========================= */
+
+            const users = await EP_USER.findAll({
+                where: { UTF07: 'N' }
+            });
+
+            let user = null;
+
+            for (let u of users) {
+                let decryptedId;
+
+                try {
+                    decryptedId = encryptor.decrypt(u.UTF04);
+                } catch {
+                    decryptedId = u.UTF04;
+                }
+
+                if (decryptedId === userId) {
+                    user = u;
+                    break;
+                }
+            }
+
+            if (!user) throw new Error('User not found');
+
+            /* =========================
+               🔐 ENCRYPT PASSWORD
+            ========================= */
+
+            const encryptedPassword = encryptor.encrypt(newPassword);
+
+            /* =========================
+               💾 UPDATE PASSWORD
+            ========================= */
+
+            await user.update({
+                UTF05: encryptedPassword
+            });
+
+            /* =========================
+               🔒 REMOVE OLD SESSIONS
+            ========================= */
+
+            await EP_LOGIN.destroy({
+                where: { LOG02: user.UTF01 }
+            });
+
+            /* =========================
+               ✅ RESPONSE
+            ========================= */
+
+            return res.json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    status: 'SUCCESS',
+                    message: 'Password reset successfully'
+                }))
+            });
+
+        } catch (err) {
+
+            console.error("❌ Reset Password Error:", err);
+
+            return res.status(500).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    status: 'FAIL',
+                    message: err.message
+                }))
+            });
+        }
+    }
 }
 
 class UserController {
@@ -2012,7 +2306,7 @@ class UserController {
             let corpexi = await PLRDBA01.findAll({
                 where: { A01F03: corpId }
             });
-             if (corpexi[0]?.A01F20 == 'P') {
+            if (corpexi[0]?.A01F20 == 'P') {
                 response.status = 'FAIL';
                 response.message = 'Registered Corporate ID is not Activated.(Please contact Support)';
                 const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
