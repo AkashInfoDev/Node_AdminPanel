@@ -3,13 +3,14 @@ const cors = require('cors'); // Import cors
 const dbConfig = require('./Config/config');
 const apiRoutes = require('./Routes/globalRoutes');
 const app = express();
+const path = require('path');
 
 // Enable CORS for all origins (for local development)
 app.use(cors());
 
 // Parse JSON request bodies
 app.use(express.json());
-
+app.use('/logo', express.static(path.join(__dirname, 'LOGO')));
 // API Routes
 app.use('/api', apiRoutes);
 
