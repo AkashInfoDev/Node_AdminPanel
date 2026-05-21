@@ -10,7 +10,7 @@ app.use(cors());
 
 // Parse JSON request bodies
 app.use(express.json());
-app.use('/logo', express.static(path.join(__dirname, 'LOGO')));
+app.use('/logo', express.static(path.join(__dirname, 'Logo')));
 // API Routes
 app.use('/api', apiRoutes);
 
