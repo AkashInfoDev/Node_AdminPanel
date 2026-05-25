@@ -567,6 +567,36 @@ class AdminDashboardController {
 
             const decoded = await TokenService.validateToken(token);
             const roleId = Number(decoded.roleId);
+
+            let whereCondition = {};
+
+            // Dashboard menu id
+            const MENU_ID = 1;
+
+            const permission = await Permission.findOne({
+                where: {
+                    M83F02: roleId,
+                    M83F08: MENU_ID
+                },
+                raw: true
+            });
+
+            /* =========================
+               SELF ACCESS
+            ========================= */
+
+            const isView = Number(permission?.M83F06) === 1;
+            const isAll = Number(permission?.M83F09) === 1;
+
+            if (!isView) {
+
+                response.status = 'FAIL';
+                response.message = 'No view permission';
+
+                encryptedResponse = encryptor.encrypt(JSON.stringify(response));
+
+                return res.status(403).json({ encryptedResponse });
+            }
             /* =========================
             🔓 DECRYPT QUERY PARAMS
             ========================= */
@@ -644,32 +674,60 @@ class AdminDashboardController {
 
             let ibDetail;
 
-            if ([1,2,5,10,11].includes(roleId)) {
-                const allUsers = await userCtrl.findAll({
-                    UTF07: 'N',
-                    UTF03: [3, 4]
-                });
+            // if ([1, 2, 5, 10, 11].includes(roleId)) {
+            //     const allUsers = await userCtrl.findAll({
+            //         UTF07: 'N',
+            //         UTF03: [3, 4]
+            //     });
 
-                ibDetail = [
-                    {
-                        id: user.UTF01,
-                        name: user.UTF02,
-                        role: roleId
-                    },
-                    ...allUsers.map(u => ({
-                        id: u.UTF01,
-                        name: u.UTF02,
-                        role: Number(u.UTF03)
-                    }))
-                ];
-            } else {
-                ibDetail = [{
-                    id: user.UTF01,
-                    name: user.UTF02,
-                    role: roleId
-                }];
-            }
+            //     ibDetail = [
+            //         {
+            //             id: user.UTF01,
+            //             name: user.UTF02,
+            //             role: roleId
+            //         },
+            //         ...allUsers.map(u => ({
+            //             id: u.UTF01,
+            //             name: u.UTF02,
+            //             role: Number(u.UTF03)
+            //         }))
+            //     ];
+            // } else {
+            //     ibDetail = [{
+            //         id: user.UTF01,
+            //         name: user.UTF02,
+            //         role: roleId
+            //     }];
+            // }
 
+            // if (isAll) {
+            //     const allUsers = await userCtrl.findAll({
+            //         UTF07: 'N',
+            //         UTF03: {
+            //             [Op.in]: [3, 4]   // ✅ IMPORTANT FIX
+            //         }
+            //     });
+
+            //     ibDetail = [
+            //         {
+            //             id: user.UTF01,
+            //             name: user.UTF02,
+            //             role: roleId
+            //         },
+            //         ...allUsers.map(u => ({
+            //             id: u.UTF01,
+            //             name: u.UTF02,
+            //             role: Number(u.UTF03)
+            //         }))
+            //     ];
+            // } else {
+            //     ibDetail = [{
+            //         id: user.UTF01,
+            //         name: user.UTF02,
+            //         role: roleId
+            //     }];
+            // }
+            // console.log("all users", ibDetail)
             /* =========================
                📊 PLAN INFO + csData
             ========================= */
@@ -708,53 +766,12 @@ class AdminDashboardController {
             ========================= */
 
 
-            let whereCondition = {};
-
-            // Dashboard menu id
-            const MENU_ID = 1;
-
-            const permission = await Permission.findOne({
-                where: {
-                    M83F02: roleId,
-                    M83F08: MENU_ID
-                },
-                raw: true
-            });
-
-            /* =========================
-               NO PERMISSION
-            ========================= */
-
-            // if (!permission || !permission.M83F06) {
-
-            //     response.status = 'FAIL';
-            //     response.message = 'No view permission';
-
-            //     encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-
-            //     return res.status(403).json({ encryptedResponse });
-            // }
-
-            /* =========================
-               SELF ACCESS
-            ========================= */
-
-            const isView = Number(permission?.M83F06) === 1;
-            const isAll = Number(permission?.M83F09) === 1;
 
             /* =========================
                NO ACCESS
             ========================= */
 
-            if (!isView) {
 
-                response.status = 'FAIL';
-                response.message = 'No view permission';
-
-                encryptedResponse = encryptor.encrypt(JSON.stringify(response));
-
-                return res.status(403).json({ encryptedResponse });
-            }
 
             /* =========================
                SELF ACCESS
@@ -2476,7 +2493,13 @@ class AdminDashboardController {
                     firstName: u.ADMIF02 || '',
                     lastName: u.ADMIF04 || '',
                     gender: u.ADMIF10 || '',
-                    dob: u.ADMIF09 || null,
+                    // dob: u.ADMIF09 || null,
+                    dob:
+                        u.ADMIF09 &&
+                            u.ADMIF09 !== "Invalid date" &&
+                            !isNaN(new Date(u.ADMIF09).getTime())
+                            ? u.ADMIF09
+                            : null,
                     email: u.ADMIF07 || '',
 
                     /* 🔹 STATUS */
@@ -2888,7 +2911,13 @@ class AdminDashboardController {
                     firstName: u.ADMIF02 || '',
                     lastName: u.ADMIF04 || '',
                     gender: u.ADMIF10 || '',
-                    dob: u.ADMIF09 || null,
+                    // dob: u.ADMIF09 || null,
+                    dob:
+                        u.ADMIF09 &&
+                            u.ADMIF09 !== "Invalid date" &&
+                            !isNaN(new Date(u.ADMIF09).getTime())
+                            ? u.ADMIF09
+                            : null,
                     email: u.ADMIF07 || '',
                     isActive,
                     status: isActive ? 'ACTIVE' : 'INACTIVE'

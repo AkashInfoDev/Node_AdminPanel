@@ -13,6 +13,7 @@ const CAdminPlanController = require('../Controller/CAdminPlanController');
 const CAdminUserController = require('../Controller/CAdminUserController');
 const WalletController = require('../Controller/WalletController');
 const UserTypeController = require('../Controller/UserTypeController');
+const IBDetailController = require('../Controller/IBDetailController')
 
 // In your express route:
 // router.get('/adminData',AdminPanel.getUsers); // For Admin Panel of AI
@@ -30,5 +31,6 @@ router.post('/withdraw', upload.single('file'), WalletController.requestWithdraw
 router.get('/UserRole', UserTypeController.manageUserType)
 router.post('/deleteCorporateCompletely', AdminDashboardController.deleteCorporateCompletely);
 router.get('/allUserTypes', UserTypeController.getTypes1)
+router.get('/ibDetail',IBDetailController.getIBDetail)
 
 module.exports = router;

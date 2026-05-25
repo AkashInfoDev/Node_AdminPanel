@@ -692,16 +692,103 @@ class AdminController {
             });
         }
     }
+    // static async sendLoginOTP(userId, res) {
+    //     try {
+
+    //         const { Sequelize } = require('sequelize');
+
+    //         /* =========================
+    //            👤 FIND USER
+    //         ========================= */
+
+    //         const users = await EP_USER.findAll();
+
+    //         let user = null;
+
+    //         for (let u of users) {
+    //             let decryptedId;
+
+    //             try {
+    //                 decryptedId = encryptor.decrypt(u.UTF04);
+    //             } catch {
+    //                 decryptedId = u.UTF04;
+    //             }
+
+    //             if (decryptedId === userId) {
+    //                 user = u;
+    //                 break;
+    //             }
+    //         }
+
+    //         if (!user) throw new Error('User not found');
+    //         if (!user.UTF10) throw new Error('User email not found');
+    //         /* =========================
+    //            🔢 GENERATE OTP
+    //         ========================= */
+
+    //         const otp = Math.floor(100000 + Math.random() * 900000);
+
+    //         const decryptedId = encryptor.decrypt(user.UTF04);
+
+    //         /* =========================
+    //            💾 SAVE OTP (NEW STRUCTURE)
+    //         ========================= */
+
+    //         await PLRDBOTP.create({
+    //             CORP_ID: decryptedId,                  // ✅ REQUIRED
+    //             EMAIL: user.UTF10,                     // ✅ REQUIRED
+    //             OTP_CODE: otp.toString(),              // ✅ REQUIRED
+    //             OTP_EXPIRY: Sequelize.literal("DATEADD(MINUTE, 5, GETDATE())"), // ✅ +5 min
+    //             OTP_STATUS: 'PENDING',                 // ✅ REQUIRED
+    //             OTP_DESC: 'FL'                // ✅ REQUIRED
+    //         });
+
+    //         /* =========================
+    //            📩 SEND EMAIL
+    //         ========================= */
+
+    //         await sendForceLogoutOTP({
+    //             to: user.UTF10,
+    //             corpId: decryptedId,
+    //             otp: otp
+    //         });
+
+
+    //         return res.json({
+    //             encryptedResponse: encryptor.encrypt(JSON.stringify({
+    //                 status: 'SUCCESS',
+    //                 message: 'OTP sent successfully'
+    //             }))
+    //         });
+
+    //     } catch (err) {
+
+    //         console.error("❌ sendLoginOTP Error:", err);
+
+    //         return res.status(500).json({
+    //             encryptedResponse: encryptor.encrypt(JSON.stringify({
+    //                 status: 'FAIL',
+    //                 message: err.message
+    //             }))
+    //         });
+    //     }
+    // }
     static async sendLoginOTP(userId, res) {
         try {
 
             const { Sequelize } = require('sequelize');
 
             /* =========================
-               👤 FIND USER
+               🧾 INPUT USER ID
             ========================= */
+            console.log("🔹 Incoming userId:", userId);
 
+            /* =========================
+               👤 FETCH USERS
+            ========================= */
             const users = await EP_USER.findAll();
+
+            console.log("🔹 Total users fetched:", users.length);
 
             let user = null;
 
@@ -714,45 +801,80 @@ class AdminController {
                     decryptedId = u.UTF04;
                 }
 
+                // ✅ DEBUG EACH MATCH
+                console.log("➡️ Comparing:", {
+                    decryptedId,
+                    inputUserId: userId
+                });
+
                 if (decryptedId === userId) {
                     user = u;
+
+                    console.log("✅ MATCHED USER FOUND:", {
+                        id: u.UTF01,
+                        name: u.UTF02,
+                        role: u.UTF03,
+                        email: u.UTF10
+                    });
+
                     break;
                 }
             }
 
-            if (!user) throw new Error('User not found');
-            if (!user.UTF10) throw new Error('User email not found');
+            /* =========================
+               ❌ USER NOT FOUND
+            ========================= */
+            if (!user) {
+                console.log("❌ No user matched for:", userId);
+                throw new Error('User not found');
+            }
 
             /* =========================
-               🔢 GENERATE OTP
+               📧 EMAIL CHECK
             ========================= */
+            console.log("📧 USER EMAIL:", user.UTF10);
 
+            if (!user.UTF10) {
+                throw new Error('User email not found');
+            }
+
+            /* =========================
+               🔢 OTP GENERATION
+            ========================= */
             const otp = Math.floor(100000 + Math.random() * 900000);
+            console.log("🔢 Generated OTP:", otp);
 
             const decryptedId = encryptor.decrypt(user.UTF04);
+            console.log("🆔 Final decryptedId:", decryptedId);
 
             /* =========================
-               💾 SAVE OTP (NEW STRUCTURE)
+               💾 SAVE OTP
             ========================= */
+            console.log("💾 Saving OTP to DB...");
 
             await PLRDBOTP.create({
-                CORP_ID: decryptedId,                  // ✅ REQUIRED
-                EMAIL: user.UTF10,                     // ✅ REQUIRED
-                OTP_CODE: otp.toString(),              // ✅ REQUIRED
-                OTP_EXPIRY: Sequelize.literal("DATEADD(MINUTE, 5, GETDATE())"), // ✅ +5 min
-                OTP_STATUS: 'PENDING',                 // ✅ REQUIRED
-                OTP_DESC: 'FL'                // ✅ REQUIRED
+                CORP_ID: decryptedId,
+                EMAIL: user.UTF10,
+                OTP_CODE: otp.toString(),
+                OTP_EXPIRY: Sequelize.literal("DATEADD(MINUTE, 5, GETDATE())"),
+                OTP_STATUS: 'PENDING',
+                OTP_DESC: 'FL'
             });
+
+            console.log("✅ OTP saved successfully");
 
             /* =========================
                📩 SEND EMAIL
             ========================= */
+            console.log("📤 Sending OTP email to:", user.UTF10);
 
             await sendForceLogoutOTP({
                 to: user.UTF10,
                 corpId: decryptedId,
                 otp: otp
             });
+
+            console.log("✅ Email sent successfully");
 
             return res.json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify({
@@ -763,7 +885,7 @@ class AdminController {
 
         } catch (err) {
 
-            console.error("❌ sendLoginOTP Error:", err);
+            console.error("❌ sendLoginOTP Error FULL:", err);
 
             return res.status(500).json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify({
