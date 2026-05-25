@@ -522,6 +522,14 @@ class AdminDashboardController {
 
                 case 'AP':  // 👈 Approve Request
                     return AdminDashboardController.approveRequest(pa, response, res, decoded);
+
+                case 'EX':   // 👈 your action name
+                    return AdminDashboardController.updateExpiry(
+                        corporateId,
+                        pa,
+                        response,
+                        res
+                    );
                 default:
                     response.status = 'FAIL';
                     response.message = 'Invalid action';
@@ -636,7 +644,7 @@ class AdminDashboardController {
 
             let ibDetail;
 
-            if ([1, 2, 5].includes(roleId)) {
+            if ([1,2,5,10,11].includes(roleId)) {
                 const allUsers = await userCtrl.findAll({
                     UTF07: 'N',
                     UTF03: [3, 4]
@@ -1766,6 +1774,7 @@ class AdminDashboardController {
                     'A01F02',
                     'A01F03',
                     'A01F08',
+                    'A01F11',
                     'A01F12',
                     'A01F13',
                     'A01F10',
@@ -1836,6 +1845,7 @@ class AdminDashboardController {
                     status: row.A01F20 === 'P' ? 'P' : 'A',
                     planId: row.A02F01,
                     subscription: {
+                        registrationdate: row.A01F11,
                         startDate: row.A01F12,
                         endDate: row.A01F13
                     },
@@ -2019,6 +2029,7 @@ class AdminDashboardController {
                     'A01F02',
                     'A01F03',
                     'A01F08',
+                    'A01F11',
                     'A01F12',
                     'A01F13',
                     'A01F10',
@@ -2089,6 +2100,7 @@ class AdminDashboardController {
                     status: row.A01F20 === 'P' ? 'P' : 'A',
                     planId: row.A02F01,
                     subscription: {
+                        registrationdate: row.A01F11,
                         startDate: row.A01F12,
                         endDate: row.A01F13
                     },
@@ -2272,6 +2284,7 @@ class AdminDashboardController {
                     'A01F02',
                     'A01F03',
                     'A01F08',
+                    'A01F11',
                     'A01F12',
                     'A01F13',
                     'A01F10',
@@ -2342,6 +2355,7 @@ class AdminDashboardController {
                     status: row.A01F20 === 'P' ? 'P' : 'A',
                     planId: row.A02F01,
                     subscription: {
+                        registrationdate: row.A01F11,
                         startDate: row.A01F12,
                         endDate: row.A01F13
                     },
@@ -2381,7 +2395,7 @@ class AdminDashboardController {
              * ========================= */
             const corp = await PLRDBA01.findOne({
                 where: { A01F03: corpId },
-                attributes: ['A01F01', 'A01F02', 'A01F12', 'A01F13']
+                attributes: ['A01F01', 'A01F02', 'A01F11', 'A01F12', 'A01F13']
             });
 
             if (!corp) {
@@ -2533,6 +2547,7 @@ class AdminDashboardController {
                 totalBranches,
                 totalCompanies,
                 subscription: {
+                    registrationdate: corp.A01F11,
                     startDate: corp.A01F12,
                     endDate: corp.A01F13
                 },
@@ -2663,7 +2678,7 @@ class AdminDashboardController {
              * ========================= */
             const corp = await PLRDBA01.findOne({
                 where: { A01F03: corpId },
-                attributes: ['A01F01', 'A01F02', 'A01F12', 'A01F13']
+                attributes: ['A01F01', 'A01F02', 'A02F01', 'A01F12', 'A01F13']
             });
 
             if (!corp) {
@@ -2963,6 +2978,7 @@ class AdminDashboardController {
                 },
                 subscription: { startDate: corp.A01F12, endDate: corp.A01F13 },
 
+                planId: corp.A02F01,
                 roleStatus: {
                     superUsers: superUsers.length,
                     users: normalUsers.length
@@ -4243,6 +4259,76 @@ class AdminDashboardController {
 
             response.status = 'FAIL';
             response.message = err.message;
+
+            return res.status(500).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+            });
+        }
+    }
+    static async updateExpiry(corporateId, pa, response, res) {
+        try {
+            const corpId = corporateId.trim().toUpperCase();
+
+            /* =========================
+             * 1. VALIDATION
+             * ========================= */
+            if (!pa.endDate) {
+                response.status = 'FAIL';
+                response.message = 'endDate is required';
+                return res.status(400).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                });
+            }
+
+            /* =========================
+             * 2. FORMAT VALIDATION
+             * ========================= */
+            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+
+            if (!dateRegex.test(pa.endDate)) {
+                response.status = 'FAIL';
+                response.message = 'Invalid date format (YYYY-MM-DD required)';
+                return res.status(400).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                });
+            }
+
+            /* =========================
+             * 3. UPDATE (IMPORTANT)
+             * ========================= */
+            const updated = await PLRDBA01.update({
+                A01F13: pa.endDate   // ✅ DIRECT STRING (BEST for DATEONLY)
+            }, {
+                where: { A01F03: corpId }
+            });
+
+            if (!updated[0]) {
+                response.status = 'FAIL';
+                response.message = 'Corporate not found';
+                return res.status(404).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                });
+            }
+
+            /* =========================
+             * 4. RESPONSE
+             * ========================= */
+            response.status = 'SUCCESS';
+            response.message = 'Expiry date updated successfully';
+            response.data = {
+                corporateId: corpId,
+                A01F13: pa.endDate
+            };
+
+            return res.status(200).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+            });
+
+        } catch (err) {
+            console.error('updateExpiryFromFrontend error:', err);
+
+            response.status = 'FAIL';
+            response.message = 'Update failed';
 
             return res.status(500).json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify(response))

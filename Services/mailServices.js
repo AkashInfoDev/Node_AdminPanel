@@ -61,11 +61,34 @@ async function sendAccountInfoMail({ to, corpId, userId, password1 }) {
         <div style="font-family: Arial, sans-serif; background:#f4f6f8; padding:20px;">
             <div style="max-width:600px; margin:auto; background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 0 10px rgba(0,0,0,0.08);">
 
-                <div style="background:#0d6efd; color:#ffffff; padding:20px; text-align:center;">
-                    <img src="E-Plus_Logo.jpg" alt="E-PLUS Logo" style="max-height:50px; vertical-align:middle; margin-right:10px;"/>
-                    <h2 style="margin:0; display:inline;">E-PLUS CLOUD-ERP</h2>
-                    <p style="margin:5px 0 0;">Account Registration Successful</p>
-                </div>
+                <div style="background:#0d6efd; padding:20px;">
+    
+    <table style="width:100%; border-collapse:collapse;">
+        <tr>
+            
+            <!-- LEFT: LOGO -->
+            <td style="width:120px; vertical-align:top;">
+                <img 
+                    src="https://nodeapi.epluserp.cloud/logo/E-Plus_Logo.jpg"
+                    alt="E-PLUS Logo"
+                    style="max-height:55px;"
+                />
+            </td>
+
+            <!-- RIGHT: TEXT -->
+            <td style="text-align:right; vertical-align:middle;">
+                <h2 style="margin:0; color:#ffffff; font-size:20px;">
+                    E-PLUS CLOUD ERP
+                </h2>
+                <p style="margin:5px 0 0; color:#dbeafe; font-size:13px;">
+                    Account Registration Successful
+                </p>
+            </td>
+
+        </tr>
+    </table>
+
+</div>
 
                 <div style="padding:25px; color:#333;">
                     <p>Hello,</p>
@@ -119,49 +142,91 @@ async function sendResetMail({ to, corpId, otp }) {
         to,
         subject: `OTP for ${corpId} to Password Reset`,
         html: `
-            <div style="font-family: Arial, sans-serif; background:#f4f6f8; padding:20px;">
-            <div style="max-width:600px; margin:auto; background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 0 10px rgba(0,0,0,0.08);">
-                
-                <div style="background:#0d6efd; color:#ffffff; padding:20px; text-align:center;">
-                    <img src="E-Plus_Logo.jpg" alt="E-PLUS Logo" style="max-height:50px; vertical-align:middle; margin-right:10px;"/>
-                    <h2 style="margin:0; display:inline;">E-PLUS CLOUD-ERP</h2>
-                    <p style="margin:5px 0 0;">Password Reset Request</p>
-                </div>
+        <div style="font-family: Arial, sans-serif; background:#f4f6f8; padding:20px;">
+            <div style="max-width:600px; margin:auto; background:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+    
+    <!-- HEADER -->
+    <div style="background:#0d6efd; padding:20px;">
+    
+    <table style="width:100%; border-collapse:collapse;">
+        <tr>
+            
+            <!-- LEFT: LOGO -->
+            <td style="width:120px; vertical-align:top;">
+                <img 
+                    src="https://nodeapi.epluserp.cloud/logo/E-Plus_Logo.jpg"
+                    alt="E-PLUS Logo"
+                    style="max-height:55px;"
+                />
+            </td>
 
-                <div style="padding:25px; color:#333;">
-                    <p>Hello,</p>
+            <!-- RIGHT: TEXT -->
+            <td style="text-align:right; vertical-align:middle;">
+                <h2 style="margin:0; color:#ffffff; font-size:20px;">
+                    E-PLUS CLOUD ERP
+                </h2>
+                <p style="margin:5px 0 0; color:#dbeafe; font-size:13px;">
+                    Password Reset Request
+                </p>
+            </td>
 
-                    <p>
-                        We received a request to reset the password for your account. Below is your OTP for completing the password reset process.
-                    </p>
+        </tr>
+    </table>
 
-                    <table style="width:100%; border-collapse:collapse; margin:20px 0;">
-                        <tr>
-                            <td style="padding:10px; font-weight:bold; background:#f0f2f5;">Corporate ID</td>
-                            <td style="padding:10px; background:#fafafa;">${corpId}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding:10px; font-weight:bold; background:#f0f2f5;">OTP</td>
-                            <td style="padding:10px; background:#fafafa;">${otp}</td>
-                        </tr>
-                    </table>
+</div>
 
-                    <p style="margin-top:20px;">
-                        Please note: This OTP is valid for 5 minutes. If you did not request a password reset, please ignore this email.
-                    </p>
+    <!-- BODY -->
+    <div style="padding:30px; color:#333;">
+      
+      <p style="margin:0 0 15px;">Hello,</p>
 
-                    <p style="color:#666;">Stay secure,<br/>E-PLUS Support Team</p>
-                </div>
+      <p style="line-height:1.6;">
+        We received a request to reset your password. Use the OTP below to proceed:
+      </p>
 
-                <div style="background:#f0f2f5; padding:15px; text-align:center; font-size:12px; color:#999;">
-                    © ${new Date().getFullYear()} Aakash Infoway Pvt. Ltd. All rights reserved. | Trusted since 2001
-                </div>
-
-            </div>
+      <!-- OTP BOX (IMPORTANT UI IMPROVEMENT) -->
+      <div style="text-align:center; margin:25px 0;">
+        <div style="
+          display:inline-block;
+          background:#f1f5ff;
+          border:1px dashed #0d6efd;
+          padding:15px 30px;
+          font-size:28px;
+          font-weight:bold;
+          letter-spacing:3px;
+          color:#0d6efd;
+          border-radius:8px;
+        ">
+          ${otp}
         </div>
-        `
+      </div>
+
+      <!-- DETAILS -->
+      <div style="background:#f9fafb; border-radius:6px; padding:15px; margin-top:20px;">
+        <p style="margin:5px 0;"><strong>Corporate ID:</strong> ${corpId}</p>
+      </div>
+
+      <p style="margin-top:20px; font-size:14px; color:#555;">
+        This OTP is valid for <strong>5 minutes</strong>. If you did not request this, please ignore this email.
+      </p>
+
+      <p style="margin-top:20px;">
+        Stay secure,<br/>
+        <strong>E-PLUS Support Team</strong>
+      </p>
+    </div>
+
+    <!-- FOOTER -->
+    <div style="background:#f1f1f1; padding:15px; text-align:center; font-size:12px; color:#777;">
+      © ${new Date().getFullYear()} Aakash Infoway Pvt. Ltd. | Trusted since 2001
+    </div>
+
+  </div>
+</div>
+`
     });
 }
+
 async function sendLogOutMail({ to, corpId, otp, subject }) {
     const transporter = createTransporter();
     let isMail = await transporter.sendMail({
@@ -172,11 +237,34 @@ async function sendLogOutMail({ to, corpId, otp, subject }) {
             <div style="font-family: Arial, sans-serif; background:#f4f6f8; padding:20px;">
             <div style="max-width:600px; margin:auto; background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 0 10px rgba(0,0,0,0.08);">
                 
-                <div style="background:#0d6efd; color:#ffffff; padding:20px; text-align:center;">
-                    <img src="E-Plus_Logo.jpg" alt="E-PLUS Logo" style="max-height:50px; vertical-align:middle; margin-right:10px;"/>
-                    <h2 style="margin:0; display:inline;">E-PLUS CLOUD-ERP</h2>
-                    <p style="margin:5px 0 0;">Logout Request</p>
-                </div>
+                <div style="background:#0d6efd; padding:20px;">
+    
+    <table style="width:100%; border-collapse:collapse;">
+        <tr>
+            
+            <!-- LEFT: LOGO -->
+            <td style="width:120px; vertical-align:top;">
+                <img 
+                    src="https://nodeapi.epluserp.cloud/logo/E-Plus_Logo.jpg"
+                    alt="E-PLUS Logo"
+                    style="max-height:55px;"
+                />
+            </td>
+
+            <!-- RIGHT: TEXT -->
+            <td style="text-align:right; vertical-align:middle;">
+                <h2 style="margin:0; color:#ffffff; font-size:20px;">
+                    E-PLUS CLOUD ERP
+                </h2>
+                <p style="margin:5px 0 0; color:#dbeafe; font-size:13px;">
+                    Logout Request
+                </p>
+            </td>
+
+        </tr>
+    </table>
+
+</div>
 
                 <div style="padding:25px; color:#333;">
                     <p>Hello,</p>
@@ -211,7 +299,7 @@ async function sendLogOutMail({ to, corpId, otp, subject }) {
         </div>
         `
     });
-    return;
+    return isMail;
 }
 
 const sendEmailWithAttachment = async (to, attachmentPath, filename, smtpConfig = {}) => {
@@ -237,12 +325,34 @@ const sendEmailWithAttachment = async (to, attachmentPath, filename, smtpConfig 
         html: `
     <div style="font-family: Arial, sans-serif; background:#f4f6f8; padding:20px;">
       <div style="max-width:600px; margin:auto; background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 0 10px rgba(0,0,0,0.08);">
+<div style="background:#0d6efd; padding:20px;">
+    
+    <table style="width:100%; border-collapse:collapse;">
+        <tr>
+            
+            <!-- LEFT: LOGO -->
+            <td style="width:120px; vertical-align:top;">
+                <img 
+                    src="https://nodeapi.epluserp.cloud/logo/E-Plus_Logo.jpg"
+                    alt="E-PLUS Logo"
+                    style="max-height:55px;"
+                />
+            </td>
 
-        <div style="background:#0d6efd; color:#ffffff; padding:20px; text-align:center;">
-          <img src="E-Plus_Logo.jpg" alt="E-PLUS Logo" style="max-height:50px; vertical-align:middle; margin-right:10px;"/>
-          <h2 style="margin:0; display:inline;">E-PLUS CLOUD ERP</h2>
-          <p style="margin:5px 0 0;">Eplus Backup</p>
-        </div>
+            <!-- RIGHT: TEXT -->
+            <td style="text-align:right; vertical-align:middle;">
+                <h2 style="margin:0; color:#ffffff; font-size:20px;">
+                    E-PLUS CLOUD ERP
+                </h2>
+                <p style="margin:5px 0 0; color:#dbeafe; font-size:13px;">
+                    Eplus Backup
+                </p>
+            </td>
+
+        </tr>
+    </table>
+
+</div>
 
         <div style="padding:25px; color:#333;">
           <p>Hello,</p>
@@ -342,10 +452,34 @@ async function sendForceLogoutOTP({ to, corpId, otp }) {
                 <div style="font-family: Arial, sans-serif; background:#f4f6f8; padding:20px;">
                 <div style="max-width:600px; margin:auto; background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 0 10px rgba(0,0,0,0.08);">
                     
-                    <div style="background:#0d6efd; color:#ffffff; padding:20px; text-align:center;">
-                        <h2 style="margin:0;">E-PLUS CLOUD-ERP</h2>
-                        <p style="margin:5px 0 0;">Force Logout OTP</p>
-                    </div>
+                  <div style="background:#0d6efd; padding:20px;">
+    
+    <table style="width:100%; border-collapse:collapse;">
+        <tr>
+            
+            <!-- LEFT: LOGO -->
+            <td style="width:120px; vertical-align:top;">
+                <img 
+                    src="https://nodeapi.epluserp.cloud/logo/E-Plus_Logo.jpg"
+                    alt="E-PLUS Logo"
+                    style="max-height:55px;"
+                />
+            </td>
+
+            <!-- RIGHT: TEXT -->
+            <td style="text-align:right; vertical-align:middle;">
+                <h2 style="margin:0; color:#ffffff; font-size:20px;">
+                    E-PLUS CLOUD ERP
+                </h2>
+                <p style="margin:5px 0 0; color:#dbeafe; font-size:13px;">
+                    Force Logout OTP
+                </p>
+            </td>
+
+        </tr>
+    </table>
+
+</div>
 
                     <div style="padding:25px; color:#333;">
                         <p>Hello,</p>
@@ -401,4 +535,93 @@ async function sendForceLogoutOTP({ to, corpId, otp }) {
     }
 }
 
-module.exports = { sendAccountInfoMail, sendResetMail, sendLogOutMail, sendEmailWithAttachment, sendForceLogoutOTP };
+async function sendDealerAccountMail({ to, dealerCode, userId, password }) {
+    const transporter = createTransporter();
+
+    return transporter.sendMail({
+        from: '"EPLUS Support" <demo@tcodes.in>',
+        to,
+        subject: ' Your Dealer Account is Ready - EPLUS ERP',
+        html: `
+        <div style="font-family: Arial, sans-serif; background:#f4f6f8; padding:20px;">
+            <div style="max-width:600px; margin:auto; background:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+
+                <!-- HEADER -->
+<div style="background:#0d6efd; padding:20px;">
+    
+    <table style="width:100%; border-collapse:collapse;">
+        <tr>
+            
+            <!-- LEFT: LOGO -->
+            <td style="width:120px; vertical-align:top;">
+                <img 
+                    src="https://nodeapi.epluserp.cloud/logo/E-Plus_Logo.jpg"
+                    alt="E-PLUS Logo"
+                    style="max-height:55px;"
+                />
+            </td>
+
+            <!-- RIGHT: TEXT (SHIFTED RIGHT) -->
+            <td style="text-align:right; vertical-align:middle;">
+                <h2 style="margin:0; color:#ffffff; font-size:20px;">
+                    E-PLUS CLOUD ERP
+                </h2>
+                <p style="margin:5px 0 0; color:#dbeafe; font-size:13px;">
+                    Dealer Account Created Successfully
+                </p>
+            </td>
+
+        </tr>
+    </table>
+
+</div>
+
+                <!-- BODY -->
+                <div style="padding:25px; color:#333;">
+                    <p>Hello Dealer,</p>
+
+                    <p>
+                        Welcome to <strong>E-PLUS ERP</strong> <br/>
+                        Your dealer account has been successfully created.
+                    </p>
+
+                    <p>
+                        Login Credentials:
+                    </p>
+
+                    <table style="width:100%; border-collapse:collapse; margin:20px 0;">
+                        
+                        <tr>
+                            <td style="padding:10px; font-weight:bold; background:#f0f2f5;">User ID</td>
+                            <td style="padding:10px; background:#fafafa;">${userId}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding:10px; font-weight:bold; background:#f0f2f5;">Password</td>
+                            <td style="padding:10px; background:#fafafa;">${password}</td>
+                        </tr>
+                    </table>
+
+                    
+
+                    <p style="margin-top:20px;">
+                        If you need assistance, contact our support team.
+                    </p>
+
+                    <p style="color:#666;">
+                        Regards,<br/>
+                        <strong>EPLUS Team</strong>
+                    </p>
+                </div>
+
+                <!-- FOOTER -->
+                <div style="background:#f1f1f1; padding:15px; text-align:center; font-size:12px; color:#777;">
+                    © ${new Date().getFullYear()} Aakash Infoway Pvt. Ltd.
+                </div>
+
+            </div>
+        </div>
+        `
+    });
+}
+
+module.exports = { sendAccountInfoMail, sendResetMail, sendLogOutMail, sendEmailWithAttachment, sendForceLogoutOTP, sendDealerAccountMail };

@@ -4,12 +4,13 @@ require('dotenv').config();
 
 const db = require('../Config/config');
 const definePLSTATE = require('../Models/IDB/PLSTATE');
-
+const { sendDealerAccountMail } = require('../Services/mailServices');
 
 // 🔥 MODEL FACTORY
 // const defineUserTable = require('../Models/RDB/UserTable');
 const defineEPUser = require('../Models/RDB/EP_USER');
 const defineEPBank = require('../Models/RDB/EP_BANK');
+
 
 const Encryptor = require('../Services/encryptor');
 
@@ -492,7 +493,22 @@ class RDBUserController {
                     BNK09: 'N'
                 });
             }
+            /* =========================
+               📧 SEND MAIL (ONLY DEALER)
+            ========================= */
 
+            if (userType === '3' && data.email) {
+                sendDealerAccountMail({
+                    to: data.email,
+                    dealerCode: dealerCode,
+                    userId: data.userId,
+                    password: data.password
+                }).then(() => {
+                    console.log("✅ Dealer mail sent");
+                }).catch(err => {
+                    console.error("❌ MAIL FAILED:", err.message);
+                });
+            }
             /* =========================
                📦 RESPONSE
             ========================= */
