@@ -57,6 +57,7 @@ class RolePageController {
             }
 
             const decoded = await TokenService.validateToken(token);
+            console.log(decoded)
             const roleId = Number(decoded.roleId);
 
             // // 🔥 Only Admin
@@ -187,7 +188,8 @@ class RolePageController {
                     add: p ? (p.M83F03 ? 1 : 0) : 0,
                     edit: p ? (p.M83F04 ? 1 : 0) : 0,
                     delete: p ? (p.M83F05 ? 1 : 0) : 0,
-                    view: p ? (p.M83F06 ? 1 : 0) : 0
+                    view: p ? (p.M83F06 ? 1 : 0) : 0,
+                    self: p ? (p.M83F09 ? 1 : 0) : 0
                 };
             });
 
