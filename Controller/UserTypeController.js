@@ -9,9 +9,17 @@ const sequelizeIDB = db.getConnection('IDBAPI');
 const defineUserTypes = require('../Models/RDB/EP_USERTPYES');
 const defineMenu = require('../Models/IDB/PLSYSM82');
 const definePermission = require('../Models/IDB/PLSYSM83');
+const defineEPUser = require('../Models/RDB/EP_USER');
+const defineEPBank = require('../Models/RDB/EP_BANK');
+
+
 const UserTypes = defineUserTypes(sequelizeRDB, require('sequelize').DataTypes);
 const Menu = defineMenu(sequelizeIDB, require('sequelize').DataTypes);
 const Permission = definePermission(sequelizeIDB, require('sequelize').DataTypes);
+const EPUser = defineEPUser(sequelizeRDB);
+const EPBank = defineEPBank(sequelizeRDB);
+
+
 const defineTicketPermission =
     require('../Models/RDB/EPTICKPER');
 
@@ -26,7 +34,7 @@ const encryptor = new Encryptor();
 class UserTypeController {
 
 
-    static async getTypes1(req,res) {
+    static async getTypes1(req, res) {
         let response = { status: 'SUCCESS', message: '', data: null };
 
         const types = await UserTypes.findAll({
@@ -128,7 +136,7 @@ class UserTypeController {
                     return UserTypeController.updateType(id, type, res);
 
                 case 'D':
-                    return UserTypeController.deleteType(id, res);
+                    return UserTypeController.deleteType(id, pa, res);
 
                 case 'GP': // Get Permissions (blank or by role)
                     return UserTypeController.getPermissions(pa.role_id, res);
@@ -720,20 +728,54 @@ class UserTypeController {
     /* =========================
        📥 GET
     ========================= */
+    // static async getTypes(res) {
+
+    //     const types = await UserTypes.findAll({
+    //         order: [['ID', 'ASC']]
+    //     });
+
+    //     return res.json({
+    //         encryptedResponse: encryptor.encrypt(JSON.stringify({
+    //             status: 'SUCCESS',
+    //             data: types
+    //         }))
+    //     });
+    // }
     static async getTypes(res) {
 
         const types = await UserTypes.findAll({
-            order: [['ID', 'ASC']]
+            order: [['ID', 'ASC']],
+            raw: true
         });
+
+        // 🔥 get user counts
+        const users = await EPUser.findAll({
+            attributes: ['UTF03'], // role id
+            where: { UTF07: 'N' },
+            raw: true
+        });
+
+        // 🔁 count users per role
+        const roleCountMap = {};
+
+        users.forEach(u => {
+            roleCountMap[u.UTF03] = (roleCountMap[u.UTF03] || 0) + 1;
+        });
+
+        // 🔄 attach count
+        const result = types.map(t => ({
+            ...t,
+            userCount: roleCountMap[t.ID] || 0,
+            hasUsers: (roleCountMap[t.ID] || 0) > 0
+        }));
 
         return res.json({
             encryptedResponse: encryptor.encrypt(JSON.stringify({
                 status: 'SUCCESS',
-                data: types
+                data: result
             }))
         });
     }
-
     /* =========================
        ✏️ UPDATE
     ========================= */
@@ -773,7 +815,40 @@ class UserTypeController {
     /* =========================
        ❌ DELETE
     ========================= */
-    static async deleteType(id, res) {
+    // static async deleteType(id, res) {
+
+    //     if (!id) {
+    //         return res.status(400).json({
+    //             encryptedResponse: encryptor.encrypt(JSON.stringify({
+    //                 status: 'FAIL',
+    //                 message: 'id required'
+    //             }))
+    //         });
+    //     }
+
+    //     const deleted = await UserTypes.destroy({
+    //         where: { ID: id }
+    //     });
+
+    //     if (!deleted) {
+    //         return res.status(404).json({
+    //             encryptedResponse: encryptor.encrypt(JSON.stringify({
+    //                 status: 'FAIL',
+    //                 message: 'Type not found'
+    //             }))
+    //         });
+    //     }
+
+    //     return res.json({
+    //         encryptedResponse: encryptor.encrypt(JSON.stringify({
+    //             status: 'SUCCESS',
+    //             message: 'Deleted successfully'
+    //         }))
+    //     });
+    // }
+    static async deleteType(id, pa, res) {
+
+        const { newRoleId } = pa; // 🔥 get from frontend
 
         if (!id) {
             return res.status(400).json({
@@ -784,25 +859,108 @@ class UserTypeController {
             });
         }
 
-        const deleted = await UserTypes.destroy({
-            where: { ID: id }
-        });
+        try {
 
-        if (!deleted) {
-            return res.status(404).json({
+            /* =========================
+               🔍 CHECK USERS EXIST
+            ========================= */
+            const users = await EPUser.findAll({
+                where: {
+                    UTF03: id,
+                    UTF07: 'N'
+                },
+                raw: true
+            });
+
+            /* =========================
+               ⚠️ USERS EXIST → REQUIRE MIGRATION
+            ========================= */
+            if (users.length > 0) {
+
+                if (!newRoleId) {
+                    return res.status(400).json({
+                        encryptedResponse: encryptor.encrypt(JSON.stringify({
+                            status: 'FAIL',
+                            message: `Role has ${users.length} users. Please provide newRoleId for migration.`
+                        }))
+                    });
+                }
+
+                if (Number(newRoleId) === Number(id)) {
+                    return res.status(400).json({
+                        encryptedResponse: encryptor.encrypt(JSON.stringify({
+                            status: 'FAIL',
+                            message: 'Cannot migrate to same role'
+                        }))
+                    });
+                }
+
+                /* =========================
+                   🔍 CHECK NEW ROLE EXISTS
+                ========================= */
+                const newRole = await UserTypes.findOne({
+                    where: { ID: newRoleId }
+                });
+
+                if (!newRole) {
+                    return res.status(400).json({
+                        encryptedResponse: encryptor.encrypt(JSON.stringify({
+                            status: 'FAIL',
+                            message: 'Target role not found'
+                        }))
+                    });
+                }
+
+                /* =========================
+                   🔄 MIGRATE USERS
+                ========================= */
+                await EPUser.update(
+                    { UTF03: newRoleId },
+                    {
+                        where: {
+                            UTF03: id,
+                            UTF07: 'N'
+                        }
+                    }
+                );
+            }
+
+            /* =========================
+               ❌ DELETE ROLE
+            ========================= */
+            const deleted = await UserTypes.destroy({
+                where: { ID: id }
+            });
+
+            if (!deleted) {
+                return res.status(404).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify({
+                        status: 'FAIL',
+                        message: 'Type not found'
+                    }))
+                });
+            }
+
+            return res.json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify({
+                    status: 'SUCCESS',
+                    message: users.length > 0
+                        ? 'Users migrated and role deleted successfully'
+                        : 'Role deleted successfully'
+                }))
+            });
+
+        } catch (error) {
+
+            console.error("DeleteType Error:", error);
+
+            return res.status(500).json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify({
                     status: 'FAIL',
-                    message: 'Type not found'
+                    message: 'Delete failed'
                 }))
             });
         }
-
-        return res.json({
-            encryptedResponse: encryptor.encrypt(JSON.stringify({
-                status: 'SUCCESS',
-                message: 'Deleted successfully'
-            }))
-        });
     }
 }
 

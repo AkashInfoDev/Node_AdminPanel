@@ -780,18 +780,40 @@ const restoreBak = async (req, res) => {
         console.log("🚀 ZIP Restore API HIT");
 
         /* ========= PAYLOAD ========= */
+        // let branchMappings = [];
+        // let skipBranchUpdate = false;
+        // if (req.body.pa) {
+        //     try {
+        //         const decrypted = encryptor.decrypt(req.body.pa);
+        //         if (decrypted === "false") skipBranchUpdate = true;
+        //         else branchMappings = JSON.parse(decodeURIComponent(decrypted)).BRCODE || [];
+        //     } catch {
+        //         throw new Error("Invalid payload format");
+        //     }
+        // }
+
         let branchMappings = [];
         let skipBranchUpdate = false;
+        let mode = "NEW";
+        let targetCompanyID = null;
+
         if (req.body.pa) {
             try {
                 const decrypted = encryptor.decrypt(req.body.pa);
-                if (decrypted === "false") skipBranchUpdate = true;
-                else branchMappings = JSON.parse(decodeURIComponent(decrypted)).BRCODE || [];
+
+                if (decrypted === "false") {
+                    skipBranchUpdate = true;
+                } else {
+                    const parsed = JSON.parse(decodeURIComponent(decrypted));
+
+                    branchMappings = parsed.BRCODE || [];
+                    mode = parsed.mode || "NEW";
+                    targetCompanyID = parsed.targetCompanyID || null;
+                }
             } catch {
                 throw new Error("Invalid payload format");
             }
         }
-
         /* ========= TOKEN ========= */
         const token = req.headers.authorization?.split(" ")[1];
         if (!token) throw new Error("Token missing");
@@ -815,9 +837,34 @@ const restoreBak = async (req, res) => {
             { type: QueryTypes.SELECT }
         );
         const usedIds = companies.map(c => Number(c.CMPF01)).filter(n => n > 0);
-        let nextCompanyID = 1;
-        while (usedIds.includes(nextCompanyID)) nextCompanyID++;
-        console.log("🆕 CompanyID:", nextCompanyID);
+        // let nextCompanyID = 1;
+        // while (usedIds.includes(nextCompanyID)) nextCompanyID++;
+        // console.log("🆕 CompanyID:", nextCompanyID);
+        let finalCompanyID;
+
+        if (mode === "OVERWRITE") {
+
+            if (!targetCompanyID) {
+                throw new Error("targetCompanyID required for OVERWRITE mode");
+            }
+
+            finalCompanyID = Number(targetCompanyID);
+
+            if (!usedIds.includes(finalCompanyID)) {
+                throw new Error("Target company does not exist");
+            }
+
+            console.log("♻️ OVERWRITE MODE:", finalCompanyID);
+
+        } else {
+
+            let nextCompanyID = 1;
+            while (usedIds.includes(nextCompanyID)) nextCompanyID++;
+
+            finalCompanyID = nextCompanyID;
+
+            console.log("🆕 NEW MODE:", finalCompanyID);
+        }
 
         /* ========= FILE ========= */
         const file = req.files?.[0];
@@ -866,19 +913,56 @@ const restoreBak = async (req, res) => {
         /* ========= SQL PATH & DB NAME ========= */
         const sqlPath = `C:\\files\\files\\${remoteFileName}`;
         const CmpDBName = corporateID.split("-");
+        // const newDatabaseName =
+        //     corporateID === "PL-P-00001"
+        //         ? `A${corporateID.slice(-5)}CMP${nextCompanyID.toString().padStart(4, "0")}`
+        //         : `${CmpDBName.join("")}CMP${nextCompanyID.toString().padStart(4, "0")}`;
         const newDatabaseName =
             corporateID === "PL-P-00001"
-                ? `A${corporateID.slice(-5)}CMP${nextCompanyID.toString().padStart(4, "0")}`
-                : `${CmpDBName.join("")}CMP${nextCompanyID.toString().padStart(4, "0")}`;
+                ? `A${corporateID.slice(-5)}SDB`
+                : `${CmpDBName.join("")}CMP${finalCompanyID.toString().padStart(4, "0")}`;
 
-        /* ========= FORCE CLOSE EXISTING DB ========= */
-        await sequelizeMASTER.query(`
-      IF DB_ID('${newDatabaseName}') IS NOT NULL
-      BEGIN
-        ALTER DATABASE [${newDatabaseName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
-      END
+
+
+
+        if (mode === "OVERWRITE") {
+
+            console.log("⚠️ OVERWRITE: Deleting existing company");
+
+            // Delete company entry
+            await sequelizeSDB.query(`
+        DELETE FROM ${sdbName}.dbo.PLSDBCMP
+        WHERE CMPF01 = ${finalCompanyID}
     `);
 
+            // Delete mapping
+            await sequelizeSDB.query(`
+        DELETE FROM ${sdbName}.dbo.PLSDBM82
+        WHERE M82F02 = ${finalCompanyID}
+    `);
+
+            // Drop DB
+            await sequelizeMASTER.query(`
+        IF DB_ID('${newDatabaseName}') IS NOT NULL
+        BEGIN
+            ALTER DATABASE [${newDatabaseName}]
+            SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+            DROP DATABASE [${newDatabaseName}];
+        END
+    `);
+
+            console.log("✅ Old company deleted");
+        }
+
+        /* ========= FORCE CLOSE EXISTING DB ========= */
+        if (mode !== "OVERWRITE") {
+            await sequelizeMASTER.query(`
+        IF DB_ID('${newDatabaseName}') IS NOT NULL
+        BEGIN
+            ALTER DATABASE [${newDatabaseName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+        END
+    `);
+        }
         /* ========= RESTORE FILE LIST ========= */
         const fileList = await sequelizeMASTER.query(`RESTORE FILELISTONLY FROM DISK = '${sqlPath}'`);
         const dataFile = fileList[0].find(f => f.Type === "D");
@@ -900,7 +984,9 @@ const restoreBak = async (req, res) => {
         const [cmpData] = await sequelizeMASTER.query(
             `SELECT TOP 1 FIELD02 as companyName FROM ${newDatabaseName}.dbo.CMPM00`
         );
-        const companyName = cmpData[0]?.companyName || `Company ${nextCompanyID}`;
+        // const companyName = cmpData[0]?.companyName || `Company ${nextCompanyID}`;
+        // const companyName = cmpData[0]?.companyName || `Company ${finalCompanyID}`;
+        const companyName = cmpData?.[0]?.companyName || `Company ${finalCompanyID}`;
 
         let activeServer = await DBSER_INFO.findOne({
             where: {
@@ -913,18 +999,21 @@ const restoreBak = async (req, res) => {
             `INSERT INTO ${sdbName}.dbo.PLSDBCMP (CMPF01, CMPF02, CMPF03, CMPF04, CMPF11, CMPF12, CMPF21, CMPF22, CMPF23, CMPF24)
        VALUES (:companyID, :companyName, 'SQL', 'No Group', 'U0000000', GETDATE(),
        '${activeServer.INFO_02}','${activeServer.INFO_03}','${encryptor.decrypt(activeServer.INFO_04)}','DATA')`,
-            { replacements: { companyID: nextCompanyID, companyName }, transaction }
+            // { replacements: { companyID: nextCompanyID, companyName }, transaction }
+            { replacements: { companyID: finalCompanyID, companyName }, transaction }
         );
 
         await sequelizeSDB.query(
             `INSERT INTO ${sdbName}.dbo.PLSDBM82 (M82F01, M82F02, M82CMP, M82YRN, M82ADA)
        VALUES ('U0000000', :companyID, 'N', '26', 'A')`,
-            { replacements: { companyID: nextCompanyID }, transaction }
+            // { replacements: { companyID: nextCompanyID }, transaction }
+            { replacements: { companyID: finalCompanyID }, transaction }
         );
 
         await sequelizeMASTER.query(
             `UPDATE ${newDatabaseName}.dbo.CMPM00 SET FIELD01 = :companyID`,
-            { replacements: { companyID: nextCompanyID }, transaction }
+            // { replacements: { companyID: nextCompanyID }, transaction }
+            { replacements: { companyID: finalCompanyID }, transaction }
         );
         /* ========= NEW GLOBAL FLOW ========= */
         if (!skipBranchUpdate && branchMappings.length === 0) {
@@ -934,9 +1023,9 @@ const restoreBak = async (req, res) => {
             await sequelizeSDB.query(`
         UPDATE ${sdbName}.dbo.PLSDBBRC
         SET BRCCOMP = CASE
-            WHEN BRCCOMP IS NULL OR BRCCOMP = '' THEN '${nextCompanyID}'
-            WHEN ',' + ISNULL(BRCCOMP, '') + ',' NOT LIKE '%,${nextCompanyID},%' 
-                THEN BRCCOMP + ',${nextCompanyID}'
+            WHEN BRCCOMP IS NULL OR BRCCOMP = '' THEN '${finalCompanyID}'
+           WHEN ',' + ISNULL(BRCCOMP, '') + ',' NOT LIKE '%,${finalCompanyID},%'
+    THEN BRCCOMP + ',${finalCompanyID}'
             ELSE BRCCOMP
         END
     `, { transaction });
@@ -949,8 +1038,8 @@ const restoreBak = async (req, res) => {
                 .map(b => `
           UPDATE ${sdbName}.dbo.PLSDBBRC
           SET BRCCOMP = CASE
-            WHEN BRCCOMP IS NULL OR BRCCOMP = '' THEN '${nextCompanyID}'
-            WHEN CHARINDEX('${nextCompanyID}', BRCCOMP) = 0 THEN BRCCOMP + ',${nextCompanyID}'
+            WHEN BRCCOMP IS NULL OR BRCCOMP = '' THEN '${finalCompanyID}'
+            WHEN CHARINDEX('${finalCompanyID}', BRCCOMP) = 0 THEN BRCCOMP + ',${finalCompanyID}'
             ELSE BRCCOMP
           END
           WHERE BRCODE = '${b.BRCODENEW}';
