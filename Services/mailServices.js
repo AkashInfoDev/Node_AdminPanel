@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const { sendWhatsAppOTP } = require('./whatsappOtpService');
 
 const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
@@ -439,7 +440,7 @@ const sendEmailWithAttachment = async (to, attachmentPath, filename, smtpConfig 
     }
 };
 
-async function sendForceLogoutOTP({ to, corpId, otp }) {
+async function sendForceLogoutOTP({ to, corpId, otp, phone }) {
     try {
 
         const transporter = createTransporter();
@@ -525,10 +526,15 @@ async function sendForceLogoutOTP({ to, corpId, otp }) {
 
         console.log("✅ Force Logout OTP sent:", info.response);
 
-        return info;
+        return "EM";
 
     } catch (error) {
-
+        if (error.code = "EENVELOPE" && error.responseCode == 550) {
+            const result = await sendWhatsAppOTP(phone, otp);
+            if(result.success == true){
+                return "WP" 
+            }
+        }
         console.error("❌ OTP Mail Error:", error);
 
         throw new Error("Failed to send OTP email");
