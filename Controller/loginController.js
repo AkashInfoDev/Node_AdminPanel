@@ -1421,7 +1421,7 @@ class UserController {
             if (action === 'A') {
                 return UserController.registerUser({
                     userId, firstName, middleName, lastName, dob, gender,
-                    email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, corpId, cusRole, decoded, req, CmpList, BrcList, lAudit
+                    email, password, roleId, address, phoneNumber, base64Image, GUaction, grpname, companyName, corpId, cusRole, decoded, req, CmpList, BrcList, lAudit, decoded
                 }, res);
             } else if (action === 'E') {
                 return UserController.updateUser({
@@ -1861,10 +1861,10 @@ class UserController {
     //         return res.status(500).json({ encryptedResponse: encryptedResponse });
     //     }
     // }
-    static async registerUser({ req }, res) {
+    static async registerUser({ req, decoded }, res) {
         try {
             // const parameterString = encryptor.decrypt(req.query.pa);
-            const encryptedPa = req.body.pa || req.query.pa;
+            const encryptedPa = req.body ? req?.body?.pa : req?.query?.pa;
 
             if (!encryptedPa) {
                 throw new Error('pa parameter missing');
@@ -1878,7 +1878,7 @@ class UserController {
                 userId, firstName, middleName, lastName, dob, gender,
                 email, password, roleId, address, phoneNumber,
                 base64Image, GUaction, grpname, companyName,
-                corpId, cusRole, CmpList, BrcList
+                corpId, cusRole, CmpList, BrcList, lAudit
             } = pa;
             // const token = req.headers['authorization']?.split(' ')[1];
             // const decoded = await TokenService.validateToken(token);
