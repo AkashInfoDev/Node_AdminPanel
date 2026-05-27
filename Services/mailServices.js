@@ -38,17 +38,15 @@ async function sendMail({ smtpConfig, to, subject, html, attachments = [] }) {
 
 module.exports = { sendMail };
 function createTransporter(smtpConfig = {}) {
-
     return nodemailer.createTransport({
         host: smtpConfig.host || process.env.SMTP_HOST,
-        port: smtpConfig.port || process.env.SMTP_PORT || 587,
-        secure: false,
-        connectionTimeout: 10000, // 🔥 10 sec
-        greetingTimeout: 10000,
+        port: Number(smtpConfig.port || process.env.SMTP_PORT || 587),
+        secure: Number(smtpConfig.port || process.env.SMTP_PORT) === 465,
         auth: {
             user: smtpConfig.user || process.env.SMTP_USER,
             pass: smtpConfig.pass || process.env.SMTP_PASS
-        }
+        },
+        // jsonTransport: true
     });
 }
 
