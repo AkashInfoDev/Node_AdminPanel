@@ -446,7 +446,7 @@ async function sendForceLogoutOTP({ to, corpId, otp, phone }) {
         const transporter = createTransporter();
 
         const mailOptions = {
-            from: `"EPLUS Support" <${process.env.SMTP_USER}>`,
+            from: `"EPLUS Support" <system@epluserp.com>`,
             to,
             subject: `OTP for ${corpId} to Force Logout`,
             html: `
