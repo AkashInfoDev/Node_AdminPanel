@@ -528,9 +528,17 @@ async function sendForceLogoutOTP({ to, corpId, otp, phone }) {
 
     } catch (error) {
         if (error.code = "EENVELOPE" && error.responseCode == 550) {
-            const result = await sendWhatsAppOTP(phone, otp);
-            if(result.success == true){
-                return "WP" 
+            try {
+                const result = await sendWhatsAppOTP(phone, otp);
+                console.log("WhatsApp Result:", result);
+                if (result?.success === true) {
+                    console.log("✅ OTP sent via WhatsApp");
+                    return "WP";
+                }
+
+            } catch (waError) {
+                console.error("❌ WhatsApp Error:", waError);
+                throw new Error("WhatsApp OTP failed");
             }
         }
         console.error("❌ OTP Mail Error:", error);
