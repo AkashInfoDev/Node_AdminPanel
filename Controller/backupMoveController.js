@@ -924,6 +924,27 @@ const restoreBak = async (req, res) => {
 
 
 
+        let oldCmp = null;
+        let oldM82 = null;
+
+        // 🔵 FETCH OLD DATA BEFORE DELETE
+        if (mode === "OVERWRITE") {
+
+            const [cmpRows] = await sequelizeSDB.query(`
+                SELECT * FROM ${sdbName}.dbo.PLSDBCMP
+                WHERE CMPF01 = ${finalCompanyID}
+            `);
+
+            const [m82Rows] = await sequelizeSDB.query(`
+                SELECT * FROM ${sdbName}.dbo.PLSDBM82
+                WHERE M82F02 = ${finalCompanyID}
+            `);
+
+            oldCmp = cmpRows[0] || null;
+            oldM82 = m82Rows[0] || null;
+
+            console.log("✅ Old company data stored before delete");
+        }
 
         if (mode === "OVERWRITE") {
 
@@ -931,15 +952,15 @@ const restoreBak = async (req, res) => {
 
             // Delete company entry
             await sequelizeSDB.query(`
-        DELETE FROM ${sdbName}.dbo.PLSDBCMP
-        WHERE CMPF01 = ${finalCompanyID}
-    `);
+                DELETE FROM ${sdbName}.dbo.PLSDBCMP
+                WHERE CMPF01 = ${finalCompanyID}
+            `);
 
             // Delete mapping
             await sequelizeSDB.query(`
-        DELETE FROM ${sdbName}.dbo.PLSDBM82
-        WHERE M82F02 = ${finalCompanyID}
-    `);
+                DELETE FROM ${sdbName}.dbo.PLSDBM82
+                WHERE M82F02 = ${finalCompanyID}
+            `);
 
             // Drop DB
             await sequelizeMASTER.query(`
@@ -988,6 +1009,49 @@ const restoreBak = async (req, res) => {
         // const companyName = cmpData[0]?.companyName || `Company ${finalCompanyID}`;
         const companyName = cmpData?.[0]?.companyName || `Company ${finalCompanyID}`;
 
+
+        let defaultCmp = null;
+        let defaultM82 = null;
+
+        // 🔵 OVERWRITE → fetch old company
+        // if (mode === "OVERWRITE") {
+
+        //     const [cmpRows] = await sequelizeSDB.query(`
+        //         SELECT * FROM ${sdbName}.dbo.PLSDBCMP
+        //         WHERE CMPF01 = ${finalCompanyID}
+        //     `);
+
+        //     const [m82Rows] = await sequelizeSDB.query(`
+        //         SELECT * FROM ${sdbName}.dbo.PLSDBM82
+        //         WHERE M82F02 = ${finalCompanyID}
+        //     `);
+
+        //     oldCmp = cmpRows[0] || null;
+        //     oldM82 = m82Rows[0] || null;
+
+        //     console.log("✅ Loaded old company data");
+        // }
+
+        // 🟢 NEW → fetch default company (M82CMP = 'Y')
+        if (mode !== "OVERWRITE") {
+
+            const [m82Rows] = await sequelizeSDB.query(`
+                SELECT TOP 1 * FROM ${sdbName}.dbo.PLSDBM82
+                WHERE M82CMP = 'Y'
+            `);
+
+            defaultM82 = m82Rows[0] || null;
+
+            const [cmpRows] = await sequelizeSDB.query(`
+                SELECT * FROM ${sdbName}.dbo.PLSDBCMP
+                WHERE CMPF01 = ${defaultM82.M82F02}
+            `);
+
+            defaultCmp = cmpRows[0] || null;
+
+            console.log("✅ Loaded default company data");
+        }
+
         let activeServer = await DBSER_INFO.findOne({
             where: {
                 INFO_11: 'Y'
@@ -995,20 +1059,77 @@ const restoreBak = async (req, res) => {
         });
 
         /* ========= REGISTER COMPANY ========= */
-        await sequelizeSDB.query(
-            `INSERT INTO ${sdbName}.dbo.PLSDBCMP (CMPF01, CMPF02, CMPF03, CMPF04, CMPF11, CMPF12, CMPF21, CMPF22, CMPF23, CMPF24)
-       VALUES (:companyID, :companyName, 'SQL', 'No Group', 'U0000000', GETDATE(),
-       '${activeServer.INFO_02}','${activeServer.INFO_03}','${encryptor.decrypt(activeServer.INFO_04)}','DATA')`,
-            // { replacements: { companyID: nextCompanyID, companyName }, transaction }
-            { replacements: { companyID: finalCompanyID, companyName }, transaction }
-        );
+        //     await sequelizeSDB.query(
+        //         `INSERT INTO ${sdbName}.dbo.PLSDBCMP (CMPF01, CMPF02, CMPF03, CMPF04, CMPF11, CMPF12, CMPF21, CMPF22, CMPF23, CMPF24)
+        //    VALUES (:companyID, :companyName, 'SQL', 'No Group', 'U0000000', GETDATE(),
+        //    '${activeServer.INFO_02}','${activeServer.INFO_03}','${encryptor.decrypt(activeServer.INFO_04)}','DATA')`,
+        //         // { replacements: { companyID: nextCompanyID, companyName }, transaction }
+        //         { replacements: { companyID: finalCompanyID, companyName }, transaction }
+        //     );
+        await sequelizeSDB.query(`
+            INSERT INTO ${sdbName}.dbo.PLSDBCMP
+            (CMPF01, CMPF02, CMPF03, CMPF04, CMPF11, CMPF12, CMPF21, CMPF22, CMPF23, CMPF24)
+            VALUES (
+                :companyID,
+                :companyName,
+                :cmpf03,
+                :cmpf04,
+                :cmpf11,
+                GETDATE(),
+                :cmpf21,
+                :cmpf22,
+                :cmpf23,
+                :cmpf24
+            )
+            `, {
+            replacements: {
+                companyID: finalCompanyID,
+                companyName: companyName,
 
-        await sequelizeSDB.query(
-            `INSERT INTO ${sdbName}.dbo.PLSDBM82 (M82F01, M82F02, M82CMP, M82YRN, M82ADA)
-       VALUES ('U0000000', :companyID, 'N', '26', 'A')`,
-            // { replacements: { companyID: nextCompanyID }, transaction }
-            { replacements: { companyID: finalCompanyID }, transaction }
-        );
+                // 🔥 FROM OLD / DEFAULT
+                cmpf03: (mode === "OVERWRITE" ? oldCmp?.CMPF03 : defaultCmp?.CMPF03) || 'SQL',
+                cmpf04: (mode === "OVERWRITE" ? oldCmp?.CMPF04 : defaultCmp?.CMPF04) || 'No Group',
+                cmpf11: (mode === "OVERWRITE" ? oldCmp?.CMPF11 : defaultCmp?.CMPF11) || 'U0000000',
+
+                // 🔥 ALWAYS FROM SERVER (VERY IMPORTANT)
+                cmpf21: activeServer?.INFO_02,
+                cmpf22: activeServer?.INFO_03,
+                cmpf23: activeServer?.INFO_04 ? encryptor.decrypt(activeServer.INFO_04) : null,
+
+                // 🔥 DEFAULT SAFE
+                cmpf24: (mode === "OVERWRITE" ? oldCmp?.CMPF24 : defaultCmp?.CMPF24) || 'DATA'
+            },
+            transaction
+        });
+
+        //     await sequelizeSDB.query(
+        //         `INSERT INTO ${sdbName}.dbo.PLSDBM82 (M82F01, M82F02, M82CMP, M82YRN, M82ADA)
+        //    VALUES ('U0000000', :companyID, 'N', '26', 'A')`,
+        //         // { replacements: { companyID: nextCompanyID }, transaction }
+        //         { replacements: { companyID: finalCompanyID }, transaction }
+        //     );
+
+        await sequelizeSDB.query(`
+                INSERT INTO ${sdbName}.dbo.PLSDBM82
+                (M82F01, M82F02, M82CMP, M82YRN, M82ADA)
+                VALUES (
+                    :m82f01,
+                    :companyID,
+                    :m82cmp,
+                    :m82yrn,
+                    :m82ada
+                )
+                `, {
+            replacements: {
+                companyID: finalCompanyID,
+
+                m82f01: (mode === "OVERWRITE" ? oldM82?.M82F01 : defaultM82?.M82F01) || 'U0000000',
+                m82cmp: (mode === "OVERWRITE" ? oldM82?.M82CMP : defaultM82?.M82CMP) || 'N',
+                m82yrn: (mode === "OVERWRITE" ? oldM82?.M82YRN : defaultM82?.M82YRN) || '26',
+                m82ada: (mode === "OVERWRITE" ? oldM82?.M82ADA : defaultM82?.M82ADA) || 'A'
+            },
+            transaction
+        });
 
         await sequelizeMASTER.query(
             `UPDATE ${newDatabaseName}.dbo.CMPM00 SET FIELD01 = :companyID`,
@@ -1024,8 +1145,8 @@ const restoreBak = async (req, res) => {
         UPDATE ${sdbName}.dbo.PLSDBBRC
         SET BRCCOMP = CASE
             WHEN BRCCOMP IS NULL OR BRCCOMP = '' THEN '${finalCompanyID}'
-           WHEN ',' + ISNULL(BRCCOMP, '') + ',' NOT LIKE '%,${finalCompanyID},%'
-    THEN BRCCOMP + ',${finalCompanyID}'
+            WHEN ',' + ISNULL(BRCCOMP, '') + ',' NOT LIKE '%,${finalCompanyID},%'
+        THEN BRCCOMP + ',${finalCompanyID}'
             ELSE BRCCOMP
         END
     `, { transaction });

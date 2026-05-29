@@ -44,20 +44,6 @@ async function handleActionGet(req, res) {
             INFO_06, INFO_07, INFO_08, INFO_09, INFO_10, INFO_11
         } = pa;
 
-        let encrypted_04;
-        let encrypted_07;
-        if (INFO_04 && !isEncrypted(INFO_04) && (action == 'A' || action == 'E')) {
-            encrypted_04 = encryptor.encrypt(INFO_04);
-        } else {
-            encrypted_04 = INFO_04; // decrypted String
-        }
-
-        if (INFO_07 && !isEncrypted(INFO_07) && (action == 'A' || action == 'E')) {
-            encrypted_07 = encryptor.encrypt(INFO_07);
-        } else {
-            encrypted_07 = INFO_07; // decrypted String
-        }
-
         switch (action) {
 
             // 🔹 Get All Records
@@ -71,8 +57,8 @@ async function handleActionGet(req, res) {
             // 🔹 Add New Record
             case 'A': {
                 const newRecord = await DBSER_INFO.create({
-                    INFO_02, INFO_03, encrypted_04, INFO_05,
-                    INFO_06, encrypted_07, INFO_08, INFO_09, INFO_10, INFO_11
+                    INFO_02, INFO_03, INFO_04: encryptor.encrypt(INFO_04), INFO_05,
+                    INFO_06, INFO_07: encryptor.encrypt(INFO_07), INFO_08, INFO_09, INFO_10, INFO_11
                 });
                 response.data = newRecord;
                 encryptedResponse = encryptor.encrypt(JSON.stringify(response));
@@ -89,8 +75,8 @@ async function handleActionGet(req, res) {
                 }
                 let id = parseInt(INFO_01)
                 const [updated] = await DBSER_INFO.update({
-                    INFO_02, INFO_03, INFO_04: encrypted_04, INFO_05,
-                    INFO_06, INFO_07: encrypted_07, INFO_08, INFO_09
+                    INFO_02, INFO_03, INFO_04: encryptor.encrypt(INFO_04), INFO_05,
+                    INFO_06, INFO_07: encryptor.encrypt(INFO_07), INFO_08, INFO_09
                 }, { where: { INFO_01: id } });
 
                 if (!updated) {
