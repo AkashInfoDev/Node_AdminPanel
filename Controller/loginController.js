@@ -1152,17 +1152,17 @@ class AdminController {
                 OTP_DESC: 'FP'
             });
 
-            await sendResetMail({
+            let otpprocess = await sendResetMail({
                 to: user.UTF10,
                 corpId: decryptedId,
-                otp,
+                otp: otp,
                 phone: user.UTF09
             });
 
-            return res.json({
+            return res.status(200).json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify({
                     status: 'SUCCESS',
-                    message: 'OTP sent successfully'
+                    message: otpprocess == "EM" ? 'OTP Sent to Your registered Mail' : 'OTP Sent to your Registered WhatsApp'
                 }))
             });
 
