@@ -134,10 +134,11 @@ async function sendAccountInfoMail({ to, corpId, userId, password1 }) {
     });
 }
 
-async function sendResetMail({ to, corpId, otp }) {
+async function sendResetMail({ to, corpId, otp, phone }) {
     const transporter = createTransporter();
-    return transporter.sendMail({
-        from: '"EPLUS Support" <demo@tcodes.in>',
+    try{
+    await transporter.sendMail({
+        from: `"EPLUS Support" <system@epluserp.com>`,
         to,
         subject: `OTP for ${corpId} to Password Reset`,
         html: `
@@ -224,6 +225,29 @@ async function sendResetMail({ to, corpId, otp }) {
 </div>
 `
     });
+        console.log("✅ Force Logout OTP sent:", info.response);
+
+        return "EM";
+
+    } catch (error) {
+        if (error.code = "EENVELOPE" && error.responseCode == 550) {
+            try {
+                const result = await sendWhatsAppOTP(phone, otp);
+                console.log("WhatsApp Result:", result);
+                if (result?.success === true) {
+                    console.log("✅ OTP sent via WhatsApp");
+                    return "WP";
+                }
+
+            } catch (waError) {
+                console.error("❌ WhatsApp Error:", waError);
+                throw new Error("WhatsApp OTP failed");
+            }
+        }
+        console.error("❌ OTP Mail Error:", error);
+
+        throw new Error("Failed to send OTP email");
+    }
 }
 
 async function sendLogOutMail({ to, corpId, otp, subject }) {

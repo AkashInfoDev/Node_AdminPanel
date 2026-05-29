@@ -1155,7 +1155,8 @@ class AdminController {
             await sendResetMail({
                 to: user.UTF10,
                 corpId: decryptedId,
-                otp
+                otp,
+                phone: user.UTF09
             });
 
             return res.json({
