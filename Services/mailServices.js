@@ -136,12 +136,12 @@ async function sendAccountInfoMail({ to, corpId, userId, password1 }) {
 
 async function sendResetMail({ to, corpId, otp, phone }) {
     const transporter = createTransporter();
-    try{
-    await transporter.sendMail({
-        from: `"EPLUS Support" <system@epluserp.com>`,
-        to,
-        subject: `OTP for ${corpId} to Password Reset`,
-        html: `
+    try {
+        await transporter.sendMail({
+            from: `"EPLUS Support" <system@epluserp.com>`,
+            to,
+            subject: `OTP for ${corpId} to Password Reset`,
+            html: `
         <div style="font-family: Arial, sans-serif; background:#f4f6f8; padding:20px;">
             <div style="max-width:600px; margin:auto; background:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.1);">
     
@@ -224,9 +224,7 @@ async function sendResetMail({ to, corpId, otp, phone }) {
   </div>
 </div>
 `
-    });
-        console.log("✅ Force Logout OTP sent:", info.response);
-
+        });
         return "EM";
 
     } catch (error) {
