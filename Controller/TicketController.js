@@ -1975,34 +1975,51 @@ class TicketController {
             );
         }
 
-        const { ticket_id } = pa;
-
-        if (!ticket_id) {
-
-            throw new Error(
-                'ticket_id required'
-            );
+        // const { ticket_id } = pa;
+        // const ticketIds = String(pa.ticket_id)
+        //     .split(',')
+        //     .map(id => Number(id.trim()))
+        //     .filter(Boolean);
+        const ticketIds = String(pa.ticket_id)
+            .split(',')
+            .map(id => Number(id.trim()))
+            .filter(id => !isNaN(id));
+            
+        if (!ticketIds.length) {
+            throw new Error('ticket_id required');
         }
 
         /* =========================
            🔍 CHECK TICKET
         ========================= */
 
-        const ticket = await Ticket.findOne({
+        // const ticket = await Ticket.findOne({
 
+        //     where: {
+        //         TKT01: ticket_id
+        //     },
+
+        //     raw: true
+        // });
+        const tickets = await Ticket.findAll({
             where: {
-                TKT01: ticket_id
+                TKT01: {
+                    [Op.in]: ticketIds
+                }
             },
-
             raw: true
         });
 
-        if (!ticket) {
-
-            throw new Error(
-                'Ticket not found'
-            );
+        if (!tickets.length) {
+            throw new Error('Ticket not found');
         }
+
+        // if (!ticket) {
+
+        //     throw new Error(
+        //         'Ticket not found'
+        //     );
+        // }
 
         /* =========================
            🗑️ DELETE FILES
@@ -2016,12 +2033,18 @@ class TicketController {
 
                     {
                         FILE07: 'TICKET',
-                        FILE08: ticket_id
+                        // FILE08: ticket_id
+                        FILE08: {
+                            [Op.in]: ticketIds
+                        }
                     },
 
                     {
                         FILE07: 'TICKET_REPEAT',
-                        FILE08: ticket_id
+                        // FILE08: ticket_id
+                        FILE08: {
+                            [Op.in]: ticketIds
+                        }
                     }
                 ]
             }
@@ -2035,7 +2058,10 @@ class TicketController {
             await TicketMessage.findAll({
 
                 where: {
-                    MSG02: ticket_id
+                    // MSG02: ticket_id
+                    MSG02: {
+                        [Op.in]: ticketIds
+                    }
                 },
 
                 attributes: ['MSG01'],
@@ -2068,10 +2094,17 @@ class TicketController {
            🗑️ DELETE MESSAGES
         ========================= */
 
-        await TicketMessage.destroy({
+        // await TicketMessage.destroy({
 
+        //     where: {
+        //         MSG02: ticket_id
+        //     }
+        // });
+        await TicketMessage.destroy({
             where: {
-                MSG02: ticket_id
+                MSG02: {
+                    [Op.in]: ticketIds
+                }
             }
         });
 
@@ -2082,7 +2115,10 @@ class TicketController {
         await TicketRepeat.destroy({
 
             where: {
-                REP02: ticket_id
+                // REP02: ticket_id
+                REP02: {
+                    [Op.in]: ticketIds
+                }
             }
         });
 
@@ -2093,7 +2129,10 @@ class TicketController {
         await Ticket.destroy({
 
             where: {
-                TKT01: ticket_id
+                // TKT01: ticket_id
+                TKT01: {
+                    [Op.in]: ticketIds
+                }
             }
         });
 

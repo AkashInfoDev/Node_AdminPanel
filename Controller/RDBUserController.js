@@ -28,6 +28,11 @@ const EPBank = defineEPBank(sequelizeRDB);
 
 const defineUserTypes = require('../Models/RDB/EP_USERTPYES');
 const UserTypes = defineUserTypes(sequelizeRDB, require('sequelize').DataTypes);
+const defineEP_DELETE =
+    require('../Models/RDB/EP_DELETE');
+
+const EP_DELETE =
+    defineEP_DELETE(sequelizeRDB);
 // 🔥 DEFINE MODEL (IMPORTANT)
 // const UserTable = defineUserTable(sequelizeRDB);
 const EPUser = defineEPUser(sequelizeRDB);
@@ -265,7 +270,12 @@ class RDBUserController {
                     }, res);
 
                 case 'D':
-                    return RDBUserController.deleteUser(User_Id, res); // keep same
+                    // return RDBUserController.deleteUser(User_Id, res); // keep same
+                    return RDBUserController.deleteUser(
+                        User_Id,
+                        res,
+                        decoded
+                    );
 
                 case 'G':
                     return RDBUserController.getUsers(res);
@@ -798,7 +808,7 @@ class RDBUserController {
     }
 
 
-    static async deleteUser(User_Id, res) {
+    static async deleteUser(User_Id, res, decoded) {
 
 
 
@@ -823,8 +833,20 @@ class RDBUserController {
                     }))
                 });
             }
-
+            console.log("decoded.userId =", decoded.userId);
+            console.log("decoded.roleId =", decoded.roleId);
             const userType = String(user.UTF03);
+            await EP_DELETE.create({
+
+    DEL02: String(user.UTF01),
+
+    DEL03: null,
+
+    DEL04: Number(decoded.Id),
+
+    DEL05: Number(decoded.roleId)
+
+});
 
             /* =========================
                🗑️ SOFT DELETE USER
