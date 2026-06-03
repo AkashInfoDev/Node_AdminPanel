@@ -1470,7 +1470,8 @@ class AdminDashboardController {
                     'A01F10',
                     'A01F19',
                     'A02F01',
-                    'A01F20'
+                    'A01F20',
+                    'A01F52'
                 ],
                 where: whereCondition,
                 order: [['A01F03', 'ASC']]
@@ -1540,7 +1541,7 @@ class AdminDashboardController {
                         endDate: row.A01F13
                     },
                     licensedUsers: row.A01F10 || 0,
-
+                    ServerIP: row.A01F52 || null,
                     // ✅ Instead of exposing A01F19
                     ownerRole: ownerDetails.role || null,
                     ownerName: ownerDetails.name || null,
@@ -1725,7 +1726,8 @@ class AdminDashboardController {
                     'A01F10',
                     'A01F19',
                     'A02F01',
-                    'A01F20'
+                    'A01F20',
+                    'A01F52'
                 ],
                 where: whereCondition,
                 order: [['A01F03', 'ASC']]
@@ -1980,7 +1982,8 @@ class AdminDashboardController {
                     'A01F10',
                     'A01F19',
                     'A02F01',
-                    'A01F20'
+                    'A01F20',
+                    'A01F52'
                 ],
                 where: whereCondition,
                 order: [['A01F03', 'ASC']]
