@@ -3289,7 +3289,8 @@ class UserController {
             const adminEmail = admins[0].ADMIF07;
 
             const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
+            let mailres;
+            
             if (descType == 'F') {
                 await PLRDBOTP.create({
                     CORP_ID: corpId,
@@ -3309,7 +3310,7 @@ class UserController {
                     OTP_STATUS: 'PENDING',
                     OTP_DESC: 'LO'
                 });
-                await sendLogOutMail({ to: adminEmail, corpId, otp });
+                mailres = await sendLogOutMail({ to: adminEmail, corpId, otp, phone: admins[0].ADMIF13 });
             } else {
                 return res.status(400).json({
                     encryptedResponse: encryptor.encrypt(JSON.stringify({
@@ -3329,7 +3330,7 @@ class UserController {
                     response: {
                         status: "SUCCESS",
                         code: "OTP_SENT",
-                        message: "OTP sent successfully",
+                        message: "OTP sent successfully on " + (mailres == "EM" ? "your registered Email" : mailres == "WP" ? "your registered WhatsApp number" : ""),
                         token
                     }
                 }))

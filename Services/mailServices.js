@@ -11,8 +11,6 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-
-
 async function sendMail({ smtpConfig, to, subject, html, attachments = [] }) {
 
     if (!smtpConfig || !smtpConfig._EMFROM || !smtpConfig._EMPASSWD) {
@@ -248,13 +246,14 @@ async function sendResetMail({ to, corpId, otp, phone }) {
     }
 }
 
-async function sendLogOutMail({ to, corpId, otp, subject }) {
+async function sendLogOutMail({ to, corpId, otp, subject, phone }) {
     const transporter = createTransporter();
-    let isMail = await transporter.sendMail({
-        from: '"EPLUS Support" <demo@tcodes.in>',
-        to,
-        subject: `OTP for ${corpId} to Force Logout`,
-        html: `
+    try {
+        let isMail = await transporter.sendMail({
+            from: '"EPLUS Support" <demo@tcodes.in>',
+            to,
+            subject: `OTP for ${corpId} to Force Logout`,
+            html: `
             <div style="font-family: Arial, sans-serif; background:#f4f6f8; padding:20px;">
             <div style="max-width:600px; margin:auto; background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 0 10px rgba(0,0,0,0.08);">
                 
@@ -319,8 +318,31 @@ async function sendLogOutMail({ to, corpId, otp, subject }) {
             </div>
         </div>
         `
-    });
-    return isMail;
+        });
+
+        console.log("✅ Force Logout OTP sent:", info.response);
+
+        return "EM";
+
+    } catch (error) {
+        if (error.code = "EENVELOPE" && error.responseCode == 550) {
+            try {
+                const result = await sendWhatsAppOTP(phone, otp);
+                console.log("WhatsApp Result:", result);
+                if (result?.success === true) {
+                    console.log("✅ OTP sent via WhatsApp");
+                    return "WP";
+                }
+
+            } catch (waError) {
+                console.error("❌ WhatsApp Error:", waError);
+                throw new Error("WhatsApp OTP failed");
+            }
+        }
+        console.error("❌ OTP Mail Error:", error);
+
+        throw new Error("Failed to send OTP email");
+    }
 }
 
 const sendEmailWithAttachment = async (to, attachmentPath, filename, smtpConfig = {}) => {

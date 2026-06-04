@@ -14,6 +14,7 @@ const CAdminUserController = require('../Controller/CAdminUserController');
 const WalletController = require('../Controller/WalletController');
 const UserTypeController = require('../Controller/UserTypeController');
 const IBDetailController = require('../Controller/IBDetailController')
+const CorporateUserController = require('../Controller/CorporateUserController');
 const { handleServer } = require('../Controller/ServerdataController');
 
 // In your express route:
@@ -34,6 +35,7 @@ router.post('/deleteCorporateCompletely', AdminDashboardController.deleteCorpora
 router.get('/allUserTypes', UserTypeController.getTypes1)
 router.get('/ibDetail', IBDetailController.getIBDetail)
 router.get('/ServerData', handleServer);
+router.get('/corporateUser', CorporateUserController.manageCorporateUser);
 
 
 module.exports = router;
