@@ -51,7 +51,7 @@ function createTransporter(smtpConfig = {}) {
 async function sendAccountInfoMail({ to, corpId, userId, password1 }) {
     const transporter = createTransporter();
     return transporter.sendMail({
-        from: '"EPLUS Support" <demo@tcodes.in>',
+        from: '"EPLUS Support" <system@epluserp.com>',
         to,
         subject: 'Your EPLUS Account Has Been Successfully Created',
         html: `
@@ -250,7 +250,7 @@ async function sendLogOutMail({ to, corpId, otp, subject, phone }) {
     const transporter = createTransporter();
     try {
         let isMail = await transporter.sendMail({
-            from: '"EPLUS Support" <demo@tcodes.in>',
+            from: '"EPLUS Support" <system@epluserp.com>',
             to,
             subject: `OTP for ${corpId} to Force Logout`,
             html: `
@@ -360,7 +360,7 @@ const sendEmailWithAttachment = async (to, attachmentPath, filename, smtpConfig 
         }
     });
     const mailOptions = {
-        // from: '"EPLUS Support" <demo@tcodes.in>',
+        // from: '"EPLUS Support" <system@epluserp.com>',
         from: `"EPLUS Support" <${smtpConfig._EMFROM ? smtpConfig._EMFROM : smtpConfig.user}>`,
         to: to,
         subject: 'Backup - EPLUS Cloud ERP',
@@ -595,7 +595,7 @@ async function sendDealerAccountMail({ to, dealerCode, userId, password }) {
     const transporter = createTransporter();
 
     return transporter.sendMail({
-        from: '"EPLUS Support" <demo@tcodes.in>',
+        from: '"EPLUS Support" <system@epluserp.com>',
         to,
         subject: ' Your Dealer Account is Ready - EPLUS ERP',
         html: `
