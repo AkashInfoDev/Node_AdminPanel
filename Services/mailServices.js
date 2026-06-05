@@ -320,7 +320,7 @@ async function sendLogOutMail({ to, corpId, otp, subject, phone }) {
         `
         });
 
-        console.log("✅ Force Logout OTP sent:", info.response);
+        // console.log("✅ Force Logout OTP sent:", info.response);
 
         return "EM";
 
