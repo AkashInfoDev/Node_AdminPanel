@@ -81,6 +81,7 @@ class CorporateUserController {
             const corporateId = pa.corporateId;
             const password = pa.password;
             const email = pa.email;
+            const mobile = pa.mobile;
 
             if (!corporateId) {
 
@@ -200,6 +201,30 @@ class CorporateUserController {
                 response.message =
                     'Email updated successfully';
             }
+            /* =========================
+                MOBILE UPDATE
+            ========================= */
+
+            else if (action === 'M') {
+
+                if (!mobile) {
+
+                    response.status = 'FAIL';
+                    response.message = 'mobile required';
+
+                    return res.status(400).json({
+                        encryptedResponse:
+                            encryptor.encrypt(
+                                JSON.stringify(response)
+                            )
+                    });
+                }
+
+                updateData.ADMIF13 =
+                    String(mobile).trim();
+                response.message =
+                    'Mobile updated successfully';
+            }
 
             else {
 
@@ -255,7 +280,7 @@ class CorporateUserController {
                 err
             );
 
-            response.status =  'FAIL';
+            response.status = 'FAIL';
             response.message = 'Server Error';
 
             return res.status(500).json({

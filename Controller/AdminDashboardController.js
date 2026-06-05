@@ -1471,7 +1471,8 @@ class AdminDashboardController {
                     'A01F19',
                     'A02F01',
                     'A01F20',
-                    'A01F52'
+                    'A01F52',
+                    'A01F17'
                 ],
                 where: whereCondition,
                 order: [['A01F03', 'ASC']]
@@ -2426,7 +2427,7 @@ class AdminDashboardController {
                     'ADMIF00',
                     'ADMIF01', 'ADMIF02', 'ADMIF04', 'ADMIF05',
                     'ADMIF06', 'ADMIF07', 'ADMIF08', 'ADMIF09',
-                    'ADMIF10', 'ADMIBRC', 'ADMICOMP', 'ADMIROL'
+                    'ADMIF10', 'ADMIBRC', 'ADMICOMP', 'ADMIROL', 'ADMIF13'
                 ]
             );
 
@@ -2596,7 +2597,8 @@ class AdminDashboardController {
                             : null,
                     email: u.ADMIF07 || '',
                     isActive,
-                    status: isActive ? 'ACTIVE' : 'INACTIVE'
+                    status: isActive ? 'ACTIVE' : 'INACTIVE',
+                    Mobile: u.ADMIF13
                 };
             };
 
