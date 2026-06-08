@@ -242,277 +242,6 @@ class AdminController {
         }
     }
 
-    // static async loginAdmin(userId, password, res) {
-    //     try {
-    //         let response = {
-    //             status: 'SUCCESS',
-    //             message: null
-    //         }
-    //         let admin = encryptor.encrypt(userId);
-    //         const existingAdmin = await PLSDBADMI.findAll({
-    //             attributes: ['ADMIF01', 'ADMIF05', 'ADMIF06']
-    //             // where: { ADMIF01: encrypted } 
-    //         });
-    //         for (let i of existingAdmin) {
-    //             const decrypted = encryptor.decrypt(i.ADMIF01)
-    //             if (decrypted == userId) {
-    //                 if (i.ADMIF06 == 1) {
-    //                     admin = i;
-    //                     response = {
-    //                         message: 'User ID valid'
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //         if (!admin) {
-    //             response = {
-    //                 message: 'Invalid UserId'
-    //             }
-    //             let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
-    //             return res.status(400).json({ encryptedResponse: encryptedResponse });
-    //         }
-
-    //         let pwd = encryptor.decrypt(admin.ADMIF05);
-    //         const isPasswordValid = pwd == password;
-    //         if (!isPasswordValid) {
-    //             response = {
-    //                 message: 'Invalid Credentials'
-    //             }
-    //             let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
-    //             return res.status(400).json({ encryptedResponse: encryptedResponse });
-    //         }
-
-    //         let planInfo = await PLRDBA02.findAll({
-    //             where: {
-    //                 A02F13: 1
-    //             }
-    //         });
-
-    //         let oCmp = new Company();
-    //         CmpMaster.oYear = new Year(oCmp);
-    //         let dbconn = db.createPool('MULTITAX');
-    //         let oDic = await dbconn.query('SELECT * FROM CMPM00', {
-    //             type: QueryTypes.SELECT
-    //         });
-    //         let oEntD = {};
-    //         oEntD["M00"] = oDic[0]
-    //         let oM00 = new CmpMaster('', '', LangType, 'G', oEntD);
-    //         oDic = await oM00.GetDictionary(null, 'MULTITAX', LangType, '0000');
-
-    //         const token = jwt.sign(
-    //             { adminId: admin.ADMIF01, password: admin.ADMIF05, roleId: admin.ADMIF06, corpId: 'A0-0-001' },
-    //             process.env.JWT_SECRET_KEY,
-    //             { expiresIn: process.env.JWT_EXPIRATION }
-    //         );
-
-    //         response = {
-    //             data: { planInfo, csData: oDic["M00"] },
-    //             message: 'Login successful',
-    //             token
-    //         }
-    //         let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
-    //         return res.status(200).json({ encryptedResponse: encryptedResponse });
-    //     } catch (error) {
-    //         console.error(error);
-    //         let response = {
-    //             status: 'FAIL',
-    //             message: 'Invalid Credentials'
-    //         }
-    //         let encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
-    //         return res.status(500).json({ encryptedResponse: encryptedResponse });
-    //     }
-    // }
-    // static async loginAdmin(userId, password, res) {
-
-    //     try {
-
-    //         /* ========================= */
-    //         /* 👤 STEP 1: FIND USER */
-    //         /* ========================= */
-
-    //         const users = await EP_USER.findAll({
-    //             where: { UTF07: 'N' } // not deleted
-    //         });
-
-    //         let user = null;
-
-    //         for (let u of users) {
-
-    //             let decryptedId;
-
-    //             try {
-    //                 decryptedId = encryptor.decrypt(u.UTF04);
-    //             } catch {
-    //                 decryptedId = u.UTF04;
-    //             }
-
-    //             if (decryptedId === userId) {
-    //                 user = u;
-    //                 break;
-    //             }
-    //         }
-
-    //         if (!user) {
-    //             return res.status(400).json({
-    //                 encryptedResponse: encryptor.encrypt(JSON.stringify({
-    //                     response: { message: 'Invalid user' }
-    //                 }))
-    //             });
-    //         }
-
-    //         /* ========================= */
-    //         /* 🔐 PASSWORD CHECK */
-    //         /* ========================= */
-
-    //         const decryptedPassword = encryptor.decrypt(user.UTF05);
-
-    //         if (decryptedPassword !== password) {
-    //             return res.status(400).json({
-    //                 encryptedResponse: encryptor.encrypt(JSON.stringify({
-    //                     response: { message: 'Invalid password' }
-    //                 }))
-    //             });
-    //         }
-
-    //         /* ========================= */
-    //         /* 🚫 ACTIVE CHECK */
-    //         /* ========================= */
-
-    //         if (user.UTF06 !== 'Y') {
-    //             return res.status(403).json({
-    //                 encryptedResponse: encryptor.encrypt(JSON.stringify({
-    //                     response: { message: 'User is inactive' }
-    //                 }))
-    //             });
-    //         }
-
-    //         /* ========================= */
-    //         /* 🔐 TOKEN */
-    //         /* ========================= */
-
-    //         const token = jwt.sign(
-    //             {
-    //                 Id: user.UTF01,
-    //                 // userId: encryptor.decrypt(user.UTF04),
-    //                 userId: user.UTF04,   // 🔐 keep encrypted
-    //                 password: user.UTF05,
-    //                 roleId: Number(user.UTF03)   // 🔥 role from EP_USER
-    //             },
-    //             process.env.JWT_SECRET_KEY,
-    //             { expiresIn: process.env.JWT_EXPIRATION }
-    //         );
-
-    //         /* ========================= */
-    //         /* 📊 COMMON DATA */
-    //         /* ========================= */
-
-    //         let planInfo = await PLRDBA02.findAll({
-    //             where: { A02F13: 1 }
-    //         });
-
-    //         let oCmp = new Company();
-    //         CmpMaster.oYear = new Year(oCmp);
-
-    //         let dbconn = db.createPool('MULTITAX');
-    //         let oDic = await dbconn.query('SELECT * FROM CMPM00', {
-    //             type: QueryTypes.SELECT
-    //         });
-
-    //         let oEntD = { M00: oDic[0] };
-
-    //         let oM00 = new CmpMaster('', '', LangType, 'G', oEntD);
-    //         oDic = await oM00.GetDictionary(null, 'MULTITAX', LangType, '0000');
-    //         const loginUser = {
-    //             id: user.UTF01,
-    //             name: user.UTF02,
-    //             role: Number(user.UTF03),
-    //             phoneNumber: user.UTF09,
-    //             email: user.UTF10,
-    //             dealerCode: user.UTF08,
-    //             commission: user.UTF12
-    //         };
-
-    //         let ibDetail;
-
-    //         const roleId = Number(user.UTF03);
-
-    //         /* =========================
-    //            🧑‍💼 ROLE-BASED ibDetail
-    //            ========================= */
-
-    //         if ([1, 2].includes(roleId)) {
-    //             // Admin or User → themselves + all dealers and resellers
-    //             const allDealersAndResellers = await EP_USER.findAll({
-    //                 where: {
-    //                     UTF07: 'N',
-    //                     UTF03: [3, 4] // dealer and reseller
-    //                 }
-    //             });
-
-    //             ibDetail = [
-    //                 {
-    //                     id: user.UTF01,
-    //                     name: user.UTF02,
-    //                     role: roleId
-    //                 },
-    //                 ...allDealersAndResellers.map(u => ({
-    //                     id: u.UTF01,
-    //                     name: u.UTF02,
-    //                     role: Number(u.UTF03)
-    //                 }))
-    //             ];
-    //         } else if ([3, 4].includes(roleId)) {
-    //             // Dealer/Reseller → only themselves
-    //             ibDetail = [{
-    //                 id: user.UTF01,
-    //                 name: user.UTF02,
-    //                 role: roleId
-    //             }];
-    //         }
-
-    //         /* =========================
-    //            👤 DEALER / RESELLER (3,4)
-    //            ========================= */
-
-    //         else {
-
-    //             ibDetail = [{
-    //                 id: user.UTF01,
-    //                 name: user.UTF02,
-    //                 role: roleId
-    //             }];
-    //         }
-
-    //         /* ========================= */
-    //         /* 📦 RESPONSE */
-    //         /* ========================= */
-    //         return res.status(200).json({
-    //             encryptedResponse: encryptor.encrypt(JSON.stringify({
-    //                 response: {
-    //                     data: {
-    //                         planInfo,
-    //                         csData: oDic["M00"],
-    //                         ibDetail,     // 🔥 array always
-    //                         loginUser     // 🔥 separate object
-    //                     },
-    //                     message: 'Login successful',
-    //                     token
-    //                 }
-    //             }))
-    //         });
-
-    //     } catch (error) {
-
-    //         console.error("Unified Login Error:", error.message);
-
-    //         return res.status(500).json({
-    //             encryptedResponse: encryptor.encrypt(JSON.stringify({
-    //                 response: { message: 'Login failed' }
-    //             }))
-    //         });
-    //     }
-    // }
-
     static async loginAdmin(userId, password, res, pa) {
 
         try {
@@ -670,17 +399,28 @@ class AdminController {
                 }];
             }
 
+            // return res.status(200).json({
+            //     encryptedResponse: encryptor.encrypt(JSON.stringify({
+            //         response: {
+            //             // data: { ibDetail, loginUser },
+            //             status: 'SUCCESS',
+            //             message: 'Login successful',
+            //             token
+            //         }
+            //     }))
+            // });
             return res.status(200).json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify({
                     response: {
-                        // data: { ibDetail, loginUser },
                         status: 'SUCCESS',
                         message: 'Login successful',
-                        token
+                        token,
+                        userId: user.UTF01
+                        // userName: user.UTF02,
+                        // roleId: Number(user.UTF03)
                     }
                 }))
             });
-
         } catch (error) {
 
             return res.status(400).json({
@@ -693,87 +433,7 @@ class AdminController {
             });
         }
     }
-    // static async sendLoginOTP(userId, res) {
-    //     try {
 
-    //         const { Sequelize } = require('sequelize');
-
-    //         /* =========================
-    //            👤 FIND USER
-    //         ========================= */
-
-    //         const users = await EP_USER.findAll();
-
-    //         let user = null;
-
-    //         for (let u of users) {
-    //             let decryptedId;
-
-    //             try {
-    //                 decryptedId = encryptor.decrypt(u.UTF04);
-    //             } catch {
-    //                 decryptedId = u.UTF04;
-    //             }
-
-    //             if (decryptedId === userId) {
-    //                 user = u;
-    //                 break;
-    //             }
-    //         }
-
-    //         if (!user) throw new Error('User not found');
-    //         if (!user.UTF10) throw new Error('User email not found');
-    //         /* =========================
-    //            🔢 GENERATE OTP
-    //         ========================= */
-
-    //         const otp = Math.floor(100000 + Math.random() * 900000);
-
-    //         const decryptedId = encryptor.decrypt(user.UTF04);
-
-    //         /* =========================
-    //            💾 SAVE OTP (NEW STRUCTURE)
-    //         ========================= */
-
-    //         await PLRDBOTP.create({
-    //             CORP_ID: decryptedId,                  // ✅ REQUIRED
-    //             EMAIL: user.UTF10,                     // ✅ REQUIRED
-    //             OTP_CODE: otp.toString(),              // ✅ REQUIRED
-    //             OTP_EXPIRY: Sequelize.literal("DATEADD(MINUTE, 5, GETDATE())"), // ✅ +5 min
-    //             OTP_STATUS: 'PENDING',                 // ✅ REQUIRED
-    //             OTP_DESC: 'FL'                // ✅ REQUIRED
-    //         });
-
-    //         /* =========================
-    //            📩 SEND EMAIL
-    //         ========================= */
-
-    //         await sendForceLogoutOTP({
-    //             to: user.UTF10,
-    //             corpId: decryptedId,
-    //             otp: otp
-    //         });
-
-
-    //         return res.json({
-    //             encryptedResponse: encryptor.encrypt(JSON.stringify({
-    //                 status: 'SUCCESS',
-    //                 message: 'OTP sent successfully'
-    //             }))
-    //         });
-
-    //     } catch (err) {
-
-    //         console.error("❌ sendLoginOTP Error:", err);
-
-    //         return res.status(500).json({
-    //             encryptedResponse: encryptor.encrypt(JSON.stringify({
-    //                 status: 'FAIL',
-    //                 message: err.message
-    //             }))
-    //         });
-    //     }
-    // }
     static async sendLoginOTP(userId, res) {
         try {
 
@@ -971,6 +631,13 @@ class AdminController {
                 where: { LOG02: user.UTF01 }
             });
 
+            if (global.io) {
+                global.io
+                    .to(`user_${user.UTF01}`)
+                    .emit('forceLogout', {
+                        message: 'Session terminated by force login'
+                    });
+            }
             /* =========================
                ✅ RESPONSE
             ========================= */
@@ -1030,7 +697,6 @@ class AdminController {
             const deleted = await EP_LOGIN.destroy({
                 where: { LOG02: userId }
             });
-
             if (!deleted) {
                 return res.status(200).json({
                     encryptedResponse: encryptor.encrypt(JSON.stringify({
@@ -1041,6 +707,15 @@ class AdminController {
                     }))
                 });
             }
+            if (global.io) {
+                global.io
+                    .to(`user_${userId}`)
+                    .emit('forceLogout', {
+                        message: 'Logged out'
+                    });
+            }
+
+
 
             /* =========================
                📩 OPTIONAL EMAIL (like UserController)

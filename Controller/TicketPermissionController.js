@@ -281,7 +281,9 @@ class TicketPermissionController {
                     Boolean(permission.TPER07),
 
                 delete_ticket:
-                    Boolean(permission.TPER08)
+                    Boolean(permission.TPER08),
+                corporate_ticket_access:
+                    Boolean(permission.TPER09)
             }
         };
 
@@ -380,7 +382,9 @@ class TicketPermissionController {
 
             TPER08: Number(
                 pa.delete_ticket || 0
-            )
+            ),
+
+            TPER09: Number(pa.corporate_ticket_access || 0)
         };
 
         /* =========================

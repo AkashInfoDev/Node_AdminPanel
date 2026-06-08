@@ -768,9 +768,33 @@ class TicketController {
                         ?.split(',')
                         .map(Number) || [];
 
-                where.TKT07 = {
-                    [Op.in]: allowedRoles
-                };
+                if (permission.TPER09) {
+
+                    where = {
+                        [Op.or]: [
+
+                            {
+                                TKT07: {
+                                    [Op.in]: allowedRoles
+                                }
+                            },
+
+                            {
+                                TKT11: {
+                                    [Op.ne]: null
+                                }
+                            }
+                        ]
+                    };
+
+                } else {
+
+                    where = {
+                        TKT07: {
+                            [Op.in]: allowedRoles
+                        }
+                    };
+                }
             }
 
             /* =========================
@@ -801,8 +825,8 @@ class TicketController {
         });
 
         /* =========================
-   🎟️ TICKET PERMISSION DATA
-========================= */
+        🎟️ TICKET PERMISSION DATA
+        ========================= */
 
         const ticket_permission = {
 
@@ -826,14 +850,20 @@ class TicketController {
                 permission?.TPER07 ? 1 : 0,
 
             delete_ticket:
-                permission?.TPER08 ? 1 : 0
+                permission?.TPER08 ? 1 : 0,
+
+            corporate_ticket_access:
+                permission?.TPER09 ? 1 : 0
         };
         if (!tickets.length) {
             return res.status(200).json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify({
                     status: 'SUCCESS',
                     message: 'No tickets found',
-                    data: []
+                    data: {
+                        tickets: [],
+                        ticket_permission
+                    }
                 }))
             });
         }
@@ -1379,9 +1409,27 @@ class TicketController {
             if (ticket.TKT11 !== decoded.corpId) {
                 throw new Error('Access denied');
             }
-        } else {
-            if (roleId !== 1 && ticket.TKT06 !== decoded.Id) {
-                throw new Error('Access denied');
+        }
+        // else {
+        //     if (roleId !== 1 && ticket.TKT06 !== decoded.Id) {
+        //         throw new Error('Access denied');
+        //     }
+        // }
+        else {
+
+            const isCorporateTicket = !!ticket.TKT11;
+
+            if (isCorporateTicket) {
+
+                if (!permission?.TPER09) {
+                    throw new Error('Access denied');
+                }
+
+            } else {
+
+                if (roleId !== 1 && ticket.TKT06 !== decoded.Id) {
+                    throw new Error('Access denied');
+                }
             }
         }
 
@@ -1494,13 +1542,34 @@ class TicketController {
                 throw new Error('Access denied');
             }
 
-        } else {
-            // ![1, 2, 3, 5].includes
-            // if (roleId !== 1 && ticket.TKT06 !== decoded.Id) {
-            //     throw new Error('Access denied');
-            // }
-            if (![1, 2, 3, 5].includes(roleId) && ticket.TKT06 !== decoded.Id) {
-                throw new Error('Access denied');
+        }
+        // else {
+        //     // ![1, 2, 3, 5].includes
+        //     // if (roleId !== 1 && ticket.TKT06 !== decoded.Id) {
+        //     //     throw new Error('Access denied');
+        //     // }
+        //     if (![1, 2, 3, 5].includes(roleId) && ticket.TKT06 !== decoded.Id) {
+        //         throw new Error('Access denied');
+        //     }
+        // }
+        else {
+
+            const isCorporateTicket = !!ticket.TKT11;
+
+            if (isCorporateTicket) {
+
+                if (!permission?.TPER09) {
+                    throw new Error('Access denied');
+                }
+
+            } else {
+
+                if (
+                    ![1, 2, 3, 5].includes(roleId) &&
+                    ticket.TKT06 !== decoded.Id
+                ) {
+                    throw new Error('Access denied');
+                }
             }
         }
 
@@ -1984,7 +2053,7 @@ class TicketController {
             .split(',')
             .map(id => Number(id.trim()))
             .filter(id => !isNaN(id));
-            
+
         if (!ticketIds.length) {
             throw new Error('ticket_id required');
         }

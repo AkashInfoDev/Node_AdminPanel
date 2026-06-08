@@ -287,7 +287,8 @@ class UserTypeController {
 
                                     change_status: 0,
 
-                                    delete_ticket: 0
+                                    delete_ticket: 0,
+                                    corporate_ticket_access: 0
                                 }
                             }
                         })
@@ -361,7 +362,9 @@ class UserTypeController {
                 ticketPermission?.TPER07 ? 1 : 0,
 
             delete_ticket:
-                ticketPermission?.TPER08 ? 1 : 0
+                ticketPermission?.TPER08 ? 1 : 0,
+            corporate_ticket_access:
+                ticketPermission?.TPER09 ? 1 : 0
         };
 
         return res.json({
@@ -656,6 +659,10 @@ class UserTypeController {
             TPER08:
                 Number(
                     ticketPermissions.delete_ticket || 0
+                ),
+            TPER09:
+                Number(
+                    ticketPermissions.corporate_ticket_access || 0
                 )
         };
 
