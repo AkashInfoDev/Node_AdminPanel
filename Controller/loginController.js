@@ -2045,7 +2045,7 @@ class UserController {
                         if (userInfo) {
                             // Update the admin user if user info is found
                             await admi.update(
-                                { ADMICORP: userInfo.A01F01 },
+                                { ADMICORP: companyResult.nextId },
                                 { ADMIF00: existingUser.ADMIF00 }
                             );
                         }
