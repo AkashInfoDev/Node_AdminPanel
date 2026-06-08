@@ -1,3 +1,5 @@
+const { default: axios } = require("axios");
+
 require("dotenv").config();
 
 async function sendWhatsAppOTP(phone, otp) {
@@ -104,6 +106,164 @@ async function sendWhatsAppOTP(phone, otp) {
   }
 }
 
+// async function sendWhatsAppTemplate(name, corpId, userName, password, phone) {
+//   try {
+//     const token = process.env.META_WHATSAPP_TOKEN;
+//     const phoneId = process.env.META_WHATSAPP_PHONE_NUMBER_ID;
+//     const response = await axios.post(
+//       `https://graph.facebook.com/v23.0/${phoneId}/messages`,
+//       {
+//         messaging_product: "whatsapp",
+//         to: "91" + (phone.toString()),
+//         type: "template",
+//         template: {
+//           name: "eplus_account_created",
+//           language: {
+//             code: "en"
+//           },
+//           components: [
+//             {
+//               type: "body",
+//               parameters: [
+//                 {
+//                   type: "text",
+//                   text: name.toString() // {{1}}
+//                 },
+//                 {
+//                   type: "text",
+//                   text: corpId.toString() // {{2}}
+//                 },
+//                 {
+//                   type: "text",
+//                   text: userName.toString() // {{3}}
+//                 },
+//                 {
+//                   type: "text",
+//                   text: password.toString() // {{4}}
+//                 }
+//               ]
+//             }
+//           ]
+//         }
+//       },
+//       {
+//         headers: {
+//           Authorization: `Bearer ${token}`,
+//           "Content-Type": "application/json"
+//         }
+//       }
+//     );
+
+//     console.log("Message sent:", response.data);
+//   } catch (error) {
+//     console.error(
+//       "Error:",
+//       error.response?.data || error.message
+//     );
+//   }
+// }
+
+async function sendWhatsAppTemplate(
+  name,
+  corpId,
+  userName,
+  password,
+  phone
+) {
+  try {
+    const token = process.env.META_WHATSAPP_TOKEN;
+    const phoneId = process.env.META_WHATSAPP_PHONE_NUMBER_ID;
+
+    // Validate environment variables
+    if (!token) {
+      throw new Error("META_WHATSAPP_TOKEN is not configured");
+    }
+
+    if (!phoneId) {
+      throw new Error("META_WHATSAPP_PHONE_NUMBER_ID is not configured");
+    }
+
+    // Validate phone number
+    if (!phone) {
+      throw new Error("Phone number is required");
+    }
+
+    // Remove all non-numeric characters
+    let formattedPhone = phone.toString().replace(/\D/g, "");
+
+    // Add India country code if not present
+    if (!formattedPhone.startsWith("91")) {
+      formattedPhone = `91${formattedPhone}`;
+    }
+
+    const payload = {
+      messaging_product: "whatsapp",
+      to: formattedPhone,
+      type: "template",
+      template: {
+        name: "eplus_account_created",
+        language: {
+          code: "en"
+        },
+        components: [
+          {
+            type: "body",
+            parameters: [
+              {
+                type: "text",
+                text: String(name || "")
+              },
+              {
+                type: "text",
+                text: String(corpId || "")
+              },
+              {
+                type: "text",
+                text: String(userName || "")
+              },
+              {
+                type: "text",
+                text: String(password || "")
+              }
+            ]
+          }
+        ]
+      }
+    };
+
+    const response = await axios.post(
+      `https://graph.facebook.com/v23.0/${phoneId}/messages`,
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        timeout: 30000
+      }
+    );
+
+    console.log("WhatsApp message sent successfully");
+    console.log("Response:", response.data);
+
+    return {
+      success: true,
+      messageId: response.data?.messages?.[0]?.id || null,
+      data: response.data
+    };
+  } catch (error) {
+    const errorData = error.response?.data || error.message;
+
+    console.error("WhatsApp API Error:", errorData);
+
+    return {
+      success: false,
+      error: errorData
+    };
+  }
+}
+
 module.exports = {
-  sendWhatsAppOTP
+  sendWhatsAppOTP,
+  sendWhatsAppTemplate
 };

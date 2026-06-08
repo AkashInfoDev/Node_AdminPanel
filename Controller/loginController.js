@@ -35,6 +35,7 @@ const queryService = require('../Services/queryService');
 const { sendAccountInfoMail, sendResetMail, sendLogOutMail, sendForceLogoutOTP } = require('../Services/mailServices');
 const M83Controller = require('./M83Controller');
 const { response } = require('express');
+const { sendWhatsAppTemplate } = require('../Services/whatsappOtpService');
 
 // Get Sequelize instance for 'SDB' or your specific DB name
 const sequelizeSDB = db.getConnection('A00001SDB');
@@ -2070,7 +2071,7 @@ class UserController {
                         // Prepare the success response
                         const response = {
                             status: 'SUCCESS',
-                            message: 'User registered successfully And Mail Send to Registered MAIL id',
+                            message: `User registered successfully And User's Credentials are sent to regiser Mail Id and whatsApp`,
                             userId: encryptor.decrypt(admin.ADMIF01),
                             password: encryptor.decrypt(admin.ADMIF05),
                             corpId: companyResult.nextCorpId,
@@ -2084,6 +2085,7 @@ class UserController {
                                 userId: response.userId,
                                 password1: response.password,
                             });
+                            const whatsApp = await sendWhatsAppTemplate(admin.ADMIF02, response.corpId, response.userId, response.password, admin.ADMIF13);
                         } catch (mailErr) {
                             console.error("❌ MAIL FAILED:", mailErr);
                         }
@@ -2460,6 +2462,13 @@ class UserController {
                 }
             }
 
+            if (!user) {
+                response.status = 'FAIL';
+                response.message = 'Invalid Credentials';
+                const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
+                return res.status(400).json({ encryptedResponse: encryptedResponse });
+            }
+
             let isActive = await m81.findOne({ M81UNQ: user.ADMIF00 });
             if (isActive) {
                 if (isActive.M81ADA == 'D') {
@@ -2470,12 +2479,7 @@ class UserController {
                 }
             }
 
-            if (!user) {
-                response.status = 'FAIL';
-                response.message = 'Invalid Credentials';
-                const encryptedResponse = encryptor.encrypt(JSON.stringify({ response }))
-                return res.status(400).json({ encryptedResponse: encryptedResponse });
-            }
+
 
             let loginExist = await m83.findAll();
             for (let i of loginExist) {
@@ -3290,7 +3294,7 @@ class UserController {
 
             const otp = Math.floor(100000 + Math.random() * 900000).toString();
             let mailres;
-            
+
             if (descType == 'F') {
                 await PLRDBOTP.create({
                     CORP_ID: corpId,
