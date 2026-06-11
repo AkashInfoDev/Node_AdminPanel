@@ -5,7 +5,7 @@ const definePLRDBPYMT = require('../Models/RDB/PLRDBPYMT');
 const definePLRDBA02 = require('../Models/RDB/PLRDBA02');
 const definePLRDBPLREL = require('../Models/RDB/PLRDBPLREL');
 const defineEP_USER = require('../Models/RDB/EP_USER');
-
+const { Op } = require("sequelize");
 const TokenService = require('../Services/tokenServices');
 const Encryptor = require('../Services/encryptor');
 
@@ -328,6 +328,8 @@ class CAdminPlanController {
 
 
                     return CAdminPlanController.getCurrentLimits(pa, response, res);
+                case 'X': // Delete Transaction
+                    return CAdminPlanController.deleteTransaction(pa, response, res);
 
 
                 /* ========================== */
@@ -1796,21 +1798,21 @@ class CAdminPlanController {
                         },
                         transaction
                     });
-                    await transaction.commit();
+                await transaction.commit();
 
-                    response.status = 'SUCCESS';
-                    response.message = 'Request rejected'
+                response.status = 'SUCCESS';
+                response.message = 'Request rejected'
 
-                    return res.status(200).json({
-                        encryptedResponse:encryptor.encrypt(JSON.stringify(response))
-                    })
+                return res.status(200).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                })
             }
 
             const type = reqRow.PRQF02;
 
-            function safeParse(json){
+            function safeParse(json) {
                 try {
-                    return typeof json === 'string'? JSON.parse(json):json;
+                    return typeof json === 'string' ? JSON.parse(json) : json;
                 } catch (error) {
                     return {}
                 }
@@ -1819,43 +1821,99 @@ class CAdminPlanController {
             const payment = safeParse(reqRow.PRQF04) || {};
 
             await PLRDBPYMT.create({
-                PYMT00:corporateId,
-                PYMT02:0
-            },{
+                PYMT00: corporateId,
+                PYMT02: 0
+            }, {
                 transaction
             })
 
             await EP_PAYREQ.update({
-                PRQF07:'A',
-                PRQF09:approverID,
-                PRQF11:''
-            },{
-                where: {PRQF00:requestId},
+                PRQF07: 'A',
+                PRQF09: approverID,
+                PRQF11: ''
+            }, {
+                where: { PRQF00: requestId },
                 transaction
             })
 
             await transaction.commit();
 
             response.status = 'SUCCESS',
-            response.message = 'request approved successfull'
+                response.message = 'request approved successfull'
 
             return res.status(200).json({
-                encryptedResponse:encryptor.encrypt(JSON.stringify(response))
+                encryptedResponse: encryptor.encrypt(JSON.stringify(response))
             })
         } catch (error) {
             console.error('approve request');
 
-            if(!transaction.finished){
+            if (!transaction.finished) {
                 await transaction.rollback();
 
             }
 
             response.status = 'fail',
-            response.message = err.message
+                response.message = err.message
 
             return res.status(500).json({
                 encryptedResponse: encryptor.encrypt(JSON.stringify(response))
             })
+        }
+    }
+
+    static async deleteTransaction(pa, response, res) {
+
+        const { PYMT00 } = pa;
+
+        const transaction = await sequelizeRDB.transaction();
+
+        try {
+
+            if (!PYMT00) {
+                response.status = "FAIL";
+                response.message = "PYMT00 is required";
+
+                return res.status(400).json({
+                    encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+                });
+            }
+
+            // Convert "3,5,7" -> [3,5,7]
+            const ids = String(PYMT00)
+                .split(",")
+                .map(id => Number(id.trim()))
+                .filter(id => !isNaN(id));
+
+            const deletedCount = await PLRDBPYMT.destroy({
+                where: {
+                    PYMT00: {
+                        [Op.in]: ids
+                    }
+                },
+                transaction
+            });
+
+            await transaction.commit();
+
+            response.status = "SUCCESS";
+            response.message = `${deletedCount} transaction(s) deleted successfully`;
+
+            return res.status(200).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+            });
+
+        } catch (err) {
+
+            if (!transaction.finished) {
+                await transaction.rollback();
+            }
+
+            response.status = "FAIL";
+            response.message = err.message;
+
+            return res.status(500).json({
+                encryptedResponse: encryptor.encrypt(JSON.stringify(response))
+            });
         }
     }
 }

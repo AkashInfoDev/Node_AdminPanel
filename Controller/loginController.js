@@ -2460,7 +2460,13 @@ class UserController {
                 let userM81Unq = user.ADMIF00
 
                 let corpExist = await PLRDBA01.findAll({
-                    where: { A01F01: corpUnq.trim() }
+                    where: { A01F01: corpUnq.trim() },
+                    attributes: [
+                        'A01F03',
+                        'A02F01',
+                        'A02F02',
+                        'A02F04'
+                    ]
                 });
 
                 let M81Row

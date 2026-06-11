@@ -48,7 +48,17 @@ class dashboardController {
             return res.status(400).json({ encryptedResponse });
         }
         let compDetail = await PLRDBA01.findOne({
-            where: { A01F03: corpId }
+            where: { A01F03: corpId },
+            attributes: [
+                'A01F01',
+                'A01F13',
+                'A01F12',
+                'A01BRC',
+                'A01UNQ',
+                'A01F10',
+                'A01CMP',
+                'A02F01'
+            ]
         });
         let availableUsers = await admi.findAll({
             ADMICORP: compDetail.A01F01.trim()
